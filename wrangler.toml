@@ -1,4 +1,8 @@
-name = "data-drills"
+name = "data-drills-cf"
+main = "dist/_worker.js"
 compatibility_date = "2025-01-01"
 compatibility_flags = ["nodejs_compat_v2"]
-pages_build_output_dir = "dist"
+
+[assets]
+directory = "dist"
+not_found_handling = "single-page-application"
