@@ -3,6 +3,7 @@ import app from "@/lib/hono-app";
 
 interface Env {
   ASSETS: Fetcher;
+  HYPERDRIVE: { connectionString: string };
   [key: string]: unknown;
 }
 
@@ -14,6 +15,11 @@ export default {
         (globalThis as any).process ??= { env: {} };
         (globalThis as any).process.env[key] = value;
       }
+    }
+
+    // Override DATABASE_URL with Hyperdrive connection string
+    if (env.HYPERDRIVE) {
+      (globalThis as any).process.env.DATABASE_URL = env.HYPERDRIVE.connectionString;
     }
 
     const url = new URL(request.url);
