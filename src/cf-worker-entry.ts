@@ -1,6 +1,6 @@
 /// <reference types="@cloudflare/workers-types" />
 import app from "@/lib/hono-app";
-import { resetDb } from "@/lib/db";
+import { withRequestDb } from "@/lib/db";
 
 interface Env {
   ASSETS: Fetcher;
@@ -10,9 +10,6 @@ interface Env {
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-    // CF Workers cannot share I/O objects across requests — create fresh DB client
-    resetDb();
-
     // Populate process.env from CF bindings so existing code works unchanged
     for (const [key, value] of Object.entries(env)) {
       if (typeof value === "string") {
@@ -28,9 +25,9 @@ export default {
 
     const url = new URL(request.url);
 
-    // API routes → Hono
+    // API routes → Hono (each request gets its own DB client via AsyncLocalStorage)
     if (url.pathname.startsWith("/api/")) {
-      return app.fetch(request, env, ctx);
+      return withRequestDb(() => app.fetch(request, env, ctx)) as Promise<Response>;
     }
 
     // Everything else → static assets (with SPA fallback)
