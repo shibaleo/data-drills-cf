@@ -8,8 +8,11 @@ dist/
 # env
 .env
 .env.*
+.dev.vars
 !.env.example
-!.env.production
+
+# secrets
+.mcp.json
 
 # misc
 .DS_Store
