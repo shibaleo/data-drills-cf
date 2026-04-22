@@ -1,0 +1,26 @@
+{
+  "name": "data-drills-pdf-service",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "start": "node dist/index.js",
+    "dev": "node --watch dist/index.js"
+  },
+  "dependencies": {
+    "hono": "^4.12.8",
+    "@hono/node-server": "^1.14.1",
+    "pdfjs-dist": "^5.6.205",
+    "pdf-lib": "^1.17.1",
+    "@pdf-lib/fontkit": "^1.1.1",
+    "googleapis": "^171.4.0",
+    "postgres": "^3.4.8",
+    "drizzle-orm": "^0.44.7"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.0",
+    "typescript": "^5.9.3",
+    "@types/node": "^22.19.15"
+  }
+}
