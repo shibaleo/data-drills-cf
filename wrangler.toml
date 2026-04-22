@@ -3,6 +3,10 @@ main = "dist/_worker.js"
 compatibility_date = "2025-01-01"
 compatibility_flags = ["nodejs_compat_v2"]
 
+[[hyperdrive]]
+binding = "HYPERDRIVE"
+id = "ec8131aac5e64775864336ec25f1267b"
+
 [assets]
 directory = "dist"
 binding = "ASSETS"
