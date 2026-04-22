@@ -1,4 +1,5 @@
 import { build } from "esbuild";
+import { writeFileSync } from "fs";
 import path from "path";
 
 await build({
@@ -19,4 +20,8 @@ await build({
   },
 });
 
+// Prevent _worker.js from being uploaded as a static asset
+writeFileSync("dist/.assetsignore", "_worker.js\n");
+
 console.log("✓ Worker bundled → dist/_worker.js");
+console.log("✓ dist/.assetsignore generated");
