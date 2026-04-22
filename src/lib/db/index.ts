@@ -7,6 +7,12 @@ type DB = PostgresJsDatabase<typeof schema>;
 let _client: ReturnType<typeof postgres> | null = null;
 let _db: DB | null = null;
 
+/** Reset DB client — must be called at the start of each request in CF Workers */
+export function resetDb() {
+  _client = null;
+  _db = null;
+}
+
 function initDb(): DB {
   if (!_db) {
     const isWorker = typeof globalThis.caches !== "undefined";
