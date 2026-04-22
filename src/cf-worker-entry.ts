@@ -1,7 +1,7 @@
+/// <reference types="@cloudflare/workers-types" />
 import app from "@/lib/hono-app";
 
 interface Env {
-  ASSETS: { fetch: (request: Request) => Promise<Response> };
   [key: string]: unknown;
 }
 
@@ -15,18 +15,8 @@ export default {
       }
     }
 
-    const url = new URL(request.url);
-
     // API routes → Hono
-    if (url.pathname.startsWith("/api")) {
-      return app.fetch(request, env, ctx);
-    }
-
-    // Static assets
-    const assetResponse = await env.ASSETS.fetch(request);
-    if (assetResponse.status !== 404) return assetResponse;
-
-    // SPA fallback → index.html
-    return env.ASSETS.fetch(new Request(new URL("/index.html", request.url), request));
+    // Static assets and SPA fallback are handled by [assets] in wrangler.toml
+    return app.fetch(request, env, ctx);
   },
 };
