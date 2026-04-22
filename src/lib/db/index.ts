@@ -1,21 +1,29 @@
 import postgres from "postgres";
-import { drizzle } from "drizzle-orm/postgres-js";
+import { drizzle, type PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import * as schema from "./schema";
 
-const globalForDb = globalThis as unknown as { _pgClient?: ReturnType<typeof postgres> };
+type DB = PostgresJsDatabase<typeof schema>;
 
-const isWorker = typeof globalThis.caches !== "undefined";
+let _client: ReturnType<typeof postgres> | null = null;
+let _db: DB | null = null;
 
-const client = globalForDb._pgClient ?? postgres(process.env.DATABASE_URL!, {
-  max: 1,
-  idle_timeout: 20,
-  connect_timeout: 10,
-  // Hyperdrive handles SSL termination; local dev needs ssl: "require"
-  ssl: isWorker ? false : "require",
-});
-
-if (process.env.NODE_ENV !== "production") {
-  globalForDb._pgClient = client;
+function initDb(): DB {
+  if (!_db) {
+    const isWorker = typeof globalThis.caches !== "undefined";
+    _client = postgres(process.env.DATABASE_URL!, {
+      max: 1,
+      idle_timeout: 20,
+      connect_timeout: 10,
+      ssl: isWorker ? false : "require",
+    });
+    _db = drizzle(_client, { schema });
+  }
+  return _db;
 }
 
-export const db = drizzle(client, { schema });
+// Lazy proxy: defers DB creation until first use (after process.env is populated)
+export const db: DB = new Proxy({} as DB, {
+  get(_, prop) {
+    return (initDb() as any)[prop];
+  },
+});
