@@ -1,35 +1,53 @@
 import postgres from "postgres";
 import { drizzle, type PostgresJsDatabase } from "drizzle-orm/postgres-js";
+import { AsyncLocalStorage } from "node:async_hooks";
 import * as schema from "./schema";
 
 type DB = PostgresJsDatabase<typeof schema>;
 
-let _client: ReturnType<typeof postgres> | null = null;
-let _db: DB | null = null;
+// Per-request DB client storage (CF Workers cannot share I/O across requests)
+const als = new AsyncLocalStorage<{ db: DB | null }>();
 
-/** Reset DB client — must be called at the start of each request in CF Workers */
-export function resetDb() {
-  _client = null;
-  _db = null;
+export function withRequestDb<T>(fn: () => T | Promise<T>): T | Promise<T> {
+  return als.run({ db: null }, fn);
 }
 
-function initDb(): DB {
-  if (!_db) {
-    const isWorker = typeof globalThis.caches !== "undefined";
-    _client = postgres(process.env.DATABASE_URL!, {
+// Fallback for local dev (long-lived process, shared client is fine)
+let _fallbackDb: DB | null = null;
+
+function getOrCreateDb(): DB {
+  const store = als.getStore();
+
+  if (store) {
+    // CF Workers: per-request client
+    if (!store.db) {
+      const client = postgres(process.env.DATABASE_URL!, {
+        max: 1,
+        idle_timeout: 20,
+        connect_timeout: 10,
+        ssl: false, // Hyperdrive handles SSL
+      });
+      store.db = drizzle(client, { schema });
+    }
+    return store.db;
+  }
+
+  // Local dev: cached client
+  if (!_fallbackDb) {
+    const client = postgres(process.env.DATABASE_URL!, {
       max: 1,
       idle_timeout: 20,
       connect_timeout: 10,
-      ssl: isWorker ? false : "require",
+      ssl: "require",
     });
-    _db = drizzle(_client, { schema });
+    _fallbackDb = drizzle(client, { schema });
   }
-  return _db;
+  return _fallbackDb;
 }
 
-// Lazy proxy: defers DB creation until first use (after process.env is populated)
+// Lazy proxy: defers DB creation until first use
 export const db: DB = new Proxy({} as DB, {
   get(_, prop) {
-    return (initDb() as any)[prop];
+    return (getOrCreateDb() as any)[prop];
   },
 });
