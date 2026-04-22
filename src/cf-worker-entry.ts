@@ -1,5 +1,6 @@
 /// <reference types="@cloudflare/workers-types" />
 import app from "@/lib/hono-app";
+import { resetDb } from "@/lib/db";
 
 interface Env {
   ASSETS: Fetcher;
@@ -9,6 +10,9 @@ interface Env {
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    // CF Workers cannot share I/O objects across requests — create fresh DB client
+    resetDb();
+
     // Populate process.env from CF bindings so existing code works unchanged
     for (const [key, value] of Object.entries(env)) {
       if (typeof value === "string") {
