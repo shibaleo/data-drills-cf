@@ -2,6 +2,7 @@
 import app from "@/lib/hono-app";
 
 interface Env {
+  ASSETS: Fetcher;
   [key: string]: unknown;
 }
 
@@ -15,8 +16,14 @@ export default {
       }
     }
 
+    const url = new URL(request.url);
+
     // API routes → Hono
-    // Static assets and SPA fallback are handled by [assets] in wrangler.toml
-    return app.fetch(request, env, ctx);
+    if (url.pathname.startsWith("/api/")) {
+      return app.fetch(request, env, ctx);
+    }
+
+    // Everything else → static assets (with SPA fallback)
+    return env.ASSETS.fetch(request);
   },
 };

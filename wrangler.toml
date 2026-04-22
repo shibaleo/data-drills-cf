@@ -5,4 +5,5 @@ compatibility_flags = ["nodejs_compat_v2"]
 
 [assets]
 directory = "dist"
+binding = "ASSETS"
 not_found_handling = "single-page-application"
