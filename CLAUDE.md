@@ -33,10 +33,9 @@ CF Pages (React + Vite SPA, TanStack Router)
 ### Key Features
 
 - 問題演習 (problems, answers, flashcards)
-- 間隔反復 (FSRS algorithm)
+- 間隔反復 / 復習スケジュール (FSRS algorithm)
 - Markdown ノート (CodeMirror + KaTeX)
-- PDF 同期 (Google Drive → 問題抽出)
-- 分析ダッシュボード (retention, scores)
+- 印刷用 PDF エクスポート (選択問題を Render サービスで結合)
 
 ## Deployed Services
 
@@ -56,18 +55,46 @@ CF Pages (React + Vite SPA, TanStack Router)
 
 ## Pending Development
 
-### 1. Toggl ウィジェット
-- Neon DWH からTogglの勉強時間を取得してダッシュボードに表示
+### 機能開発
+
+#### 1. Toggl ウィジェット
+- Neon DWH から Toggl の勉強時間を取得してダッシュボードに表示
 - 目的: 勉強時間の最大化（毎日 drills を使うので、ここに表示すれば Toggl を見に行く必要がない）
 - データソース: `neon_db.data_warehouse.fct_toggl_time_entries`
 - 接続先: Neon PostgreSQL (読み取りのみ)
 
-### 2. CodeMirror の洗練
+#### 2. CodeMirror の洗練
 - Markdown 入力 UX の改善
 - 関連ファイル:
   - `src/components/codemirror-editor.tsx` — メインエディタ
   - `src/components/markdown-editor.tsx` — 遅延ロードラッパー
   - `src/lib/codemirror-extensions.ts` — カスタムプラグイン
+
+### インフラ / 品質
+
+#### 3. Vitest 導入
+- リグレッション防止。フレームワーク刷新直後で土台を敷く好機
+- framework-proposal.md §5 で保留判断
+
+#### 4. CodeMirror バンドル分割
+- 現状 1.5MB の単一 chunk。動的 import で code-split 可能
+
+### 将来の検討事項 (発生したら対応)
+
+#### 5. `@hono/zod-openapi` への移行
+- API を外部クライアント (SaaS、MCP モジュール等) に公開するタイミングで
+- Zod スキーマは再利用できるので移行コストは低い (framework-proposal.md §4.4)
+
+#### 6. Sentry 等のエラー監視
+- 本番運用開始時に導入 (framework-proposal.md §5)
+
+#### 7. `AppType` コンパイル時間
+- 現状問題なし。ルート数が増えて肥大化したら v1 を複数アプリに分割 (framework-proposal.md §7)
+
+#### 8. `unwrap` 内部の narrowing cast
+- [src/lib/rpc-client.ts](src/lib/rpc-client.ts) の `as SuccessBody<T>` 1 箇所
+- TypeScript の generic narrowing 制限を回避するための cast
+- `isErrorBody` ガードで runtime 保証済み、意図的な妥協として維持
 
 ## Conventions
 
