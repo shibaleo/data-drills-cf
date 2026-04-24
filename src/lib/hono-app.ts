@@ -21,75 +21,75 @@ import problemsList from "@/routes/problems-list";
 import answersList from "@/routes/answers-list";
 import schedule from "@/routes/schedule";
 import notes from "@/routes/notes";
-import pdfSync from "@/routes/pdf-sync";
+import pdfExport from "@/routes/pdf-export";
 import googleAuth from "@/routes/google-auth";
 import drive from "@/routes/drive";
 
-/* ── V1 API sub-app ── */
+/* ── V1 API sub-app ──
+ *
+ * Methods are chained so the accumulated route schema is preserved
+ * in the app's type — required for Hono RPC (`hc<AppType>`).
+ */
 
-const v1 = new Hono<Env>();
-
-v1.use("*", logger());
-
-// Error handler — include cause message for DB constraint errors
-v1.onError((err, c) => {
-  console.error(err);
-  const causeMsg = err.cause instanceof Error ? err.cause.message : "";
-  const msg = causeMsg ? `${err.message} - ${causeMsg}` : (err.message || "Internal Server Error");
-  return c.json({ error: msg }, 500);
-});
-
-// Public routes
-v1.route("/health", health);
-v1.route("/auth", authRoutes);
-
-// Auth middleware for all subsequent routes
-v1.use("*", async (c, next) => {
-  const result = await authenticate(c.req.raw);
-  if (!result) {
-    return c.json({ error: "Unauthorized" }, 401);
-  }
-  c.set("authResult", result);
-  await next();
-});
-
-// Routes
-v1.route("/projects", projects);
-v1.route("/problems", problems);
-v1.route("/answers", answers);
-v1.route("/flashcards", flashcards);
-v1.route("/flashcard-reviews", flashcardReviews);
-v1.route("/reviews", reviews);
-v1.route("/api-keys", apiKeys);
-v1.route("/users", users);
-v1.route("/statuses", statuses);
-v1.route("/tags", tags);
-v1.route("/review-tags", reviewTags);
-v1.route("/problem-files", problemFiles);
-v1.route("/problems-list", problemsList);
-v1.route("/answers-list", answersList);
-v1.route("/schedule", schedule);
-v1.route("/notes", notes);
-v1.route("/pdf-sync", pdfSync);
-
-// /me endpoint — return authenticated user info
-v1.get("/me", (c) => {
-  const authResult = c.get("authResult");
-  return c.json({
-    data: {
-      id: authResult.userId,
-      name: authResult.name,
-      email: authResult.email,
-    },
+const v1 = new Hono<Env>()
+  .use("*", logger())
+  .onError((err, c) => {
+    console.error(err);
+    const causeMsg = err.cause instanceof Error ? err.cause.message : "";
+    const msg = causeMsg ? `${err.message} - ${causeMsg}` : (err.message || "Internal Server Error");
+    return c.json({ error: msg }, 500);
+  })
+  // Public routes (before auth middleware)
+  .route("/health", health)
+  .route("/auth", authRoutes)
+  // Auth middleware for all subsequent routes
+  .use("*", async (c, next) => {
+    const result = await authenticate(c.req.raw);
+    if (!result) {
+      return c.json({ error: "Unauthorized" }, 401);
+    }
+    c.set("authResult", result);
+    await next();
+  })
+  // Protected routes
+  .route("/projects", projects)
+  .route("/problems", problems)
+  .route("/answers", answers)
+  .route("/flashcards", flashcards)
+  .route("/flashcard-reviews", flashcardReviews)
+  .route("/reviews", reviews)
+  .route("/api-keys", apiKeys)
+  .route("/users", users)
+  .route("/statuses", statuses)
+  .route("/tags", tags)
+  .route("/review-tags", reviewTags)
+  .route("/problem-files", problemFiles)
+  .route("/problems-list", problemsList)
+  .route("/answers-list", answersList)
+  .route("/schedule", schedule)
+  .route("/notes", notes)
+  .route("/pdf-export", pdfExport)
+  // /me endpoint — return authenticated user info
+  .get("/me", (c) => {
+    const authResult = c.get("authResult");
+    return c.json({
+      data: {
+        id: authResult.userId,
+        name: authResult.name,
+        email: authResult.email,
+      },
+    });
   });
-});
 
 /* ── Root app — mounts V1 + Google/Drive routes ── */
 
-const app = new Hono().basePath("/api");
-
-app.route("/v1", v1);
-app.route("/auth/google", googleAuth);
-app.route("/drive", drive);
+const app = new Hono()
+  .basePath("/api")
+  .route("/v1", v1)
+  .route("/auth/google", googleAuth)
+  .route("/drive", drive);
 
 export default app;
+
+/** Type used by `hc<AppType>()` on the client to derive a type-safe RPC client. */
+export type AppType = typeof app;
