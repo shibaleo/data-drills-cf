@@ -18,7 +18,20 @@ export interface AuthResult {
 
 // ── API Key verification ──
 
+// In-memory cache keyed on the full token. bcrypt.compare is 20-50 ms of
+// CPU which alone approaches the Workers per-request budget, so caching is
+// necessary to sustain burst usage (e.g. the taxtant sync tool running
+// 70+ sequential requests). Entries live 5 minutes; revocations propagate
+// after at most that delay, which is acceptable for a single-user tool.
+const apiKeyAuthCache = new Map<string, { result: AuthResult; expiresAt: number }>();
+const API_KEY_CACHE_TTL = 5 * 60 * 1000;
+
 async function verifyApiKeyToken(token: string): Promise<AuthResult | null> {
+  const cached = apiKeyAuthCache.get(token);
+  if (cached && Date.now() < cached.expiresAt) {
+    return cached.result;
+  }
+
   const prefix = token.slice(0, 11); // dd_ + 8 chars
   const rows = await db
     .select()
@@ -34,13 +47,9 @@ async function verifyApiKeyToken(token: string): Promise<AuthResult | null> {
   const valid = await bcrypt.compare(rawKey, row.keyHash);
   if (!valid) return null;
 
-  // Update last_used_at
-  await db
-    .update(apiKey)
-    .set({ lastUsedAt: new Date() })
-    .where(eq(apiKey.id, row.id));
-
-  return { authenticated: true, userId: "", name: "API", email: "" };
+  const result: AuthResult = { authenticated: true, userId: "", name: "API", email: "" };
+  apiKeyAuthCache.set(token, { result, expiresAt: Date.now() + API_KEY_CACHE_TTL });
+  return result;
 }
 
 // ── Clerk JWKS ──
