@@ -124,6 +124,9 @@ export default function AboutPage() {
   const [fVal, setFVal] = useState(19 / 81);
   const [cVal, setCVal] = useState(-0.5);
 
+  // Schedule adaptation: power of C_T (matches fsrs.ts TIME_COEFF_K)
+  const [kVal, setKVal] = useState(2);
+
   // Derived: max stability for P_i computation
   const maxStab = useMemo(
     () => Math.max(...statuses.map((s) => s.stabilityDays), 1),
@@ -407,6 +410,86 @@ export default function AboutPage() {
           <p className="text-xs text-muted-foreground mt-2">
             Overdue = 今日 - 復習予定日。正の値は期限超過（復習が必要）を意味します。
           </p>
+
+          <div className="mt-4 border-t border-border pt-3">
+            <h3 className="text-sm font-semibold mb-1">実効間隔（Duration 補正）</h3>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              実際の次回予定日は解答時間 <Tex>{"t_{\\text{dur}}"}</Tex> によって伸縮します。
+              <Tex>{"C_T"}</Tex> を <Tex>{"k"}</Tex> 乗することで、同じステータスでも解答時間に応じて実効間隔が散り、同日バッチのスケジュール団子化を防ぎます。
+            </p>
+            <TexBlock>
+              {"I_{\\text{eff}} = I_i \\times C_T^{\\,k}, \\quad C_T = c \\cdot \\frac{t_{\\text{std}}}{t_{\\text{dur}}}"}
+            </TexBlock>
+            <p className="text-sm text-foreground -mt-1">
+              <Tex>{"c"}</Tex> ={" "}
+              <V value={timeCoeff} onChange={setTimeCoeff} fmt={(v) => v.toFixed(1)} />
+              {"  "}
+              <Tex>{"k"}</Tex> ={" "}
+              <V value={kVal} onChange={setKVal} fmt={(v) => String(v)} />
+              <span className="text-xs text-muted-foreground ml-2">
+                実コードでは <Tex>{"c = 0.5, k = 2"}</Tex> 固定
+              </span>
+            </p>
+            <p className="text-xs text-muted-foreground mt-2">
+              <strong>基準点</strong>: <Tex>{"r = t_{\\text{dur}}/t_{\\text{std}} = 0.5"}</Tex> で{" "}
+              <Tex>{"C_T^{\\,k} = 1"}</Tex> → nominal 通り。
+              これは<strong>学習後半（習熟時）</strong>の想定。mastered 状態では解答時間が標準時間の約半分に落ち着く前提で、
+              その時に nominal の間隔で復習が来るよう calibrate されています。
+              学習初期は <Tex>{"r"}</Tex> が 1 以上に寄るため <Tex>{"C_T^{\\,k} < 1"}</Tex>
+              {" "}となり、実効間隔が自動で短縮 → 高頻度復習で定着を促進します。
+            </p>
+            <table className="text-xs w-full mt-2">
+              <thead>
+                <tr className="border-b border-border">
+                  <th className="pr-3 py-1 text-left font-medium">評価</th>
+                  <th className="pr-3 py-1 text-right font-medium">
+                    <Tex>{"I_i"}</Tex>
+                  </th>
+                  <th className="pr-3 py-1 text-right font-medium">
+                    習熟<br />
+                    <span className="text-[9px] text-muted-foreground">r=0.5</span>
+                  </th>
+                  <th className="pr-3 py-1 text-right font-medium">
+                    学習中<br />
+                    <span className="text-[9px] text-muted-foreground">r=1.0</span>
+                  </th>
+                  <th className="pr-3 py-1 text-right font-medium">
+                    初期/難問<br />
+                    <span className="text-[9px] text-muted-foreground">r=1.5</span>
+                  </th>
+                  <th className="py-1 text-right font-medium">
+                    <span className="text-[9px] text-muted-foreground">r=2.0</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="text-muted-foreground">
+                {statuses.map((s) => {
+                  const eff = (r: number) => {
+                    if (s.stabilityDays <= 0) return 0;
+                    const ct = timeCoeff / r;
+                    const ctk = Math.min(10, Math.max(0.1, Math.pow(ct, kVal)));
+                    return Math.round(s.stabilityDays * ctk);
+                  };
+                  return (
+                    <tr key={s.name} className="border-b border-border/50 last:border-0">
+                      <td className="pr-3 py-1" style={{ color: s.color ?? "#888" }}>{s.name}</td>
+                      <td className="pr-3 py-1 text-right tabular-nums font-medium">{s.stabilityDays}d</td>
+                      <td className="pr-3 py-1 text-right tabular-nums">{eff(0.5)}d</td>
+                      <td className="pr-3 py-1 text-right tabular-nums">{eff(1.0)}d</td>
+                      <td className="pr-3 py-1 text-right tabular-nums">{eff(1.5)}d</td>
+                      <td className="py-1 text-right tabular-nums">{eff(2.0)}d</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            <p className="text-xs text-muted-foreground mt-2 leading-relaxed">
+              SM-2 / FSRS の canonical 間隔（Rough 3-7d, Fair 10-14d, Fluent 30-45d, Done 90-180d）と比較するときは、
+              <strong>nominal ではなく「習熟時の実効値」列</strong>を見てください。同じ桁感になります。
+              暴走防止で <Tex>{"C_T^{\\,k}"}</Tex> は <Tex>{"[0.1, 10]"}</Tex> にクランプしています。
+            </p>
+          </div>
+
           {/* FSRS 保持率モデル（補足） */}
           <details className="mt-3">
             <summary className="text-xs text-muted-foreground cursor-pointer hover:text-foreground transition-colors">
