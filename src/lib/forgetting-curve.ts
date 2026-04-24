@@ -80,7 +80,7 @@ export function parseDurationSec(d: string | null): number | null {
  * Falls back to `point` if provided, then sortOrder.
  */
 export function computeForgettingInfo(
-  answers: { date: string | null; sortOrder?: number; point?: number; duration?: string | null; created_at?: string }[],
+  answers: { date: string | null; sortOrder?: number; point?: number | null; duration?: string | null; created_at?: string }[],
   now: Date = new Date(),
 ): ForgettingInfo | null {
   // Sort chronologically
