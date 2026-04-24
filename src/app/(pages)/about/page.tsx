@@ -5,6 +5,7 @@ import katex from "katex";
 import "katex/dist/katex.min.css";
 import { usePageTitle } from "@/lib/page-context";
 import { useProject } from "@/hooks/use-project";
+import { useUpdateStatus } from "@/hooks/queries/use-statuses";
 
 /* ── KaTeX helpers ── */
 
@@ -104,6 +105,7 @@ function V({
 export default function AboutPage() {
   usePageTitle("About");
   const { statuses } = useProject();
+  const updateStatus = useUpdateStatus();
 
   // Score params
   const [timeCoeff, setTimeCoeff] = useState(0.5);
@@ -118,17 +120,10 @@ export default function AboutPage() {
   const [fVal, setFVal] = useState(19 / 81);
   const [cVal, setCVal] = useState(-0.5);
 
-  // Editable stability per status (initialised from DB)
-  const [stabilityOverrides, setStabilityOverrides] = useState<Map<string, number>>(new Map());
-  const getStab = (name: string, dbDays: number) => stabilityOverrides.get(name) ?? dbDays;
-  const setStab = (name: string, v: number) =>
-    setStabilityOverrides((p) => new Map(p).set(name, v));
-
   // Derived: max stability for P_i computation
   const maxStab = useMemo(
-    () => Math.max(...statuses.map((s) => getStab(s.name, s.stabilityDays)), 1),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [statuses, stabilityOverrides],
+    () => Math.max(...statuses.map((s) => s.stabilityDays), 1),
+    [statuses],
   );
 
   // First status (lowest sortOrder) for "incorrect" description
@@ -214,8 +209,10 @@ export default function AboutPage() {
                   <td className="pr-4 py-1">{s.description ?? ""}</td>
                   <td className="py-1">
                     <V
-                      value={getStab(s.name, s.stabilityDays)}
-                      onChange={(v) => setStab(s.name, v)}
+                      value={s.stabilityDays}
+                      onChange={(v) =>
+                        updateStatus.mutate({ id: s.id, payload: { stability_days: v } })
+                      }
                       suffix="日"
                     />
                   </td>
@@ -270,7 +267,7 @@ export default function AboutPage() {
                 </thead>
                 <tbody className="text-muted-foreground">
                   {statuses.map((s) => {
-                    const stab = getStab(s.name, s.stabilityDays);
+                    const stab = s.stabilityDays;
                     const pe = maxStab > 0 ? Math.pow(stab / maxStab, ceExponent) * 100 : 0;
                     return (
                       <tr key={s.name} className="border-b border-border/50 last:border-0">
