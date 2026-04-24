@@ -22,7 +22,6 @@ const app = new Hono()
         name: apiKey.name,
         keyPrefix: apiKey.keyPrefix,
         isActive: apiKey.isActive,
-        lastUsedAt: apiKey.lastUsedAt,
         createdAt: apiKey.createdAt,
       })
       .from(apiKey)
