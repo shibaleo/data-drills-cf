@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { toast } from "sonner";
-import { Download, Filter, Loader2 } from "lucide-react";
+import { Download, Filter, Loader2, RotateCcw, Save, SlidersHorizontal } from "lucide-react";
 import {
   useReactTable,
   getCoreRowModel,
@@ -19,6 +19,7 @@ import { OpaqueTag } from "@/components/problem-card";
 import { useProblemDialogs } from "@/hooks/use-problem-dialogs";
 import { useScheduleList, scheduleKeys } from "@/hooks/queries/use-schedule";
 import { useProblemsList, problemsKeys } from "@/hooks/queries/use-problems";
+import { useUpdateStatus } from "@/hooks/queries/use-statuses";
 import { SortHeader } from "@/app/(pages)/problems/columns";
 import { toJSTDateString } from "@/lib/date-utils";
 import { StatusTag } from "@/components/color-tags";
@@ -288,6 +289,85 @@ function ScheduleChart({
   );
 }
 
+/* ── Stability Slider (client-side preview) ── */
+
+function StabilitySlider({
+  statuses,
+  overrides,
+  onChange,
+  max,
+}: {
+  statuses: { name: string; color: string | null; stabilityDays: number }[];
+  overrides: Map<string, number>;
+  onChange: (name: string, v: number) => void;
+  max: number;
+}) {
+  const trackRef = useRef<HTMLDivElement>(null);
+  const draggingRef = useRef<string | null>(null);
+
+  const pctToVal = useCallback(
+    (clientX: number) => {
+      const rect = trackRef.current?.getBoundingClientRect();
+      if (!rect) return 0;
+      const pct = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+      return Math.round(pct * max);
+    },
+    [max],
+  );
+
+  const startDrag = (name: string) => (e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    draggingRef.current = name;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    onChange(name, pctToVal(e.clientX));
+  };
+
+  const moveDrag = (name: string) => (e: React.PointerEvent<HTMLDivElement>) => {
+    if (draggingRef.current !== name) return;
+    onChange(name, pctToVal(e.clientX));
+  };
+
+  const endDrag = (name: string) => (e: React.PointerEvent<HTMLDivElement>) => {
+    if (draggingRef.current === name) draggingRef.current = null;
+    try { e.currentTarget.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
+  };
+
+  return (
+    <div ref={trackRef} className="relative h-14 select-none touch-none">
+      {/* Track line */}
+      <div className="absolute top-1/2 left-0 right-0 h-0.5 -translate-y-1/2 bg-border rounded" />
+      {/* Thumbs */}
+      {statuses.map((s) => {
+        const v = overrides.get(s.name) ?? s.stabilityDays;
+        const pct = Math.min(100, Math.max(0, (v / max) * 100));
+        const color = s.color ?? "#888";
+        return (
+          <div
+            key={s.name}
+            className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 size-4 rounded-full border-2 border-background cursor-grab active:cursor-grabbing"
+            style={{ left: `${pct}%`, backgroundColor: color, boxShadow: "0 0 0 1px hsl(var(--border))" }}
+            onPointerDown={startDrag(s.name)}
+            onPointerMove={moveDrag(s.name)}
+            onPointerUp={endDrag(s.name)}
+            onPointerCancel={endDrag(s.name)}
+          >
+            <div
+              className="absolute -top-4 left-1/2 -translate-x-1/2 text-[9px] tabular-nums font-medium whitespace-nowrap"
+              style={{ color }}
+            >
+              {v}d
+            </div>
+            <div className="absolute top-4 left-1/2 -translate-x-1/2 text-[9px] text-muted-foreground whitespace-nowrap">
+              {s.name}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 /* ── Summary Card ── */
 
 type SummaryFilter = "today" | "week";
@@ -464,7 +544,7 @@ export default function SchedulePage() {
 
   // Fast path: /schedule API (driven by TanStack Query)
   const scheduleQuery = useScheduleList(currentProject?.id);
-  const rows = useMemo<ScheduleRow[]>(() => {
+  const serverRows = useMemo<ScheduleRow[]>(() => {
     return (scheduleQuery.data ?? []).map((r) => ({
       problemId: r.problemId,
       code: r.code,
@@ -486,6 +566,42 @@ export default function SchedulePage() {
     }));
   }, [scheduleQuery.data]);
   const loading = scheduleQuery.isLoading;
+
+  // Client-side stability overrides (preview until saved via explicit button)
+  const [stabilityOverrides, setStabilityOverrides] = useState<Map<string, number>>(new Map());
+  const [showSlider, setShowSlider] = useState(false);
+  const [savingOverrides, setSavingOverrides] = useState(false);
+  const updateStatus = useUpdateStatus();
+
+  const saveOverrides = useCallback(async () => {
+    if (stabilityOverrides.size === 0) return;
+    setSavingOverrides(true);
+    try {
+      for (const [name, v] of stabilityOverrides) {
+        const s = statuses.find((s) => s.name === name);
+        if (!s) continue;
+        if (s.stabilityDays === v) continue;
+        await updateStatus.mutateAsync({
+          id: s.id,
+          payload: { stability_days: Math.max(0, Math.round(v)) },
+        });
+      }
+      setStabilityOverrides(new Map());
+      toast.success("復習間隔を保存しました");
+    } catch (err) {
+      toast.error(`保存に失敗: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setSavingOverrides(false);
+    }
+  }, [stabilityOverrides, statuses, updateStatus]);
+  const sliderStatuses = useMemo(
+    () => [...statuses].sort((a, b) => a.sortOrder - b.sortOrder),
+    [statuses],
+  );
+  const sliderMax = useMemo(() => {
+    const peak = Math.max(30, ...statuses.map((s) => s.stabilityDays));
+    return Math.ceil((peak * 2) / 10) * 10;
+  }, [statuses]);
 
   // Background: /problems-list for dialogs (shared with other pages)
   const dialogProblemsQuery = useProblemsList(currentProject?.id);
@@ -509,6 +625,40 @@ export default function SchedulePage() {
 
   const now = useMemo(() => new Date(), []);
   const todayStr = useMemo(() => toJSTDateString(now), [now]);
+
+  // Apply overrides by proportionally scaling each row's (nextReview - lastDate)
+  // by sliderStab / baseStab. The C_T adjustment server applies divides out.
+  const rows = useMemo<ScheduleRow[]>(() => {
+    if (stabilityOverrides.size === 0) return serverRows;
+    const baseStabByName = new Map(statuses.map((s) => [s.name, s.stabilityDays]));
+    const todayMs = new Date(todayStr + "T00:00:00").getTime();
+    return serverRows.map((r) => {
+      const override = stabilityOverrides.get(r.lastStatus);
+      if (override === undefined) return r;
+      const baseStab = baseStabByName.get(r.lastStatus) ?? 0;
+      if (override === baseStab) return r;
+      const last = r.answerHistory.at(-1);
+      if (!last) return r;
+      const lastDate = last.date;
+      let nextReview: string;
+      if (override <= 0) {
+        nextReview = lastDate;
+      } else if (baseStab <= 0) {
+        nextReview = addDays(lastDate, override);
+      } else {
+        const serverDays = Math.round(
+          (new Date(r.nextReview + "T00:00:00").getTime() - new Date(lastDate + "T00:00:00").getTime()) /
+            86_400_000,
+        );
+        const previewDays = Math.round((serverDays * override) / baseStab);
+        nextReview = addDays(lastDate, previewDays);
+      }
+      const daysUntil = Math.round(
+        (new Date(nextReview + "T00:00:00").getTime() - todayMs) / 86_400_000,
+      );
+      return { ...r, nextReview, daysUntil };
+    });
+  }, [serverRows, stabilityOverrides, statuses, todayStr]);
 
   const handleDataChanged = useCallback(() => {
     if (!currentProject) return;
@@ -752,7 +902,34 @@ export default function SchedulePage() {
 
           {/* Schedule chart */}
           <div className="shrink-0 rounded-md border p-3">
-            <div className="flex justify-end mb-1">
+            <div className="flex justify-end items-center gap-2 mb-1">
+              {showSlider && stabilityOverrides.size > 0 && (
+                <>
+                  <button
+                    type="button"
+                    disabled={savingOverrides}
+                    className="inline-flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground disabled:opacity-50"
+                    onClick={() => setStabilityOverrides(new Map())}
+                  >
+                    <RotateCcw className="size-3" />
+                    Reset
+                  </button>
+                  <Button
+                    size="sm"
+                    variant="default"
+                    className="h-6 text-[10px] px-2"
+                    onClick={saveOverrides}
+                    disabled={savingOverrides}
+                  >
+                    {savingOverrides ? (
+                      <Loader2 className="size-3 mr-1 animate-spin" />
+                    ) : (
+                      <Save className="size-3 mr-1" />
+                    )}
+                    {savingOverrides ? "保存中..." : "保存"}
+                  </Button>
+                </>
+              )}
               <div className="inline-flex rounded-md border text-[10px]">
                 <button
                   type="button"
@@ -769,7 +946,41 @@ export default function SchedulePage() {
                   Status
                 </button>
               </div>
+              {sliderStatuses.length > 0 && (
+                <button
+                  type="button"
+                  title="復習間隔スライダー"
+                  aria-pressed={showSlider}
+                  className={`relative inline-flex items-center justify-center size-[22px] rounded-md border transition-colors ${
+                    showSlider
+                      ? "bg-accent text-accent-foreground border-accent-foreground/20"
+                      : "text-muted-foreground hover:bg-muted"
+                  }`}
+                  onClick={() => setShowSlider((p) => !p)}
+                >
+                  <SlidersHorizontal className="size-3" />
+                  {stabilityOverrides.size > 0 && (
+                    <span className="absolute -top-1 -right-1 size-2 rounded-full bg-primary" />
+                  )}
+                </button>
+              )}
             </div>
+            {showSlider && sliderStatuses.length > 0 && (
+              <div className="mb-2 px-2">
+                <StabilitySlider
+                  statuses={sliderStatuses}
+                  overrides={stabilityOverrides}
+                  max={sliderMax}
+                  onChange={(name, v) =>
+                    setStabilityOverrides((prev) => {
+                      const next = new Map(prev);
+                      next.set(name, Math.max(0, v));
+                      return next;
+                    })
+                  }
+                />
+              </div>
+            )}
             <ScheduleChart items={chartRows} today={todayStr} onSelect={handleSelect} onOpen={openDetail} selectedId={selectedId} colorMode={chartColorMode} statusOrderMap={statusOrderMap} />
           </div>
 
