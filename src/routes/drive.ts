@@ -74,7 +74,7 @@ const app = new Hono()
     const authResult = await authenticate(c.req.raw);
     if (!authResult) return c.json({ error: "Unauthorized" }, 401);
 
-    const { problemId, gdriveFileId, fileName } = c.req.valid("json");
+    const { problemId, gdriveFileId, fileName, problemPages } = c.req.valid("json");
 
     const existing = await db
       .select({ id: problemFile.id })
@@ -82,16 +82,21 @@ const app = new Hono()
       .where(eq(problemFile.problemId, problemId))
       .limit(1);
 
+    const values = {
+      gdriveFileId,
+      fileName,
+      ...(problemPages !== undefined ? { problemPages: problemPages ?? null } : {}),
+    };
+
     if (existing.length > 0) {
       await db
         .update(problemFile)
-        .set({ gdriveFileId, fileName })
+        .set(values)
         .where(eq(problemFile.id, existing[0].id));
     } else {
       await db.insert(problemFile).values({
         problemId,
-        gdriveFileId,
-        fileName,
+        ...values,
       });
     }
 
