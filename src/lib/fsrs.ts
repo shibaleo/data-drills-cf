@@ -22,8 +22,12 @@ const C = -0.5
 /** Stevens' Power Law exponent for evaluation points */
 const GAMMA = 0.5
 
-/** Target ratio of standard time to answer time */
+/** Target ratio of standard time to answer time (C_T = 1 at dur = std/2) */
 const TIME_COEFF_C = 0.5
+
+/** Power-law exponent for C_T. Larger = more sensitive to duration → disperses
+ *  same-day batches across more days. k=1 is linear (old behavior). */
+const TIME_COEFF_K = 2
 
 /* ── Core functions ── */
 
@@ -69,8 +73,9 @@ export function computeScore(
 /**
  * Compute next review date from last answer date and stability days.
  * When standardTimeSec and durationSec are provided, stability is adjusted:
- *   adjustedStability = base × C_T,  C_T = c × t_std / t_dur
+ *   adjustedStability = base × C_T^k,  C_T = c × t_std / t_dur
  * Reference point: t_dur = t_std/2 → C_T = 1 (unchanged from base).
+ * Power k disperses same-day batches across more days.
  */
 export function computeNextReview(
   lastDateStr: string,
@@ -84,7 +89,10 @@ export function computeNextReview(
     return lastDateStr.slice(0, 10)
   }
   if (standardTimeSec && durationSec && durationSec > 0) {
-    s = s * TIME_COEFF_C * standardTimeSec / durationSec
+    const ct = TIME_COEFF_C * standardTimeSec / durationSec
+    // Clamp C_T^k to avoid extreme values from outlier durations
+    const ctk = Math.min(10, Math.max(0.1, Math.pow(ct, TIME_COEFF_K)))
+    s = s * ctk
   }
   const d = new Date(lastDateStr)
   d.setDate(d.getDate() + Math.round(s))
