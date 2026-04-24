@@ -64,8 +64,8 @@ export function ProblemPdfLink({ problemFiles, problemId, onLinked, startActions
         }),
       })
       if (!res.ok) {
-        const { error } = await res.json()
-        throw new Error(error ?? 'Failed to link PDF')
+        const body = await res.json() as { error?: string }
+        throw new Error(body.error ?? 'Failed to link PDF')
       }
       toast.success('PDF を紐づけました')
       onLinked?.(problemId)

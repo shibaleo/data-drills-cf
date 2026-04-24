@@ -35,28 +35,22 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { api, ApiError, fetchAllPages } from "@/lib/api-client";
+import { ApiError } from "@/lib/api-client";
 import { useProject } from "@/hooks/use-project";
+import {
+  useNotesList,
+  useCreateNote,
+  useUpdateNote,
+  useDeleteNote,
+  useReorderNotes,
+  type NoteRow,
+} from "@/hooks/queries/use-notes";
 import { usePageTitle, usePageContext } from "@/lib/page-context";
 import { MarkdownEditor } from "@/components/markdown-editor";
 import { Fab } from "@/components/shared/fab";
 import { cn } from "@/lib/utils";
 
 type NotesTab = "notes" | "masters";
-
-/* ── Types ── */
-
-interface NoteRow {
-  id: string;
-  projectId: string;
-  topicId: string | null;
-  title: string;
-  content: string;
-  pinned: boolean;
-  sortOrder: number;
-  createdAt: string;
-  updatedAt: string;
-}
 
 /* ── Sortable note row ── */
 
@@ -120,8 +114,11 @@ export default function NotesPage() {
   const { currentProject } = useProject();
 
   const [tab, setTab] = useState<NotesTab>("notes");
-  const [notes, setNotes] = useState<NoteRow[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: notes = [], isLoading: loading } = useNotesList(currentProject?.id);
+  const createNote = useCreateNote(currentProject?.id);
+  const updateNote = useUpdateNote(currentProject?.id);
+  const deleteNote = useDeleteNote(currentProject?.id);
+  const reorderNotes = useReorderNotes(currentProject?.id);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState("");
   const contentRef = useRef("");
@@ -140,55 +137,28 @@ export default function NotesPage() {
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
-  const handleNoteDragEnd = async (event: DragEndEvent) => {
+  const handleNoteDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
     const oldIndex = notes.findIndex((n) => n.id === active.id);
     const newIndex = notes.findIndex((n) => n.id === over.id);
     if (oldIndex === -1 || newIndex === -1) return;
     const reordered = arrayMove(notes, oldIndex, newIndex);
-    setNotes(reordered);
-    try {
-      await api.patch("/notes/reorder", { ids: reordered.map((n) => n.id) });
-    } catch {
-      toast.error("Failed to save order");
-      setNotes(notes);
-    }
+    reorderNotes.mutate(reordered.map((n) => n.id), {
+      onError: () => toast.error("Failed to save order"),
+    });
   };
-
-  const fetchData = useCallback(async () => {
-    if (!currentProject) return;
-    setLoading(true);
-    try {
-      const noteData = await fetchAllPages<NoteRow>("/notes", {
-        project_id: currentProject.id,
-      });
-      setNotes(noteData);
-    } catch {
-      toast.error("Failed to fetch notes");
-    } finally {
-      setLoading(false);
-    }
-  }, [currentProject]);
-
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
 
   /* ── Auto-save on note switch / unmount ── */
 
   const saveNote = useCallback(
-    async (noteId: string, title: string, content: string) => {
-      try {
-        await api.put(`/notes/${noteId}`, {
-          title: title.trim() || "Untitled",
-          content,
-        });
-      } catch {
-        /* silent */
-      }
+    (noteId: string, title: string, content: string) => {
+      updateNote.mutate({
+        id: noteId,
+        payload: { title: title.trim() || "Untitled", content },
+      });
     },
-    [],
+    [updateNote],
   );
 
   const flushSave = useCallback(() => {
@@ -294,48 +264,45 @@ export default function NotesPage() {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => {
       if (selectedId) {
-        saveNote(selectedId, editTitle, contentRef.current).then(() =>
-          fetchData(),
-        );
+        saveNote(selectedId, editTitle, contentRef.current);
       }
     }, 2000);
   }
 
   /* ── Handlers ── */
 
-  async function handleCreate() {
+  const handleCreate = () => {
     if (!currentProject) return;
-    try {
-      const res = await api.post<{ data: NoteRow }>("/notes", {
-        project_id: currentProject.id,
-        title: "Untitled",
-        content: "",
-      });
-      await fetchData();
-      setSelectedId(res.data.id);
-      setEditTitle(res.data.title);
-      contentRef.current = res.data.content;
-    } catch (e) {
-      toast.error(e instanceof ApiError ? e.body?.error : "Failed to create");
-    }
-  }
+    createNote.mutate(
+      { title: "Untitled", content: "" },
+      {
+        onSuccess: (res) => {
+          setSelectedId(res.data.id);
+          setEditTitle(res.data.title);
+          contentRef.current = res.data.content;
+        },
+        onError: (e) =>
+          toast.error(e instanceof ApiError ? e.body?.error : "Failed to create"),
+      },
+    );
+  };
 
-  async function handleDelete(id: string) {
+  const handleDelete = (id: string) => {
     if (saveTimerRef.current) {
       clearTimeout(saveTimerRef.current);
       saveTimerRef.current = null;
     }
-    try {
-      await api.delete(`/notes/${id}`);
-      toast.success("Deleted");
-      if (selectedId === id) {
-        setSelectedId(null);
-      }
-      fetchData();
-    } catch (e) {
-      toast.error(e instanceof ApiError ? e.body?.error : "Failed to delete");
-    }
-  }
+    deleteNote.mutate(id, {
+      onSuccess: () => {
+        toast.success("Deleted");
+        if (selectedId === id) {
+          setSelectedId(null);
+        }
+      },
+      onError: (e) =>
+        toast.error(e instanceof ApiError ? e.body?.error : "Failed to delete"),
+    });
+  };
 
   deleteRef.current = handleDelete;
 

@@ -2,7 +2,9 @@
 
 import { useState, useRef, type RefObject } from 'react'
 import { ArrowUp, ArrowDown, Plus, Pencil, Trash2 } from 'lucide-react'
-import type { Problem, Answer, Review } from '@/lib/types'
+import type { ProblemWithAnswers, AnswerWithReviews } from '@/hooks/queries/use-problems'
+import type { Problem } from '@/lib/types'
+export type { ProblemWithAnswers, AnswerWithReviews }
 import { parseDuration, fmtDiff, secondsToHms } from '@/lib/duration'
 import { toJSTDate, jstDayDiff, todayJST } from '@/lib/date-utils'
 import { computeForgettingInfo } from '@/lib/forgetting-curve'
@@ -33,9 +35,6 @@ export function OpaqueTag({ name, color }: { name: string; color: string | null 
     </span>
   )
 }
-
-export type AnswerWithReviews = Answer & { reviews: Review[] }
-export type ProblemWithAnswers = Problem & { answers: AnswerWithReviews[] }
 
 /* ── Card list with infinite scroll ── */
 

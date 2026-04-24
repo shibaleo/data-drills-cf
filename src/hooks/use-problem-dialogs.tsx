@@ -2,7 +2,8 @@
 
 import { useState, useCallback, type ReactNode } from "react";
 import { toast } from "sonner";
-import { api, ApiError } from "@/lib/api-client";
+import { ApiError } from "@/lib/api-client";
+import { rpc, unwrap } from "@/lib/rpc-client";
 import { useProject } from "@/hooks/use-project";
 import { useAnswerForm, useEditAnswerForm } from "@/hooks/use-answer-form";
 import { ProblemDetailDialog } from "@/components/problem-detail-dialog";
@@ -67,7 +68,7 @@ export function useProblemDialogs({
 
   const handleDeleteProblem = useCallback(async (id: string) => {
     try {
-      await api.delete(`/problems/${id}`);
+      await unwrap(rpc.api.v1.problems[":id"].$delete({ param: { id } }));
       toast.success("削除しました");
       setDetailOpen(false);
       notifyAndRefresh();
@@ -121,23 +122,11 @@ export function useProblemDialogs({
           open={answerForm.open}
           onOpenChange={answerForm.setOpen}
           title="解答を登録"
-          subject={answerForm.subject}
-          onSubjectChange={answerForm.setSubject}
-          level={answerForm.level}
-          onLevelChange={answerForm.setLevel}
-          code={answerForm.code}
-          onCodeChange={answerForm.setCode}
+          form={answerForm.form}
+          reviewsField={answerForm.reviewsField}
           codeSuggestions={answerForm.codeSuggestions}
           checkpointMap={answerForm.checkpointMap}
           nameMap={answerForm.nameMap}
-          status={answerForm.status}
-          onStatusChange={answerForm.setStatus}
-          duration={answerForm.duration}
-          onDurationChange={answerForm.setDuration}
-          reviews={answerForm.reviews}
-          onAddReview={answerForm.addReview}
-          onUpdateReview={answerForm.updateReview}
-          onRemoveReview={answerForm.removeReview}
           saveLabel="登録"
           onSave={answerForm.save}
         />
@@ -146,23 +135,11 @@ export function useProblemDialogs({
           open={editForm.open}
           onOpenChange={editForm.setOpen}
           title="解答を編集"
-          subject={editForm.subject}
-          onSubjectChange={editForm.setSubject}
-          level={editForm.level}
-          onLevelChange={editForm.setLevel}
-          code={editForm.code}
-          onCodeChange={editForm.setCode}
+          form={editForm.form}
+          reviewsField={editForm.reviewsField}
           codeSuggestions={editForm.codeSuggestions}
           checkpointMap={editForm.checkpointMap}
           nameMap={editForm.nameMap}
-          status={editForm.status}
-          onStatusChange={editForm.setStatus}
-          duration={editForm.duration}
-          onDurationChange={editForm.setDuration}
-          reviews={editForm.reviews}
-          onAddReview={editForm.addReview}
-          onUpdateReview={editForm.updateReview}
-          onRemoveReview={editForm.removeReview}
           saveLabel="保存"
           onSave={editForm.save}
         />

@@ -1,9 +1,8 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState } from "react";
 import { Plus, Pencil, GripVertical } from "lucide-react";
 import { toast } from "sonner";
-import { usePageTitle } from "@/lib/page-context";
 import {
   DndContext,
   closestCenter,
@@ -29,221 +28,138 @@ import {
   DialogTitle,
   DialogFooter,
   DialogDescription,
+  DialogClose,
 } from "@/components/ui/dialog";
-import { api, ApiError, fetchAllPages } from "@/lib/api-client";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { ApiError } from "@/lib/api-client";
+import { usePageTitle } from "@/lib/page-context";
+import { randomCode } from "@/lib/utils";
+import { MasterList, type MasterSavePayload } from "@/components/shared/master-list-ui";
 import {
-  MasterItemDialog,
-  type MasterRow,
-  type MasterPageConfig,
-} from "@/components/shared/master-page";
+  useProjects,
+  useReorderProjects,
+  useCreateProject,
+  useUpdateProject,
+  useDeleteProject,
+  type Project,
+} from "@/hooks/queries/use-project-data";
+import {
+  useStatusesList,
+  useCreateStatus,
+  useUpdateStatus,
+  useDeleteStatus,
+  useReorderStatuses,
+} from "@/hooks/queries/use-statuses";
+import {
+  useSubjectsList,
+  useCreateSubject,
+  useUpdateSubject,
+  useDeleteSubject,
+  useReorderSubjects,
+} from "@/hooks/queries/use-subjects";
+import {
+  useLevelsList,
+  useCreateLevel,
+  useUpdateLevel,
+  useDeleteLevel,
+  useReorderLevels,
+} from "@/hooks/queries/use-levels";
 
-/* ── Types ── */
+/* ── Statuses (global) ── */
 
-interface SectionDef {
-  key: string;
-  entityName: string;
-  pluralName: string;
-  path: string;
-  hasColor: boolean;
-  hasPoint?: boolean;
-}
-
-/* ── Sortable item within a section ── */
-
-function SortableItem({
-  item,
-  def,
-  onClick,
-}: {
-  item: MasterRow;
-  def: SectionDef;
-  onClick: () => void;
-}) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id });
-  const didDrag = useRef(false);
-
-  useEffect(() => {
-    if (isDragging) didDrag.current = true;
-  }, [isDragging]);
-
-  const handleClick = () => {
-    if (didDrag.current) { didDrag.current = false; return; }
-    onClick();
-  };
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
-  };
-
+function StatusesSection() {
+  const { data: statuses = [], isLoading } = useStatusesList();
+  const create = useCreateStatus();
+  const update = useUpdateStatus();
+  const remove = useDeleteStatus();
+  const reorder = useReorderStatuses();
   return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className="flex items-center gap-2 px-2 py-1.5 text-sm transition-colors hover:bg-accent/20 cursor-grab active:cursor-grabbing touch-none"
-      onClick={handleClick}
-      {...attributes}
-      {...listeners}
-    >
-      <GripVertical className="size-3.5 text-muted-foreground/30 shrink-0" />
-      {def.hasColor && item.color && (
-        <span
-          className="inline-block size-2.5 rounded-full shrink-0"
-          style={{ backgroundColor: item.color as string }}
-        />
-      )}
-      <span className="font-mono text-[10px] text-muted-foreground">{item.code}</span>
-      <span className="truncate">{item.name}</span>
-      {def.hasPoint && (
-        <span className="ml-auto shrink-0 font-mono text-[10px] text-muted-foreground">{(item.point as number) ?? 0}pt</span>
-      )}
-    </div>
+    <MasterList
+      title="Statuses"
+      entityName="Status"
+      hasColor
+      items={statuses}
+      loading={isLoading}
+      onCreate={(p: MasterSavePayload) =>
+        create.mutateAsync({ code: p.code, name: p.name, color: p.color ?? null })
+      }
+      onUpdate={(id, p: MasterSavePayload) =>
+        update.mutateAsync({ id, payload: { code: p.code, name: p.name, color: p.color ?? null } })
+      }
+      onDelete={(id) => remove.mutateAsync(id)}
+      onReorder={(ids) => reorder.mutateAsync(ids)}
+    />
   );
 }
 
-/* ── Reusable MasterSection (with DnD) ── */
+/* ── Per-project subjects/levels ── */
 
-function MasterSection({
-  def,
-  endpoint,
-  items,
-  onRefresh,
-  extraCreatePayload,
-}: {
-  def: SectionDef;
-  endpoint: string;
-  items: MasterRow[];
-  onRefresh: () => void;
-  extraCreatePayload?: Record<string, unknown>;
-}) {
-  const [localItems, setLocalItems] = useState(items);
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [dialogItem, setDialogItem] = useState<MasterRow | null>(null);
-  const [confirmDelete, setConfirmDelete] = useState<MasterRow | null>(null);
-
-  useEffect(() => { setLocalItems(items); }, [items]);
-
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
-  );
-
-  const config: MasterPageConfig = {
-    title: def.entityName,
-    endpoint,
-    entityName: def.entityName,
-    hasColor: def.hasColor,
-    hasPoint: def.hasPoint,
-    extraCreatePayload,
-  };
-
-  const handleCreate = () => { setDialogItem(null); setDialogOpen(true); };
-  const handleRowClick = (item: MasterRow) => { setDialogItem(item); setDialogOpen(true); };
-
-  const handleItemDragEnd = async (event: DragEndEvent) => {
-    const { active, over } = event;
-    if (!over || active.id === over.id) return;
-    const oldIndex = localItems.findIndex((i) => i.id === active.id);
-    const newIndex = localItems.findIndex((i) => i.id === over.id);
-    if (oldIndex === -1 || newIndex === -1) return;
-    const reordered = arrayMove(localItems, oldIndex, newIndex);
-    setLocalItems(reordered);
-    try {
-      await api.patch(`${endpoint}/reorder`, { ids: reordered.map((i) => i.id) });
-    } catch {
-      toast.error("Failed to save order");
-      setLocalItems(items);
-    }
-  };
-
-  const executeDelete = async () => {
-    if (!confirmDelete) return;
-    try {
-      await api.delete(`${endpoint}/${confirmDelete.id}`);
-      toast.success(`${def.entityName} deleted`);
-      setConfirmDelete(null);
-      setDialogOpen(false);
-      onRefresh();
-    } catch (e) {
-      toast.error(e instanceof ApiError ? e.body.error : "Failed to delete");
-    }
-  };
-
-  const handleSaved = () => {
-    setDialogOpen(false);
-    onRefresh();
-  };
-
+function SubjectsSection({ projectId }: { projectId: string }) {
+  const { data: subjects = [], isLoading } = useSubjectsList(projectId);
+  const create = useCreateSubject(projectId);
+  const update = useUpdateSubject(projectId);
+  const remove = useDeleteSubject(projectId);
+  const reorder = useReorderSubjects(projectId);
   return (
-    <div className="border border-border rounded-lg">
-      <div className="flex items-center justify-between px-3 py-2 border-b border-border/50">
-        <h3 className="text-sm font-semibold" style={{ color: 'hsl(var(--primary))' }}>{def.pluralName}</h3>
-        <Button variant="ghost" size="icon" className="size-7" onClick={handleCreate}>
-          <Plus className="size-3.5" />
-        </Button>
-      </div>
-      <div>
-        {localItems.length === 0 ? (
-          <div className="px-3 py-4 text-xs text-muted-foreground text-center">Empty</div>
-        ) : (
-          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleItemDragEnd}>
-            <SortableContext items={localItems.map((i) => i.id)} strategy={verticalListSortingStrategy}>
-              {localItems.map((item) => (
-                <SortableItem key={item.id} item={item} def={def} onClick={() => handleRowClick(item)} />
-              ))}
-            </SortableContext>
-          </DndContext>
-        )}
-      </div>
+    <MasterList
+      title="Subjects"
+      entityName="Subject"
+      hasColor
+      items={subjects}
+      loading={isLoading}
+      onCreate={(p: MasterSavePayload) =>
+        create.mutateAsync({ code: p.code, name: p.name, color: p.color ?? null })
+      }
+      onUpdate={(id, p: MasterSavePayload) =>
+        update.mutateAsync({ id, payload: { code: p.code, name: p.name, color: p.color ?? null } })
+      }
+      onDelete={(id) => remove.mutateAsync(id)}
+      onReorder={(ids) => reorder.mutateAsync(ids)}
+    />
+  );
+}
 
-      <MasterItemDialog
-        open={dialogOpen}
-        onOpenChange={setDialogOpen}
-        item={dialogItem}
-        config={config}
-        onSaved={() => { handleSaved(); toast.success(dialogItem ? `${def.entityName} updated` : `${def.entityName} created`); }}
-        onDeleted={() => dialogItem && setConfirmDelete(dialogItem)}
-      />
-
-      <Dialog open={confirmDelete !== null} onOpenChange={(open) => { if (!open) setConfirmDelete(null); }}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Confirm Delete</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete &quot;{confirmDelete?.name}&quot;?
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setConfirmDelete(null)}>Cancel</Button>
-            <Button variant="destructive" onClick={executeDelete}>Delete</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
+function LevelsSection({ projectId }: { projectId: string }) {
+  const { data: levels = [], isLoading } = useLevelsList(projectId);
+  const create = useCreateLevel(projectId);
+  const update = useUpdateLevel(projectId);
+  const remove = useDeleteLevel(projectId);
+  const reorder = useReorderLevels(projectId);
+  return (
+    <MasterList
+      title="Levels"
+      entityName="Level"
+      hasColor
+      items={levels}
+      loading={isLoading}
+      onCreate={(p: MasterSavePayload) =>
+        create.mutateAsync({ code: p.code, name: p.name, color: p.color ?? null })
+      }
+      onUpdate={(id, p: MasterSavePayload) =>
+        update.mutateAsync({ id, payload: { code: p.code, name: p.name, color: p.color ?? null } })
+      }
+      onDelete={(id) => remove.mutateAsync(id)}
+      onReorder={(ids) => reorder.mutateAsync(ids)}
+    />
   );
 }
 
 /* ── Sortable project section ── */
 
 function SortableProjectSection({
-  projectData,
-  onRefresh,
+  project,
   onEditProject,
 }: {
-  projectData: ProjectData;
-  onRefresh: () => void;
-  onEditProject: (p: MasterRow) => void;
+  project: Project;
+  onEditProject: (p: Project) => void;
 }) {
-  const { project, subjects, levels } = projectData;
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: project.id });
-
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.5 : 1,
   };
-
   return (
     <div ref={setNodeRef} style={style}>
       <div className="flex items-center gap-2 mb-2">
@@ -266,161 +182,176 @@ function SortableProjectSection({
         </button>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <MasterSection
-          def={SUBJECT_DEF}
-          endpoint={`/projects/${project.id}/subjects`}
-          items={subjects}
-          onRefresh={onRefresh}
-        />
-        <MasterSection
-          def={LEVEL_DEF}
-          endpoint={`/projects/${project.id}/levels`}
-          items={levels}
-          onRefresh={onRefresh}
-        />
+        <SubjectsSection projectId={project.id} />
+        <LevelsSection projectId={project.id} />
       </div>
     </div>
   );
 }
 
-/* ── Page ── */
+/* ── Project create/edit dialog (minimal, since project has no color/point here) ── */
 
-const STATUS_DEF: SectionDef = { key: "statuses", entityName: "Status", pluralName: "Statuses", path: "statuses", hasColor: true, hasPoint: true };
-const SUBJECT_DEF: SectionDef = { key: "subjects", entityName: "Subject", pluralName: "Subjects", path: "subjects", hasColor: true };
-const LEVEL_DEF: SectionDef = { key: "levels", entityName: "Level", pluralName: "Levels", path: "levels", hasColor: true };
+function ProjectDialog({
+  open,
+  onOpenChange,
+  item,
+  onSave,
+  onDelete,
+}: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  item: Project | null;
+  onSave: (payload: { code: string; name: string }) => Promise<void>;
+  onDelete: () => void;
+}) {
+  const isCreate = item === null;
+  const [code, setCode] = useState("");
+  const [name, setName] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-interface ProjectData {
-  project: MasterRow;
-  subjects: MasterRow[];
-  levels: MasterRow[];
+  // Reset form when dialog opens
+  if (open && !saving) {
+    // noop — React will call effect next tick; we use uncontrolled defaults below
+  }
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        onOpenChange(o);
+        if (o) {
+          setCode(item?.code ?? "");
+          setName(item?.name ?? "");
+          setError(null);
+        }
+      }}
+    >
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>{isCreate ? "New Project" : "Edit Project"}</DialogTitle>
+          <DialogDescription className="sr-only">Project details</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label>Code</Label>
+            <Input value={code} onChange={(e) => setCode(e.target.value)} placeholder="Auto-generated if empty" className="font-mono" />
+          </div>
+          <div className="space-y-2">
+            <Label>Name</Label>
+            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Project name" />
+          </div>
+          {error && <p className="text-sm text-destructive">{error}</p>}
+        </div>
+        <DialogFooter>
+          {!isCreate && (
+            <Button variant="outline" size="sm" className="text-destructive hover:text-destructive mr-auto" onClick={onDelete}>
+              Delete
+            </Button>
+          )}
+          <DialogClose asChild>
+            <Button variant="outline" disabled={saving}>Cancel</Button>
+          </DialogClose>
+          <Button
+            onClick={async () => {
+              if (!name.trim()) { setError("Name is required"); return; }
+              setSaving(true);
+              try {
+                await onSave({ code: code.trim() || randomCode(), name: name.trim() });
+              } catch (e) {
+                setError(e instanceof Error ? e.message : "Failed to save");
+              } finally {
+                setSaving(false);
+              }
+            }}
+            disabled={saving}
+          >
+            {saving ? "Saving..." : isCreate ? "Create" : "Update"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
 }
+
+/* ── Page ── */
 
 export default function MastersPage() {
   usePageTitle("Masters");
-  const [statuses, setStatuses] = useState<MasterRow[]>([]);
-  const [projects, setProjects] = useState<MasterRow[]>([]);
-  const [projectData, setProjectData] = useState<ProjectData[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: projects = [], isLoading } = useProjects();
+  const reorderProjects = useReorderProjects();
+  const createProject = useCreateProject();
+  const updateProject = useUpdateProject();
+  const deleteProject = useDeleteProject();
 
   // Project create/edit dialog
   const [projectDialogOpen, setProjectDialogOpen] = useState(false);
-  const [projectDialogItem, setProjectDialogItem] = useState<MasterRow | null>(null);
-  const [confirmDeleteProject, setConfirmDeleteProject] = useState<MasterRow | null>(null);
-
-  const projectConfig: MasterPageConfig = {
-    title: "Project",
-    endpoint: "/projects",
-    entityName: "Project",
-    hasColor: false,
-  };
+  const [projectDialogItem, setProjectDialogItem] = useState<Project | null>(null);
+  const [confirmDeleteProject, setConfirmDeleteProject] = useState<Project | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
-  const fetchAll = useCallback(async () => {
-    setLoading(true);
-    try {
-      const [sts, projs] = await Promise.all([
-        fetchAllPages<MasterRow>("/statuses"),
-        fetchAllPages<MasterRow>("/projects"),
-      ]);
-      setStatuses(sts);
-      setProjects(projs);
-
-      const pd = await Promise.all(
-        projs.map(async (proj) => {
-          const [subjects, levels] = await Promise.all([
-            fetchAllPages<MasterRow>(`/projects/${proj.id}/subjects`),
-            fetchAllPages<MasterRow>(`/projects/${proj.id}/levels`),
-          ]);
-          return { project: proj, subjects, levels };
-        }),
-      );
-      setProjectData(pd);
-    } catch {
-      toast.error("Failed to fetch data");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => { fetchAll(); }, [fetchAll]);
-
-  const handleDragEnd = async (event: DragEndEvent) => {
+  const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
-
-    const oldIndex = projectData.findIndex((d) => d.project.id === active.id);
-    const newIndex = projectData.findIndex((d) => d.project.id === over.id);
+    const oldIndex = projects.findIndex((p) => p.id === active.id);
+    const newIndex = projects.findIndex((p) => p.id === over.id);
     if (oldIndex === -1 || newIndex === -1) return;
-
-    const reordered = arrayMove(projectData, oldIndex, newIndex);
-    setProjectData(reordered);
-
-    // Persist order
-    try {
-      await api.patch("/projects/reorder", { ids: reordered.map((d) => d.project.id) });
-    } catch {
-      toast.error("Failed to save order");
-      fetchAll(); // revert
-    }
+    const reordered = arrayMove(projects, oldIndex, newIndex);
+    reorderProjects.mutate(reordered.map((p) => p.id), {
+      onError: () => toast.error("Failed to save order"),
+    });
   };
 
-  const executeDeleteProject = async () => {
+  const executeDeleteProject = () => {
     if (!confirmDeleteProject) return;
-    try {
-      await api.delete(`/projects/${confirmDeleteProject.id}`);
-      toast.success("Project deleted");
-      setConfirmDeleteProject(null);
-      setProjectDialogOpen(false);
-      fetchAll();
-    } catch (e) {
-      toast.error(e instanceof ApiError ? e.body.error : "Failed to delete");
-    }
+    deleteProject.mutate(confirmDeleteProject.id, {
+      onSuccess: () => {
+        toast.success("Project deleted");
+        setConfirmDeleteProject(null);
+        setProjectDialogOpen(false);
+      },
+      onError: (e) => toast.error(e instanceof ApiError ? e.body.error : "Failed to delete"),
+    });
   };
 
-  const handleEditProject = (p: MasterRow) => {
-    setProjectDialogItem(p);
-    setProjectDialogOpen(true);
+  const handleSaveProject = async (payload: { code: string; name: string }) => {
+    if (projectDialogItem) {
+      await updateProject.mutateAsync({ id: projectDialogItem.id, payload });
+      toast.success("Project updated");
+    } else {
+      await createProject.mutateAsync(payload);
+      toast.success("Project created");
+    }
+    setProjectDialogOpen(false);
   };
 
   return (
     <div className="p-4 md:p-6">
-      {loading ? (
+      {isLoading ? (
         <div className="text-center py-12 text-muted-foreground">Loading...</div>
       ) : (
         <div className="space-y-6">
-          {/* ── Global ── */}
+          {/* Global section */}
           <div>
             <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Global</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <MasterSection
-                def={{ key: "projects", entityName: "Project", pluralName: "Projects", path: "projects", hasColor: true }}
-                endpoint="/projects"
-                items={projects}
-                onRefresh={fetchAll}
-              />
-              <MasterSection
-                def={STATUS_DEF}
-                endpoint="/statuses"
-                items={statuses}
-                onRefresh={fetchAll}
-              />
+              <StatusesSection />
             </div>
           </div>
 
-          {/* ── Per-project sections (sortable) ── */}
+          {/* Per-project sections (sortable) */}
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-            <SortableContext items={projectData.map((d) => d.project.id)} strategy={verticalListSortingStrategy}>
+            <SortableContext items={projects.map((p) => p.id)} strategy={verticalListSortingStrategy}>
               <div className="space-y-6">
-                {projectData.map((pd) => (
+                {projects.map((project) => (
                   <SortableProjectSection
-                    key={pd.project.id}
-                    projectData={pd}
-                    onRefresh={fetchAll}
-                    onEditProject={handleEditProject}
+                    key={project.id}
+                    project={project}
+                    onEditProject={(p) => { setProjectDialogItem(p); setProjectDialogOpen(true); }}
                   />
                 ))}
               </div>
@@ -439,18 +370,12 @@ export default function MastersPage() {
         </div>
       )}
 
-      {/* Project create/edit dialog */}
-      <MasterItemDialog
+      <ProjectDialog
         open={projectDialogOpen}
         onOpenChange={setProjectDialogOpen}
         item={projectDialogItem}
-        config={projectConfig}
-        onSaved={() => {
-          setProjectDialogOpen(false);
-          toast.success(projectDialogItem ? "Project updated" : "Project created");
-          fetchAll();
-        }}
-        onDeleted={() => projectDialogItem && setConfirmDeleteProject(projectDialogItem)}
+        onSave={handleSaveProject}
+        onDelete={() => projectDialogItem && setConfirmDeleteProject(projectDialogItem)}
       />
 
       <Dialog open={confirmDeleteProject !== null} onOpenChange={(open) => { if (!open) setConfirmDeleteProject(null); }}>

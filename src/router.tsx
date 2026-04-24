@@ -19,9 +19,6 @@ const AnswersPage = lazy(() => import("./app/(pages)/answers/page"));
 const TimelinePage = lazy(() => import("./app/(pages)/timeline/page"));
 const FlashcardsPage = lazy(() => import("./app/(pages)/flashcards/page"));
 const NotesPage = lazy(() => import("./app/(pages)/notes/page"));
-const StatsPage = lazy(() => import("./app/(pages)/stats/page"));
-const RetentionPage = lazy(() => import("./app/(pages)/stats/retention/page"));
-const ScorePage = lazy(() => import("./app/(pages)/stats/score/page"));
 const TagsPage = lazy(() => import("./app/(pages)/tags/page"));
 const SubjectsPage = lazy(() => import("./app/(pages)/subjects/page"));
 const LevelsPage = lazy(() => import("./app/(pages)/levels/page"));
@@ -31,7 +28,6 @@ const StatusesPage = lazy(() => import("./app/(pages)/statuses/page"));
 const UsersPage = lazy(() => import("./app/(pages)/users/page"));
 const ApiKeysPage = lazy(() => import("./app/(pages)/api-keys/page"));
 const MastersPage = lazy(() => import("./app/(pages)/masters/page"));
-const PdfSyncPage = lazy(() => import("./app/(pages)/pdf-sync/page"));
 const AboutPage = lazy(() => import("./app/(pages)/about/page"));
 
 /* ── Route tree ── */
@@ -74,9 +70,6 @@ const answersRoute = lazyRoute("/answers", AnswersPage);
 const timelineRoute = lazyRoute("/timeline", TimelinePage);
 const flashcardsRoute = lazyRoute("/flashcards", FlashcardsPage);
 const notesRoute = lazyRoute("/notes", NotesPage);
-const statsRoute = lazyRoute("/stats", StatsPage);
-const retentionRoute = lazyRoute("/stats/retention", RetentionPage);
-const scoreRoute = lazyRoute("/stats/score", ScorePage);
 const tagsRoute = lazyRoute("/tags", TagsPage);
 const subjectsRoute = lazyRoute("/subjects", SubjectsPage);
 const levelsRoute = lazyRoute("/levels", LevelsPage);
@@ -86,7 +79,6 @@ const statusesRoute = lazyRoute("/statuses", StatusesPage);
 const usersRoute = lazyRoute("/users", UsersPage);
 const apiKeysRoute = lazyRoute("/api-keys", ApiKeysPage);
 const mastersRoute = lazyRoute("/masters", MastersPage);
-const pdfSyncRoute = lazyRoute("/pdf-sync", PdfSyncPage);
 const aboutRoute = lazyRoute("/about", AboutPage);
 
 // / → /schedule redirect
@@ -113,9 +105,6 @@ const routeTree = rootRoute.addChildren([
     timelineRoute,
     flashcardsRoute,
     notesRoute,
-    statsRoute,
-    retentionRoute,
-    scoreRoute,
     tagsRoute,
     subjectsRoute,
     levelsRoute,
@@ -125,7 +114,6 @@ const routeTree = rootRoute.addChildren([
     usersRoute,
     apiKeysRoute,
     mastersRoute,
-    pdfSyncRoute,
     aboutRoute,
   ]),
   indexRoute,

@@ -1,10 +1,9 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { Link, usePathname } from "@/lib/router";
 import { SITE_NAME } from "@/lib/site";
 import {
-  BarChart3,
   CalendarDays,
   Clock,
   FileText,
@@ -19,9 +18,10 @@ import {
   Tag,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { api } from "@/lib/api-client";
 import { useProject } from "@/hooks/use-project";
-import type { ScheduleRow } from "@/lib/api-responses";
+import { useScheduleList } from "@/hooks/queries/use-schedule";
+import { useQueryClient } from "@tanstack/react-query";
+import { scheduleKeys } from "@/hooks/queries/use-schedule";
 import { UserMenu } from "./user-menu";
 
 const EXPANDED_WIDTH = 224;
@@ -39,26 +39,20 @@ interface NavItem {
 
 function OverdueBadge() {
   const { currentProject } = useProject();
-  const [count, setCount] = useState(0);
+  const qc = useQueryClient();
+  const { data = [] } = useScheduleList(currentProject?.id);
+  const count = data.filter((r) => r.daysUntil <= 0).length;
 
-  const refresh = useCallback(() => {
-    if (!currentProject) return;
-    api
-      .get<{ data: ScheduleRow[] }>(
-        `/schedule?project_id=${currentProject.id}`,
-      )
-      .then((res) => {
-        setCount(res.data.filter((r) => r.daysUntil <= 0).length);
-      })
-      .catch(() => {});
-  }, [currentProject]);
-
-  useEffect(() => { refresh(); }, [refresh]);
-
+  // Legacy "schedule-changed" event — re-invalidate to pick up updates.
   useEffect(() => {
-    window.addEventListener("schedule-changed", refresh);
-    return () => window.removeEventListener("schedule-changed", refresh);
-  }, [refresh]);
+    const invalidate = () => {
+      if (currentProject) {
+        qc.invalidateQueries({ queryKey: scheduleKeys.list(currentProject.id) });
+      }
+    };
+    window.addEventListener("schedule-changed", invalidate);
+    return () => window.removeEventListener("schedule-changed", invalidate);
+  }, [qc, currentProject]);
 
   if (count <= 0) return null;
   return (
@@ -75,11 +69,9 @@ const navItems: NavItem[] = [
   { href: "/timeline", label: "Timeline", icon: Clock, dividerAfter: true },
   { href: "/flashcards", label: "Flashcards", icon: Layers },
   { href: "/notes", label: "Notes", icon: FileText, dividerAfter: true },
-  { href: "/stats", label: "Stats", icon: BarChart3, dividerAfter: true },
   { href: "/topics", label: "Topics", icon: List },
   { href: "/tags", label: "Tags", icon: Tag, dividerAfter: true },
   { href: "/masters", label: "Masters", icon: LayoutGrid },
-  { href: "/pdf-sync", label: "PDF Sync", icon: FileText },
   { href: "/about", label: "About", icon: Info },
 ];
 

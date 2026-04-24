@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
 import { Copy, Check } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -17,63 +17,41 @@ import {
   DialogFooter,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { api, ApiError, fetchAllPages } from "@/lib/api-client";
-
-interface ApiKeyRow {
-  id: string;
-  name: string;
-  key_prefix: string;
-  is_active: boolean;
-  last_used_at: string | null;
-  created_at: string;
-}
+import { ApiError } from "@/lib/api-client";
+import {
+  useApiKeysList,
+  useCreateApiKey,
+  useDeleteApiKey,
+} from "@/hooks/queries/use-api-keys";
 
 export default function ApiKeysPage() {
   usePageTitle("API Keys");
-  const [items, setItems] = useState<ApiKeyRow[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: items = [], isLoading: loading } = useApiKeysList();
+  const createKey = useCreateApiKey();
+  const deactivateKey = useDeleteApiKey();
+
   const [createOpen, setCreateOpen] = useState(false);
   const [newKeyName, setNewKeyName] = useState("");
   const [createdKey, setCreatedKey] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  const fetchItems = useCallback(async () => {
-    setLoading(true);
-    try {
-      const data = await fetchAllPages<ApiKeyRow>("/api-keys");
-      setItems(data);
-    } catch (e) {
-      toast.error(e instanceof ApiError ? e.body.error : "Failed to fetch API keys");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => { fetchItems(); }, [fetchItems]);
-
-  const handleCreate = async () => {
+  const handleCreate = () => {
     if (!newKeyName.trim()) return;
-    setSaving(true);
-    try {
-      const res = await api.post<{ data: { raw_key: string } }>("/api-keys", { name: newKeyName.trim() });
-      setCreatedKey(res.data.raw_key);
-      fetchItems();
-    } catch (e) {
-      toast.error(e instanceof ApiError ? e.body.error : "Failed to create");
-    } finally {
-      setSaving(false);
-    }
+    createKey.mutate(newKeyName.trim(), {
+      onSuccess: (data) => {
+        setCreatedKey(data.key);
+      },
+      onError: (e) =>
+        toast.error(e instanceof ApiError ? e.body.error : "Failed to create"),
+    });
   };
 
-  const handleDeactivate = async (id: string) => {
-    try {
-      await api.patch("/api-keys/" + id, { is_active: false });
-      toast.success("API key deactivated");
-      fetchItems();
-    } catch (e) {
-      toast.error(e instanceof ApiError ? e.body.error : "Failed to deactivate");
-    }
+  const handleDeactivate = (id: string) => {
+    deactivateKey.mutate(id, {
+      onSuccess: () => toast.success("API key deactivated"),
+      onError: (e) =>
+        toast.error(e instanceof ApiError ? e.body.error : "Failed to deactivate"),
+    });
   };
 
   const handleCopy = async () => {
@@ -98,13 +76,13 @@ export default function ApiKeysPage() {
                   <td className="py-2 px-3">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <span className="font-mono text-xs text-muted-foreground">{item.key_prefix}...</span>
+                        <span className="font-mono text-xs text-muted-foreground">{item.keyPrefix}...</span>
                         <span>{item.name}</span>
-                        {!item.is_active && (
+                        {!item.isActive && (
                           <Badge className="bg-red-900/30 text-red-400 border-red-800/50 text-xs py-0">Disabled</Badge>
                         )}
                       </div>
-                      {item.is_active && (
+                      {item.isActive && (
                         <Button variant="outline" size="sm" className="text-destructive" onClick={() => handleDeactivate(item.id)}>
                           Deactivate
                         </Button>
@@ -152,7 +130,9 @@ export default function ApiKeysPage() {
             ) : (
               <>
                 <Button variant="outline" onClick={() => setCreateOpen(false)}>Cancel</Button>
-                <Button onClick={handleCreate} disabled={saving}>{saving ? "Creating..." : "Create"}</Button>
+                <Button onClick={handleCreate} disabled={createKey.isPending}>
+                  {createKey.isPending ? "Creating..." : "Create"}
+                </Button>
               </>
             )}
           </DialogFooter>

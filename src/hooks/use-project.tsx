@@ -1,31 +1,18 @@
 "use client";
 
-import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react";
-import { fetchAllPages } from "@/lib/api-client";
+import { createContext, useContext, useState, useEffect, useCallback, useMemo, type ReactNode } from "react";
+import {
+  useProjects,
+  useSubjects,
+  useLevels,
+  useStatuses,
+  useInvalidateProjectData,
+  type Project,
+  type LookupItem,
+  type StatusItem,
+} from "@/hooks/queries/use-project-data";
 
-interface Project {
-  id: string;
-  code: string;
-  name: string;
-}
-
-interface LookupItem {
-  id: string;
-  name: string;
-  color?: string | null;
-  point?: number;
-}
-
-/** Full answer_status row from the API */
-export interface StatusItem {
-  id: string;
-  name: string;
-  color: string | null;
-  point: number;
-  sortOrder: number;
-  stabilityDays: number;
-  description: string | null;
-}
+export type { StatusItem };
 
 interface ProjectContextValue {
   projects: Project[];
@@ -69,43 +56,25 @@ export function useLookup() {
 const STORAGE_KEY = "dd_current_project";
 
 export function ProjectProvider({ children }: { children: ReactNode }) {
-  const [projects, setProjects] = useState<Project[]>([]);
   const [currentProject, setCurrentProjectState] = useState<Project | null>(null);
-  const [subjects, setSubjects] = useState<LookupItem[]>([]);
-  const [levels, setLevels] = useState<LookupItem[]>([]);
-  const [statuses, setStatuses] = useState<StatusItem[]>([]);
   const [filterSubjectId, setFilterSubjectId] = useState<string | null>(null);
   const [filterLevelId, setFilterLevelId] = useState<string | null>(null);
 
-  const refresh = useCallback(async () => {
-    try {
-      const data = await fetchAllPages<Project>("/projects");
-      setProjects(data);
-      if (data.length > 0 && !currentProject) {
-        const savedId = typeof window !== "undefined" ? localStorage.getItem(STORAGE_KEY) : null;
-        const saved = savedId ? data.find((p) => p.id === savedId) : null;
-        setCurrentProjectState(saved ?? data[0]);
-      }
-    } catch {
-      // ignore
-    }
-  }, [currentProject]);
+  const projectsQuery = useProjects();
+  const subjectsQuery = useSubjects(currentProject?.id);
+  const levelsQuery = useLevels(currentProject?.id);
+  const statusesQuery = useStatuses();
+  const invalidate = useInvalidateProjectData();
 
-  useEffect(() => { refresh(); }, [refresh]);
+  const projects = projectsQuery.data ?? [];
 
-  // Fetch subjects, levels, statuses when project changes
+  // Pick initial project from localStorage once the list loads
   useEffect(() => {
-    if (!currentProject) return;
-    Promise.all([
-      fetchAllPages<LookupItem>(`/projects/${currentProject.id}/subjects`),
-      fetchAllPages<LookupItem>(`/projects/${currentProject.id}/levels`),
-      fetchAllPages<StatusItem>("/statuses"),
-    ]).then(([subs, lvls, stats]) => {
-      setSubjects(subs);
-      setLevels(lvls);
-      setStatuses(stats);
-    }).catch(() => { /* ignore */ });
-  }, [currentProject]);
+    if (currentProject || projects.length === 0) return;
+    const savedId = typeof window !== "undefined" ? localStorage.getItem(STORAGE_KEY) : null;
+    const saved = savedId ? projects.find((p) => p.id === savedId) : null;
+    setCurrentProjectState(saved ?? projects[0]);
+  }, [projects, currentProject]);
 
   const setCurrentProject = useCallback((p: Project) => {
     setCurrentProjectState(p);
@@ -116,9 +85,33 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  return (
-    <ProjectContext.Provider value={{ projects, currentProject, setCurrentProject, refresh, subjects, levels, statuses, filterSubjectId, setFilterSubjectId, filterLevelId, setFilterLevelId }}>
-      {children}
-    </ProjectContext.Provider>
-  );
+  const refresh = useCallback(async () => {
+    invalidate();
+  }, [invalidate]);
+
+  const value = useMemo<ProjectContextValue>(() => ({
+    projects,
+    currentProject,
+    setCurrentProject,
+    refresh,
+    subjects: subjectsQuery.data ?? [],
+    levels: levelsQuery.data ?? [],
+    statuses: statusesQuery.data ?? [],
+    filterSubjectId,
+    setFilterSubjectId,
+    filterLevelId,
+    setFilterLevelId,
+  }), [
+    projects,
+    currentProject,
+    setCurrentProject,
+    refresh,
+    subjectsQuery.data,
+    levelsQuery.data,
+    statusesQuery.data,
+    filterSubjectId,
+    filterLevelId,
+  ]);
+
+  return <ProjectContext.Provider value={value}>{children}</ProjectContext.Provider>;
 }

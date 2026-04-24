@@ -1,11 +1,10 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { Pencil, Trash2, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
 import { MarkdownEditor } from "@/components/markdown-editor";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -15,8 +14,17 @@ import {
 } from "@/components/ui/dialog";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { api, ApiError, fetchAllPages } from "@/lib/api-client";
+import { ApiError } from "@/lib/api-client";
 import { useProject } from "@/hooks/use-project";
+import {
+  useFlashcardsData,
+  useCreateFlashcard,
+  useUpdateFlashcard,
+  useDeleteFlashcard,
+  useRateFlashcard,
+  type FlashcardRow,
+  type FlashcardReviewRow,
+} from "@/hooks/queries/use-flashcards";
 import { Fab } from "@/components/shared/fab";
 import { usePageTitle, usePageSubtitle } from "@/lib/page-context";
 import { StatusTag } from "@/components/color-tags";
@@ -28,32 +36,8 @@ import { toJSTDateString, jstDayDiff } from "@/lib/date-utils";
 
 /* ── Types ── */
 
-interface FlashcardRow {
-  id: string;
-  code: string;
-  projectId: string;
-  topicId: string | null;
-  front: string;
-  back: string;
-  createdAt: string;
-}
-
-interface FlashcardReviewRow {
-  id: string;
-  flashcardId: string;
-  quality: number;
-  reviewedAt: string;
-  nextReviewAt: string | null;
-}
-
 interface FlashcardWithReviews extends FlashcardRow {
   reviews: FlashcardReviewRow[];
-}
-
-interface TopicItem {
-  id: string;
-  name: string;
-  color?: string | null;
 }
 
 /* ── FlipCard ── */
@@ -103,9 +87,12 @@ function cardRetention(reviews: FlashcardReviewRow[], now: Date) {
 export default function FlashcardsPage() {
   usePageTitle("Flashcards");
   const { currentProject, statuses } = useProject();
-  const [cards, setCards] = useState<FlashcardWithReviews[]>([]);
-  const [topics, setTopics] = useState<TopicItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { cards: rawCards, reviews, topics, isLoading } = useFlashcardsData(currentProject?.id);
+  const createCard = useCreateFlashcard(currentProject?.id);
+  const updateCard = useUpdateFlashcard(currentProject?.id);
+  const deleteCard = useDeleteFlashcard(currentProject?.id);
+  const rateCard = useRateFlashcard();
+  const isSaving = createCard.isPending || updateCard.isPending;
 
   // Create/edit dialog
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -113,51 +100,28 @@ export default function FlashcardsPage() {
   const [formFront, setFormFront] = useState("");
   const [formBack, setFormBack] = useState("");
   const [formTopicId, setFormTopicId] = useState("__none__");
-  const [saving, setSaving] = useState(false);
 
   // Inline reveal state
   const [revealedIds, setRevealedIds] = useState<Set<string>>(new Set());
 
-  const fetchData = useCallback(async () => {
-    if (!currentProject) return;
-    setLoading(true);
-    try {
-      const [rawCards, reviews, tops] = await Promise.all([
-        fetchAllPages<FlashcardRow>("/flashcards", { project_id: currentProject.id }),
-        fetchAllPages<FlashcardReviewRow>("/flashcard-reviews"),
-        fetchAllPages<TopicItem>(`/projects/${currentProject.id}/topics`),
-      ]);
-
-      const reviewMap = new Map<string, FlashcardReviewRow[]>();
-      for (const r of reviews) {
-        const list = reviewMap.get(r.flashcardId) ?? [];
-        list.push(r);
-        reviewMap.set(r.flashcardId, list);
-      }
-
-      const combined: FlashcardWithReviews[] = rawCards.map((fc) => ({
-        ...fc,
-        reviews: reviewMap.get(fc.id) ?? [],
-      }));
-
-      // Sort by retention (lowest first = most urgent)
-      const now = new Date();
-      combined.sort((a, b) => {
-        const ra = cardRetention(a.reviews, now);
-        const rb = cardRetention(b.reviews, now);
-        return ra.ret - rb.ret;
-      });
-
-      setCards(combined);
-      setTopics(tops);
-    } catch {
-      toast.error("Failed to fetch data");
-    } finally {
-      setLoading(false);
+  const cards = useMemo<FlashcardWithReviews[]>(() => {
+    const reviewMap = new Map<string, FlashcardReviewRow[]>();
+    for (const r of reviews) {
+      const list = reviewMap.get(r.flashcardId) ?? [];
+      list.push(r);
+      reviewMap.set(r.flashcardId, list);
     }
-  }, [currentProject]);
+    const combined = rawCards.map((fc) => ({
+      ...fc,
+      reviews: reviewMap.get(fc.id) ?? [],
+    }));
+    const now = new Date();
+    combined.sort((a, b) =>
+      cardRetention(a.reviews, now).ret - cardRetention(b.reviews, now).ret,
+    );
+    return combined;
+  }, [rawCards, reviews]);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
   usePageSubtitle(cards.length > 0 ? `${cards.length}枚` : "");
 
   function openCreateDialog() {
@@ -176,46 +140,43 @@ export default function FlashcardsPage() {
     setDialogOpen(true);
   }
 
-  async function handleSave() {
+  const handleSave = () => {
     if (!formFront.trim() || !formBack.trim()) {
       toast.error("表面と裏面を入力してください");
       return;
     }
-    setSaving(true);
-    try {
-      const payload: Record<string, unknown> = {
-        front: formFront.trim(),
-        back: formBack.trim(),
-        topic_id: formTopicId === "__none__" ? null : formTopicId,
-      };
-      if (editItem) {
-        await api.put(`/flashcards/${editItem.id}`, payload);
-        toast.success("カードを更新しました");
-      } else {
-        payload.project_id = currentProject!.id;
-        payload.code = randomCode();
-        await api.post("/flashcards", payload);
-        toast.success("カードを作成しました");
-      }
-      setDialogOpen(false);
-      fetchData();
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "保存に失敗");
-    } finally {
-      setSaving(false);
+    const base = {
+      front: formFront.trim(),
+      back: formBack.trim(),
+      topic_id: formTopicId === "__none__" ? null : formTopicId,
+    };
+    const onDone = {
+      onSuccess: () => {
+        toast.success(editItem ? "カードを更新しました" : "カードを作成しました");
+        setDialogOpen(false);
+      },
+      onError: (e: Error) => toast.error(e.message ?? "保存に失敗"),
+    };
+    if (editItem) {
+      updateCard.mutate({ id: editItem.id, payload: base }, onDone);
+    } else {
+      createCard.mutate(
+        { ...base, project_id: currentProject!.id, code: randomCode() },
+        onDone,
+      );
     }
-  }
+  };
 
-  async function handleDelete(id: string) {
-    try {
-      await api.delete(`/flashcards/${id}`);
-      toast.success("カードを削除しました");
-      setDialogOpen(false);
-      fetchData();
-    } catch (e) {
-      toast.error(e instanceof ApiError ? e.body.error : "削除に失敗しました");
-    }
-  }
+  const handleDelete = (id: string) => {
+    deleteCard.mutate(id, {
+      onSuccess: () => {
+        toast.success("カードを削除しました");
+        setDialogOpen(false);
+      },
+      onError: (e) =>
+        toast.error(e instanceof ApiError ? e.body.error : "削除に失敗しました"),
+    });
+  };
 
   function toggleReveal(id: string) {
     setRevealedIds((prev) => {
@@ -226,20 +187,14 @@ export default function FlashcardsPage() {
     });
   }
 
-  async function handleRate(cardId: string, quality: number) {
-    try {
-      await api.post(`/flashcards/${cardId}/reviews`, {
-        quality,
-        reviewed_at: new Date().toISOString(),
-      });
-    } catch { /* ignore */ }
+  const handleRate = (cardId: string, quality: number) => {
+    rateCard.mutate({ cardId, quality });
     setRevealedIds((prev) => {
       const next = new Set(prev);
       next.delete(cardId);
       return next;
     });
-    fetchData();
-  }
+  };
 
   if (!currentProject) {
     return (
@@ -253,7 +208,7 @@ export default function FlashcardsPage() {
 
   return (
     <div className="p-4 md:p-6">
-      {loading ? (
+      {isLoading ? (
         <div className="text-center py-12 text-muted-foreground">読み込み中...</div>
       ) : (
         <div className="max-w-2xl mx-auto space-y-4">
@@ -418,7 +373,7 @@ export default function FlashcardsPage() {
               </Button>
             )}
             <Button variant="outline" onClick={() => setDialogOpen(false)}>キャンセル</Button>
-            <Button onClick={handleSave} disabled={saving}>{saving ? "保存中..." : editItem ? "保存" : "作成"}</Button>
+            <Button onClick={handleSave} disabled={isSaving}>{isSaving ? "保存中..." : editItem ? "保存" : "作成"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

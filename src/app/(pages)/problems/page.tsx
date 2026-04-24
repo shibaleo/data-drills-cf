@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { Search } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -11,21 +11,37 @@ import {
   flexRender,
   type SortingState,
 } from "@tanstack/react-table";
-import { api, ApiError } from "@/lib/api-client";
+import { useQueryClient } from "@tanstack/react-query";
+import { ApiError } from "@/lib/api-client";
 import { useProject } from "@/hooks/use-project";
 import { useSubjectLevelFilter } from "@/hooks/use-subject-level-filter";
 import { usePageTitle } from "@/lib/page-context";
 import { useProblemDialogs } from "@/hooks/use-problem-dialogs";
+import {
+  useProblemsList,
+  useDeleteProblem,
+  useUpdateProblem,
+  problemsKeys,
+} from "@/hooks/queries/use-problems";
+import type { ProblemUpdateInput } from "@/lib/schemas/problem";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { getColumns } from "./columns";
-import type { ProblemWithAnswers } from "@/components/problem-card";
 
 export default function ProblemsPage() {
   usePageTitle("Problems");
   const { currentProject, subjects, levels } = useProject();
-  const [problems, setProblems] = useState<ProblemWithAnswers[]>([]);
-  const [loading, setLoading] = useState(true);
+
+  const qc = useQueryClient();
+  const { data: problems = [], isLoading } = useProblemsList(currentProject?.id);
+  const deleteProblem = useDeleteProblem(currentProject?.id);
+  const updateProblem = useUpdateProblem(currentProject?.id);
+
+  const invalidateProblems = useCallback(() => {
+    if (currentProject) {
+      qc.invalidateQueries({ queryKey: problemsKeys.list(currentProject.id) });
+    }
+  }, [qc, currentProject]);
 
   // Table state
   const [sorting, setSorting] = useState<SortingState>([]);
@@ -45,51 +61,42 @@ export default function ProblemsPage() {
 
   const now = useMemo(() => new Date(), []);
 
-  const fetchData = useCallback(async () => {
-    if (!currentProject) return;
-    setLoading(true);
-    try {
-      const res = await api.get<{ data: ProblemWithAnswers[] }>(
-        `/problems-list?project_id=${currentProject.id}`,
-      );
-      setProblems(res.data);
-    } catch {
-      toast.error("Failed to fetch problems");
-    } finally {
-      setLoading(false);
-    }
-  }, [currentProject]);
-
-  useEffect(() => { fetchData(); }, [fetchData]);
-
   const filtered = useSubjectLevelFilter(problems, { subject: "subject_id", level: "level_id" });
 
   // Shared dialogs (detail, edit, answer create/edit, fab)
+  // Dialogs still call the raw API; invalidate our query so the table reflects changes.
   const { openDetail, renderDialogs } = useProblemDialogs({
     allProblems: problems,
-    onDataChanged: fetchData,
+    onDataChanged: invalidateProblems,
   });
 
-  const handleDeleteProblem = useCallback(async (id: string) => {
-    try {
-      await api.delete(`/problems/${id}`);
-      toast.success("削除しました");
-      fetchData();
-    } catch (e) {
-      toast.error(e instanceof ApiError ? e.body.error : "削除に失敗しました");
-    }
-  }, [fetchData]);
+  const handleDeleteProblem = useCallback(
+    (id: string) => {
+      deleteProblem.mutate(id, {
+        onSuccess: () => toast.success("削除しました"),
+        onError: (e) =>
+          toast.error(e instanceof ApiError ? e.body.error : "削除に失敗しました"),
+      });
+    },
+    [deleteProblem],
+  );
 
-  const handleCellUpdate = useCallback(async (id: string, field: string, value: unknown) => {
-    try {
-      await api.put(`/problems/${id}`, { [field]: value });
-      setProblems((prev) => prev.map((p) =>
-        p.id === id ? { ...p, [field]: value } : p,
-      ));
-    } catch (e) {
-      toast.error(e instanceof ApiError ? e.body.error : "更新に失敗しました");
-    }
-  }, []);
+  const handleCellUpdate = useCallback(
+    <K extends keyof ProblemUpdateInput>(
+      id: string,
+      field: K,
+      value: ProblemUpdateInput[K],
+    ) => {
+      updateProblem.mutate(
+        { id, payload: { [field]: value } as ProblemUpdateInput },
+        {
+          onError: (e) =>
+            toast.error(e instanceof ApiError ? e.body.error : "更新に失敗しました"),
+        },
+      );
+    },
+    [updateProblem],
+  );
 
   const columns = useMemo(
     () => getColumns({ subjectMap, levelMap, now, onDelete: handleDeleteProblem, onCellUpdate: handleCellUpdate }),
@@ -123,7 +130,7 @@ export default function ProblemsPage() {
 
   return (
     <div className="p-4 md:p-6">
-      {loading ? (
+      {isLoading ? (
         <div className="text-center py-12 text-muted-foreground">Loading...</div>
       ) : (
         <div className="space-y-3">

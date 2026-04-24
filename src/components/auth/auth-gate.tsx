@@ -36,7 +36,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     try {
       const res = await fetch("/api/v1/me");
       if (res.ok) {
-        const json = await res.json();
+        const json = await res.json() as { data: MeUser };
         setMe(json.data);
         return true;
       }

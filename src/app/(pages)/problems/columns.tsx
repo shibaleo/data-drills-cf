@@ -3,7 +3,8 @@
 import { useState, useRef, useEffect } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { ArrowUpDown, ArrowUp, ArrowDown, Trash2 } from "lucide-react";
-import type { ProblemWithAnswers } from "@/components/problem-card";
+import type { ProblemWithAnswers } from "@/hooks/queries/use-problems";
+import type { ProblemUpdateInput } from "@/lib/schemas/problem";
 import { computeForgettingInfo } from "@/lib/forgetting-curve";
 import { secondsToHms, hmsToSeconds } from "@/lib/duration";
 import { toJSTDate } from "@/lib/date-utils";
@@ -34,7 +35,11 @@ interface ColumnOpts {
   levelMap: Map<string, { name: string; color: string | null }>;
   now: Date;
   onDelete: (id: string) => void;
-  onCellUpdate: (id: string, field: string, value: unknown) => void;
+  onCellUpdate: <K extends keyof ProblemUpdateInput>(
+    id: string,
+    field: K,
+    value: ProblemUpdateInput[K],
+  ) => void;
 }
 
 export function SortHeader({ column, children }: { column: { getIsSorted: () => false | "asc" | "desc"; toggleSorting: (desc: boolean) => void }; children: React.ReactNode }) {
@@ -153,7 +158,7 @@ export function getColumns({ subjectMap, levelMap, now, onDelete, onCellUpdate }
       cell: ({ row }) => (
         <EditableCell
           value={row.original.code}
-          onSave={(v) => onCellUpdate(row.original.id, "code", v)}
+          onSave={(v) => onCellUpdate(row.original.id, "code", v as string)}
           className="font-mono"
         />
       ),
@@ -195,7 +200,7 @@ export function getColumns({ subjectMap, levelMap, now, onDelete, onCellUpdate }
             }
             format={(v) => (v != null ? secondsToHms(v as number) : "")}
             parse={(s) => (s.trim() ? hmsToSeconds(s.trim()) : null)}
-            onSave={(v) => onCellUpdate(row.original.id, "standard_time", v)}
+            onSave={(v) => onCellUpdate(row.original.id, "standard_time", v as number | null)}
             className="tabular-nums"
           />
         );

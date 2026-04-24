@@ -1,8 +1,8 @@
 'use client'
 
 import { useState } from 'react'
+import { Controller, type UseFormReturn, type UseFieldArrayReturn } from 'react-hook-form'
 import { Plus } from 'lucide-react'
-import type { ReviewType } from '@/lib/types'
 import { REVIEW_TYPES } from '@/lib/types'
 import { StatusTag } from '@/components/color-tags'
 import { Markdown } from '@/components/markdown'
@@ -18,39 +18,18 @@ import {
 import {
   Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
 } from '@/components/ui/select'
-
-export interface ReviewRow {
-  id?: string
-  _key?: string
-  type: ReviewType
-  content: string
-}
+import type { AnswerFormData } from '@/lib/schemas/answer-form'
+import type { ReviewType } from '@/lib/types'
 
 interface AnswerDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   title: string
-  // problem fields (always editable)
-  subject: string
-  onSubjectChange: (s: string) => void
-  level: string
-  onLevelChange: (l: string) => void
-  code: string
-  onCodeChange: (c: string) => void
+  form: UseFormReturn<AnswerFormData>
+  reviewsField: UseFieldArrayReturn<AnswerFormData, 'reviews', '_key'>
   codeSuggestions?: string[]
   checkpointMap?: Record<string, string>
   nameMap?: Record<string, string>
-  // answer fields
-  status: string
-  onStatusChange: (s: string) => void
-  duration: string
-  onDurationChange: (d: string) => void
-  // reviews
-  reviews: ReviewRow[]
-  onAddReview: () => void
-  onUpdateReview: (index: number, field: 'type' | 'content', value: string) => void
-  onRemoveReview: (index: number) => void
-  // save
   saveLabel: string
   onSave: () => void | Promise<void>
 }
@@ -59,28 +38,18 @@ export function AnswerDialog({
   open,
   onOpenChange,
   title,
-  subject,
-  onSubjectChange,
-  level,
-  onLevelChange,
-  code,
-  onCodeChange,
+  form,
+  reviewsField,
   codeSuggestions = [],
   checkpointMap = {},
   nameMap = {},
-  status,
-  onStatusChange,
-  duration,
-  onDurationChange,
-  reviews,
-  onAddReview,
-  onUpdateReview,
-  onRemoveReview,
   saveLabel,
   onSave,
 }: AnswerDialogProps) {
   const { currentProject, subjects, levels, statuses } = useProject()
   const [saving, setSaving] = useState(false)
+
+  const code = form.watch('code')
 
   async function handleSave() {
     if (saving) return
@@ -104,37 +73,55 @@ export function AnswerDialog({
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
         <div className="grid gap-4 py-2 overflow-y-auto min-h-0">
-          {/* Problem fields — always editable */}
+          {/* Problem fields */}
           <div className="grid grid-cols-3 gap-4">
             <div className="grid gap-2">
               <Label>科目</Label>
-              <Select value={subject} onValueChange={onSubjectChange}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {subjects.map((s) => (
-                    <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Controller
+                control={form.control}
+                name="subject"
+                render={({ field }) => (
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {subjects.map((s) => (
+                        <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
             </div>
             <div className="grid gap-2">
               <Label>レベル</Label>
-              <Select value={level} onValueChange={onLevelChange}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {levels.map((l) => (
-                    <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Controller
+                control={form.control}
+                name="level"
+                render={({ field }) => (
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {levels.map((l) => (
+                        <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
             </div>
             <div className="grid gap-2">
               <Label>コード</Label>
-              <CodeCombobox value={code} onChange={onCodeChange} suggestions={codeSuggestions} />
+              <Controller
+                control={form.control}
+                name="code"
+                render={({ field }) => (
+                  <CodeCombobox value={field.value} onChange={field.onChange} suggestions={codeSuggestions} />
+                )}
+              />
             </div>
           </div>
 
@@ -157,26 +144,28 @@ export function AnswerDialog({
           <div className="grid grid-cols-2 gap-4">
             <div className="grid gap-2">
               <Label>ステータス</Label>
-              <Select value={status} onValueChange={(v) => onStatusChange(v)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {statuses.map((s) => (
-                    <SelectItem key={s.id} value={s.name}>
-                      <StatusTag status={s.name} color={s.color} opaque />
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Controller
+                control={form.control}
+                name="status"
+                render={({ field }) => (
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {statuses.map((s) => (
+                        <SelectItem key={s.id} value={s.name}>
+                          <StatusTag status={s.name} color={s.color} opaque />
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
             </div>
             <div className="grid gap-2">
               <Label>所要時間</Label>
-              <Input
-                placeholder="例: 00:30:00"
-                value={duration}
-                onChange={(e) => onDurationChange(e.target.value)}
-              />
+              <Input placeholder="例: 00:30:00" {...form.register('duration')} />
             </div>
           </div>
 
@@ -186,40 +175,54 @@ export function AnswerDialog({
               <Label>レビュー</Label>
               <button
                 type="button"
-                onClick={onAddReview}
+                onClick={() =>
+                  reviewsField.append({ type: '不理解' as ReviewType, content: '' })
+                }
                 className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs bg-muted text-muted-foreground hover:bg-muted/80 transition-colors"
               >
                 <Plus className="size-3" /> 追加
               </button>
             </div>
-            {reviews.map((r, i) => (
-              <div key={r._key ?? r.id ?? i} className="grid gap-1.5">
+            {reviewsField.fields.map((r, i) => (
+              <div key={r._key} className="grid gap-1.5">
                 <div className="flex items-center gap-2">
-                  <Select value={r.type} onValueChange={(v) => onUpdateReview(i, 'type', v)}>
-                    <SelectTrigger className="w-fit">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {REVIEW_TYPES.map((t) => (
-                        <SelectItem key={t} value={t}>{t}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Controller
+                    control={form.control}
+                    name={`reviews.${i}.type`}
+                    render={({ field }) => (
+                      <Select value={field.value} onValueChange={field.onChange}>
+                        <SelectTrigger className="w-fit">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {REVIEW_TYPES.map((t) => (
+                            <SelectItem key={t} value={t}>{t}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  />
                   <Button
                     type="button"
                     variant="ghost"
                     size="sm"
-                    onClick={() => onRemoveReview(i)}
+                    onClick={() => reviewsField.remove(i)}
                     className="ml-auto shrink-0 text-muted-foreground hover:text-destructive"
                   >
                     &times;
                   </Button>
                 </div>
-                <MarkdownEditor
-                  compact
-                  defaultValue={r.content}
-                  onChange={(val) => onUpdateReview(i, 'content', val)}
-                  placeholder="振り返り内容"
+                <Controller
+                  control={form.control}
+                  name={`reviews.${i}.content`}
+                  render={({ field }) => (
+                    <MarkdownEditor
+                      compact
+                      defaultValue={field.value}
+                      onChange={field.onChange}
+                      placeholder="振り返り内容"
+                    />
+                  )}
                 />
               </div>
             ))}

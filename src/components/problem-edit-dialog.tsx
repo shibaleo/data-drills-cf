@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
-import { api, ApiError } from "@/lib/api-client";
+import { ApiError } from "@/lib/api-client";
+import { rpc, unwrap } from "@/lib/rpc-client";
 import { secondsToHms, hmsToSeconds } from "@/lib/duration";
 import { MarkdownEditor } from "@/components/markdown-editor";
 import { Button } from "@/components/ui/button";
@@ -91,10 +92,15 @@ export function ProblemEditDialog({
 
     try {
       if (problem) {
-        await api.put(`/problems/${problem.id}`, payload);
+        await unwrap(
+          rpc.api.v1.problems[":id"].$put({
+            param: { id: problem.id },
+            json: payload,
+          }),
+        );
         toast.success("更新しました");
       } else {
-        await api.post("/problems", payload);
+        await unwrap(rpc.api.v1.problems.$post({ json: payload }));
         toast.success("登録しました");
       }
       onOpenChange(false);

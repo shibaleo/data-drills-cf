@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { usePageTitle } from "@/lib/page-context";
@@ -16,93 +16,81 @@ import {
   DialogFooter,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { api, ApiError, fetchAllPages } from "@/lib/api-client";
-
-interface UserRow {
-  id: string;
-  email: string;
-  name: string;
-  isActive: boolean;
-  createdAt: string;
-}
+import { ApiError } from "@/lib/api-client";
+import {
+  useUsersList,
+  useCreateUser,
+  useDeactivateUser,
+  useActivateUser,
+  useSetUserPassword,
+  type UserRow,
+} from "@/hooks/queries/use-users";
 
 export default function UsersPage() {
   usePageTitle("Users");
-  const [items, setItems] = useState<UserRow[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: items = [], isLoading: loading } = useUsersList();
+  const createUser = useCreateUser();
+  const deactivate = useDeactivateUser();
+  const activate = useActivateUser();
+  const setPassword = useSetUserPassword();
 
   // Create dialog
   const [createOpen, setCreateOpen] = useState(false);
   const [newEmail, setNewEmail] = useState("");
   const [newName, setNewName] = useState("");
-  const [saving, setSaving] = useState(false);
 
   // Password dialog
   const [pwOpen, setPwOpen] = useState(false);
   const [pwUser, setPwUser] = useState<UserRow | null>(null);
   const [newPassword, setNewPassword] = useState("");
 
-  const fetchItems = useCallback(async () => {
-    setLoading(true);
-    try {
-      const data = await fetchAllPages<UserRow>("/users");
-      setItems(data);
-    } catch (e) {
-      toast.error(e instanceof ApiError ? e.body.error : "Failed to fetch users");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => { fetchItems(); }, [fetchItems]);
-
-  const handleCreate = async () => {
+  const handleCreate = () => {
     if (!newEmail.trim() || !newName.trim()) {
       toast.error("Email and name are required");
       return;
     }
-    setSaving(true);
-    try {
-      await api.post("/users", { email: newEmail.trim(), name: newName.trim() });
-      toast.success("User created");
-      setCreateOpen(false);
-      fetchItems();
-    } catch (e) {
-      toast.error(e instanceof ApiError ? e.body.error : "Failed to create");
-    } finally {
-      setSaving(false);
-    }
+    createUser.mutate(
+      { email: newEmail.trim(), name: newName.trim() },
+      {
+        onSuccess: () => {
+          toast.success("User created");
+          setCreateOpen(false);
+        },
+        onError: (e) =>
+          toast.error(e instanceof ApiError ? e.body.error : "Failed to create"),
+      },
+    );
   };
 
-  const handleDeactivate = async (id: string) => {
-    try {
-      await api.delete(`/users/${id}`);
-      toast.success("User deactivated");
-      fetchItems();
-    } catch (e) {
-      toast.error(e instanceof ApiError ? e.body.error : "Failed to deactivate");
-    }
+  const handleDeactivate = (id: string) => {
+    deactivate.mutate(id, {
+      onSuccess: () => toast.success("User deactivated"),
+      onError: (e) =>
+        toast.error(e instanceof ApiError ? e.body.error : "Failed to deactivate"),
+    });
   };
 
-  const handleActivate = async (id: string) => {
-    try {
-      await api.post(`/users/${id}/activate`, {});
-      toast.success("User activated");
-      fetchItems();
-    } catch (e) {
-      toast.error(e instanceof ApiError ? e.body.error : "Failed to activate");
-    }
+  const handleActivate = (id: string) => {
+    activate.mutate(id, {
+      onSuccess: () => toast.success("User activated"),
+      onError: (e) =>
+        toast.error(e instanceof ApiError ? e.body.error : "Failed to activate"),
+    });
   };
 
-  const handleSetPassword = async () => {
+  const handleSetPassword = () => {
     if (!pwUser || !newPassword.trim()) return;
-    try {
-      await api.post(`/users/${pwUser.id}/password`, { password: newPassword });
-      toast.success("Password updated");
-      setPwOpen(false);
-    } catch (e) {
-      toast.error(e instanceof ApiError ? e.body.error : "Failed to set password");
-    }
+    setPassword.mutate(
+      { id: pwUser.id, password: newPassword },
+      {
+        onSuccess: () => {
+          toast.success("Password updated");
+          setPwOpen(false);
+        },
+        onError: (e) =>
+          toast.error(e instanceof ApiError ? e.body.error : "Failed to set password"),
+      },
+    );
   };
 
   return (
@@ -183,7 +171,9 @@ export default function UsersPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreateOpen(false)}>Cancel</Button>
-            <Button onClick={handleCreate} disabled={saving}>{saving ? "Creating..." : "Create"}</Button>
+            <Button onClick={handleCreate} disabled={createUser.isPending}>
+              {createUser.isPending ? "Creating..." : "Create"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

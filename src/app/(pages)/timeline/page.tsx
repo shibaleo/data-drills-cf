@@ -1,11 +1,13 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { toast } from "sonner";
-import { api, ApiError } from "@/lib/api-client";
+import { useQueryClient } from "@tanstack/react-query";
+import { ApiError } from "@/lib/api-client";
 import { useProject } from "@/hooks/use-project";
 import { useSubjectLevelFilter } from "@/hooks/use-subject-level-filter";
 import { useAnswerForm, useEditAnswerForm } from "@/hooks/use-answer-form";
+import { useProblemsList, useDeleteProblem, problemsKeys } from "@/hooks/queries/use-problems";
 import { usePageTitle } from "@/lib/page-context";
 import { Fab } from "@/components/shared/fab";
 import { ProblemCard, type ProblemWithAnswers } from "@/components/problem-card";
@@ -16,8 +18,13 @@ import type { Problem } from "@/lib/types";
 export default function TimelinePage() {
   usePageTitle("Timeline");
   const { currentProject, subjects, levels } = useProject();
-  const [problems, setProblems] = useState<ProblemWithAnswers[]>([]);
-  const [loading, setLoading] = useState(true);
+  const qc = useQueryClient();
+  const { data: problems = [], isLoading: loading } = useProblemsList(currentProject?.id);
+  const deleteProblem = useDeleteProblem(currentProject?.id);
+
+  const invalidate = useCallback(() => {
+    if (currentProject) qc.invalidateQueries({ queryKey: problemsKeys.list(currentProject.id) });
+  }, [qc, currentProject]);
 
   // Problem edit dialog
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -25,44 +32,28 @@ export default function TimelinePage() {
 
   const now = useMemo(() => new Date(), []);
 
-  const fetchData = useCallback(async () => {
-    if (!currentProject) return;
-    setLoading(true);
-    try {
-      const res = await api.get<{ data: ProblemWithAnswers[] }>(
-        `/problems-list?project_id=${currentProject.id}`,
-      );
-      setProblems(res.data);
-    } catch {
-      toast.error("Failed to fetch data");
-    } finally {
-      setLoading(false);
-    }
-  }, [currentProject]);
-
-  useEffect(() => { fetchData(); }, [fetchData]);
-
-  const filtered = useSubjectLevelFilter(problems, { subject: "subject_id", level: "level_id" });
+  const filtered = useSubjectLevelFilter(problems as ProblemWithAnswers[], { subject: "subject_id", level: "level_id" });
 
   // Answer create form
-  const answerForm = useAnswerForm(() => fetchData());
+  const answerForm = useAnswerForm(invalidate);
 
   // Answer edit form
-  const editForm = useEditAnswerForm(() => fetchData());
+  const editForm = useEditAnswerForm(invalidate);
 
   const handleEditProblem = (p: Problem) => {
     setEditProblem(p);
     setEditDialogOpen(true);
   };
 
-  const handleDeleteProblem = async (id: string) => {
-    try {
-      await api.delete(`/problems/${id}`);
-      toast.success("削除しました");
-      fetchData();
-    } catch (e) {
-      toast.error(e instanceof ApiError ? e.body.error : "削除に失敗しました");
-    }
+  const handleDeleteProblem = (id: string) => {
+    deleteProblem.mutate(id, {
+      onSuccess: () => {
+        toast.success("削除しました");
+        invalidate();
+      },
+      onError: (e) =>
+        toast.error(e instanceof ApiError ? e.body.error : "削除に失敗しました"),
+    });
   };
 
   if (!currentProject) {
@@ -90,7 +81,7 @@ export default function TimelinePage() {
               onEditProblem={handleEditProblem}
               onEditAnswer={editForm.openFor}
               onDelete={handleDeleteProblem}
-              onPdfLinked={() => fetchData()}
+              onPdfLinked={() => invalidate()}
             />
           ))}
         </div>
@@ -112,7 +103,7 @@ export default function TimelinePage() {
         projectId={currentProject.id}
         subjects={subjects}
         levels={levels}
-        onSaved={() => { setEditDialogOpen(false); fetchData(); }}
+        onSaved={() => { setEditDialogOpen(false); invalidate(); }}
         onDelete={editProblem ? () => handleDeleteProblem(editProblem.id) : undefined}
       />
 
@@ -121,23 +112,11 @@ export default function TimelinePage() {
         open={answerForm.open}
         onOpenChange={answerForm.setOpen}
         title="解答を登録"
-        subject={answerForm.subject}
-        onSubjectChange={answerForm.setSubject}
-        level={answerForm.level}
-        onLevelChange={answerForm.setLevel}
-        code={answerForm.code}
-        onCodeChange={answerForm.setCode}
+        form={answerForm.form}
+        reviewsField={answerForm.reviewsField}
         codeSuggestions={answerForm.codeSuggestions}
         checkpointMap={answerForm.checkpointMap}
         nameMap={answerForm.nameMap}
-        status={answerForm.status}
-        onStatusChange={answerForm.setStatus}
-        duration={answerForm.duration}
-        onDurationChange={answerForm.setDuration}
-        reviews={answerForm.reviews}
-        onAddReview={answerForm.addReview}
-        onUpdateReview={answerForm.updateReview}
-        onRemoveReview={answerForm.removeReview}
         saveLabel="登録"
         onSave={answerForm.save}
       />
@@ -147,23 +126,11 @@ export default function TimelinePage() {
         open={editForm.open}
         onOpenChange={editForm.setOpen}
         title="解答を編集"
-        subject={editForm.subject}
-        onSubjectChange={editForm.setSubject}
-        level={editForm.level}
-        onLevelChange={editForm.setLevel}
-        code={editForm.code}
-        onCodeChange={editForm.setCode}
+        form={editForm.form}
+        reviewsField={editForm.reviewsField}
         codeSuggestions={editForm.codeSuggestions}
         checkpointMap={editForm.checkpointMap}
         nameMap={editForm.nameMap}
-        status={editForm.status}
-        onStatusChange={editForm.setStatus}
-        duration={editForm.duration}
-        onDurationChange={editForm.setDuration}
-        reviews={editForm.reviews}
-        onAddReview={editForm.addReview}
-        onUpdateReview={editForm.updateReview}
-        onRemoveReview={editForm.removeReview}
         saveLabel="保存"
         onSave={editForm.save}
       />

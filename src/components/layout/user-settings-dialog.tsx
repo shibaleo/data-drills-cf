@@ -10,7 +10,8 @@ import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import { useMe } from "@/components/auth/auth-gate";
-import { api, ApiError } from "@/lib/api-client";
+import { ApiError } from "@/lib/api-client";
+import { rpc, unwrap } from "@/lib/rpc-client";
 
 interface Props {
   open: boolean;
@@ -37,7 +38,7 @@ export function UserSettingsDialog({ open, onOpenChange }: Props) {
     try {
       const res = await fetch("/api/auth/google/status");
       if (res.ok) {
-        const data = await res.json();
+        const data = await res.json() as { connected: boolean };
         setDriveConnected(data.connected);
       }
     } catch {
@@ -58,7 +59,12 @@ export function UserSettingsDialog({ open, onOpenChange }: Props) {
     if (!name.trim() || name === me.name) return;
     setNameSaving(true);
     try {
-      await api.put(`/users/${me.id}`, { name: name.trim() });
+      await unwrap(
+        rpc.api.v1.users[":id"].$put({
+          param: { id: me.id },
+          json: { name: name.trim() },
+        }),
+      );
       await refresh();
       toast.success("Display name updated");
     } catch (e) {
@@ -77,7 +83,12 @@ export function UserSettingsDialog({ open, onOpenChange }: Props) {
     }
     setPasswordSaving(true);
     try {
-      await api.post(`/users/${me.id}/password`, { password });
+      await unwrap(
+        rpc.api.v1.users[":id"].password.$post({
+          param: { id: me.id },
+          json: { password },
+        }),
+      );
       setPassword("");
       setPasswordConfirm("");
       toast.success("Password changed");

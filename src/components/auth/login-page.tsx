@@ -43,7 +43,7 @@ export function LoginPage({ onPasswordLogin, error: externalError }: LoginPagePr
         body: JSON.stringify({ email, password }),
       });
       if (!res.ok) {
-        const body = await res.json();
+        const body = await res.json() as { error?: string };
         setError(body.error ?? "Login failed");
         return;
       }

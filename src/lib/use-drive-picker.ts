@@ -67,7 +67,7 @@ export function useDrivePicker() {
 
     const res = await fetch('/api/auth/google/token')
     if (!res.ok) throw new Error('Failed to get access token')
-    const { accessToken } = await res.json()
+    const { accessToken } = await res.json() as { accessToken: string }
 
     const apiKey = import.meta.env.VITE_GOOGLE_API_KEY
     if (!apiKey) throw new Error('Missing VITE_GOOGLE_API_KEY')

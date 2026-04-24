@@ -11,11 +11,14 @@ import {
   type SortingState,
   type ColumnDef,
 } from "@tanstack/react-table";
-import { api } from "@/lib/api-client";
+import { useQueryClient } from "@tanstack/react-query";
+import { rpc } from "@/lib/rpc-client";
 import { useProject } from "@/hooks/use-project";
 import { usePageTitle } from "@/lib/page-context";
-import { OpaqueTag, type ProblemWithAnswers } from "@/components/problem-card";
+import { OpaqueTag } from "@/components/problem-card";
 import { useProblemDialogs } from "@/hooks/use-problem-dialogs";
+import { useScheduleList, scheduleKeys } from "@/hooks/queries/use-schedule";
+import { useProblemsList, problemsKeys } from "@/hooks/queries/use-problems";
 import { SortHeader } from "@/app/(pages)/problems/columns";
 import { toJSTDateString } from "@/lib/date-utils";
 import { StatusTag } from "@/components/color-tags";
@@ -34,7 +37,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import type { ScheduleRow as ScheduleApiRow } from "@/lib/api-responses";
+import type { ScheduleRow as ScheduleApiRow } from "@/hooks/queries/use-schedule";
 
 /* ── Row types ── */
 
@@ -457,12 +460,36 @@ export default function SchedulePage() {
     return m;
   }, [statuses]);
 
-  // Schedule data (fast path via /schedule API)
-  const [rows, setRows] = useState<ScheduleRow[]>([]);
-  const [loading, setLoading] = useState(true);
+  const qc = useQueryClient();
 
-  // Dialog data (background path via /problems-list)
-  const [allProblems, setAllProblems] = useState<ProblemWithAnswers[]>([]);
+  // Fast path: /schedule API (driven by TanStack Query)
+  const scheduleQuery = useScheduleList(currentProject?.id);
+  const rows = useMemo<ScheduleRow[]>(() => {
+    return (scheduleQuery.data ?? []).map((r) => ({
+      problemId: r.problemId,
+      code: r.code,
+      name: r.name,
+      subjectId: r.subjectId,
+      subjectName: r.subjectName,
+      subjectColor: r.subjectColor,
+      levelId: r.levelId,
+      levelName: r.levelName,
+      levelColor: r.levelColor,
+      color: r.color,
+      lastStatus: r.lastStatus,
+      statusColor: r.statusColor,
+      nextReview: r.nextReview,
+      daysUntil: r.daysUntil,
+      reviewCount: r.answerCount,
+      standardTime: r.standardTime,
+      answerHistory: r.answerHistory,
+    }));
+  }, [scheduleQuery.data]);
+  const loading = scheduleQuery.isLoading;
+
+  // Background: /problems-list for dialogs (shared with other pages)
+  const dialogProblemsQuery = useProblemsList(currentProject?.id);
+  const allProblems = dialogProblemsQuery.data ?? [];
 
   // UI state
   const [sorting, setSorting] = useState<SortingState>([
@@ -483,62 +510,11 @@ export default function SchedulePage() {
   const now = useMemo(() => new Date(), []);
   const todayStr = useMemo(() => toJSTDateString(now), [now]);
 
-  /* ── Fast path: /schedule API ── */
-  const fetchSchedule = useCallback(async () => {
-    if (!currentProject) return;
-    setLoading(true);
-    try {
-      const res = await api.get<{ data: ScheduleApiRow[] }>(
-        `/schedule?project_id=${currentProject.id}`,
-      );
-      const built: ScheduleRow[] = res.data.map((r) => ({
-        problemId: r.problemId,
-        code: r.code,
-        name: r.name,
-        subjectId: r.subjectId,
-        subjectName: r.subjectName,
-        subjectColor: r.subjectColor,
-        levelId: r.levelId,
-        levelName: r.levelName,
-        levelColor: r.levelColor,
-        color: r.color,
-        lastStatus: r.lastStatus,
-        statusColor: r.statusColor,
-        nextReview: r.nextReview,
-        daysUntil: r.daysUntil,
-        reviewCount: r.answerCount,
-        standardTime: r.standardTime,
-        answerHistory: r.answerHistory,
-      }));
-      setRows(built);
-    } catch {
-      toast.error("Failed to fetch schedule");
-    } finally {
-      setLoading(false);
-    }
-  }, [currentProject]);
-
-  /* ── Background: /problems-list for dialogs ── */
-  const fetchDialogData = useCallback(async () => {
-    if (!currentProject) return;
-    try {
-      const res = await api.get<{ data: ProblemWithAnswers[] }>(
-        `/problems-list?project_id=${currentProject.id}`,
-      );
-      setAllProblems(res.data);
-    } catch {
-      // Dialog data is non-critical
-    }
-  }, [currentProject]);
-
-  // Fetch schedule first (fast), then dialog data in background
-  useEffect(() => { fetchSchedule(); }, [fetchSchedule]);
-  useEffect(() => { if (currentProject) fetchDialogData(); }, [currentProject, fetchDialogData]);
-
   const handleDataChanged = useCallback(() => {
-    fetchSchedule();
-    fetchDialogData();
-  }, [fetchSchedule, fetchDialogData]);
+    if (!currentProject) return;
+    qc.invalidateQueries({ queryKey: scheduleKeys.list(currentProject.id) });
+    qc.invalidateQueries({ queryKey: problemsKeys.list(currentProject.id) });
+  }, [qc, currentProject]);
 
   const { openDetail, renderDialogs } = useProblemDialogs({
     allProblems,
@@ -606,13 +582,11 @@ export default function SchedulePage() {
     if (exportSelected.size === 0) return;
     setExporting(true);
     try {
-      const res = await fetch("/api/v1/pdf-sync/export", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ problem_ids: Array.from(exportSelected) }),
+      const res = await rpc.api.v1["pdf-export"].$post({
+        json: { problem_ids: Array.from(exportSelected) },
       });
       if (!res.ok) {
-        const body = await res.json().catch(() => ({ error: res.statusText }));
+        const body = (await res.json().catch(() => ({ error: res.statusText }))) as { error?: string };
         throw new Error(body.error || "Export failed");
       }
       const blob = await res.blob();
