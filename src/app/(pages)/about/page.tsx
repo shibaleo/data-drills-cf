@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import katex from "katex";
 import "katex/dist/katex.min.css";
+import { toast } from "sonner";
 import { usePageTitle } from "@/lib/page-context";
 import { useProject } from "@/hooks/use-project";
 import { useUpdateStatus } from "@/hooks/queries/use-statuses";
@@ -45,8 +46,6 @@ function V({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
   const ref = useRef<HTMLInputElement>(null);
-  const spanRef = useRef<HTMLSpanElement>(null);
-  const [width, setWidth] = useState<number | undefined>(undefined);
 
   useEffect(() => {
     if (editing) {
@@ -55,47 +54,52 @@ function V({
     }
   }, [editing]);
 
+  const display = fmt ? fmt(value) : String(value);
+
   const commit = () => {
-    const n = parseFloat(draft);
-    if (!isNaN(n)) onChange(n);
     setEditing(false);
+    const n = parseFloat(draft);
+    if (!isNaN(n) && draft !== display) onChange(n);
   };
 
-  const display = fmt ? fmt(value) : String(value);
-  const shared =
-    "inline-flex items-center justify-center tabular-nums font-medium text-sm leading-6 h-6";
-
-  if (editing) {
-    return (
-      <input
-        ref={ref}
-        type="text"
-        className={`${shared} px-0 text-center rounded border border-primary/50 bg-transparent text-primary focus:outline-none focus:ring-1 focus:ring-primary`}
-        style={{ width: width ? Math.max(width, 28) : 40 }}
-        value={draft}
-        onChange={(e) => setDraft(e.target.value)}
-        onBlur={commit}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") commit();
-          if (e.key === "Escape") setEditing(false);
-        }}
-      />
-    );
-  }
+  const startEdit = (e: React.MouseEvent) => {
+    if (editing) return;
+    e.stopPropagation();
+    setDraft(display);
+    setEditing(true);
+  };
 
   return (
-    <span
-      ref={spanRef}
-      className={`${shared} cursor-pointer text-primary border-b border-dashed border-primary/40 hover:border-primary transition-colors`}
-      onClick={() => {
-        if (spanRef.current) setWidth(spanRef.current.offsetWidth + 8);
-        setDraft(String(value));
-        setEditing(true);
-      }}
-    >
-      {display}
+    <>
+      <span className="relative inline-block tabular-nums" onClick={startEdit}>
+        <span
+          className={
+            editing
+              ? "invisible"
+              : "cursor-text text-primary hover:bg-muted/50 rounded px-0.5"
+          }
+        >
+          {display}
+        </span>
+        {editing && (
+          <input
+            ref={ref}
+            type="text"
+            className="absolute inset-0 bg-transparent border-b border-primary outline-none text-primary tabular-nums px-0.5 min-w-[3ch]"
+            style={{ font: "inherit" }}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={commit}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") { e.preventDefault(); commit(); }
+              if (e.key === "Escape") { e.preventDefault(); setEditing(false); }
+            }}
+            onClick={(e) => e.stopPropagation()}
+          />
+        )}
+      </span>
       {suffix}
-    </span>
+    </>
   );
 }
 
@@ -210,9 +214,17 @@ export default function AboutPage() {
                   <td className="py-1">
                     <V
                       value={s.stabilityDays}
-                      onChange={(v) =>
-                        updateStatus.mutate({ id: s.id, payload: { stability_days: v } })
-                      }
+                      onChange={(v) => {
+                        const days = Math.max(0, Math.round(v));
+                        if (days === s.stabilityDays) return;
+                        updateStatus.mutate(
+                          { id: s.id, payload: { stability_days: days } },
+                          {
+                            onError: (err) =>
+                              toast.error(`保存に失敗: ${err instanceof Error ? err.message : "unknown"}`),
+                          },
+                        );
+                      }}
                       suffix="日"
                     />
                   </td>
