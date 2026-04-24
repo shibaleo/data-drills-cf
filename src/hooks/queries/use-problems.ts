@@ -35,18 +35,6 @@ export function useDeleteProblem(projectId: string | undefined) {
   });
 }
 
-/** Map a snake_case `ProblemUpdateInput` field to its snake_case mirror
- * on the `problems-list` response row (for optimistic cache updates). */
-const UPDATE_TO_ROW_KEY: Record<keyof ProblemUpdateInput, keyof ProblemWithAnswers> = {
-  code: "code",
-  name: "name",
-  checkpoint: "checkpoint",
-  subject_id: "subject_id",
-  level_id: "level_id",
-  topic_id: "subject_id", // problems-list row doesn't expose topic_id; fallback no-op key
-  standard_time: "standard_time",
-};
-
 export function useUpdateProblem(projectId: string | undefined) {
   const qc = useQueryClient();
   return useMutation({
@@ -62,17 +50,19 @@ export function useUpdateProblem(projectId: string | undefined) {
       const key = problemsKeys.list(projectId);
       await qc.cancelQueries({ queryKey: key });
       const previous = qc.getQueryData<ProblemWithAnswers[]>(key);
+      // Server emits `name`, `subject_id`, `level_id` as non-null strings
+      // (via `?? ""`). Normalize payload nullables to match when merging
+      // into the cache, so types stay consistent.
+      const patch: Partial<ProblemWithAnswers> = {};
+      if (payload.code !== undefined) patch.code = payload.code;
+      if (payload.name !== undefined) patch.name = payload.name ?? "";
+      if (payload.checkpoint !== undefined) patch.checkpoint = payload.checkpoint ?? null;
+      if (payload.subject_id !== undefined) patch.subject_id = payload.subject_id ?? "";
+      if (payload.level_id !== undefined) patch.level_id = payload.level_id ?? "";
+      if (payload.topic_id !== undefined) patch.topic_id = payload.topic_id ?? null;
+      if (payload.standard_time !== undefined) patch.standard_time = payload.standard_time ?? null;
       qc.setQueryData<ProblemWithAnswers[]>(key, (old) =>
-        old?.map((p) => {
-          if (p.id !== id) return p;
-          const patch: Partial<ProblemWithAnswers> = {};
-          for (const k of Object.keys(payload) as (keyof ProblemUpdateInput)[]) {
-            const rowKey = UPDATE_TO_ROW_KEY[k];
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            (patch as any)[rowKey] = payload[k];
-          }
-          return { ...p, ...patch };
-        }),
+        old?.map((p) => (p.id === id ? { ...p, ...patch } : p)),
       );
       return { previous };
     },

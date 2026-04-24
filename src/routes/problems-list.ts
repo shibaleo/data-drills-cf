@@ -166,6 +166,7 @@ const app = new Hono()
         name: p.name ?? "",
         subject_id: p.subjectId ?? "",
         level_id: p.levelId ?? "",
+        topic_id: p.topicId,
         checkpoint: p.checkpoint,
         standard_time: p.standardTime ?? null,
         project_id: p.projectId,
