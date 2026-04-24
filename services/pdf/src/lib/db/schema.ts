@@ -21,30 +21,14 @@ const timestamps = () => ({
 });
 
 // =============================================================================
-// Project
-// =============================================================================
-
-export const project = pgTable("project", {
-  id: id(),
-  code: code(),
-  name: name(),
-  color: text("color"),
-  gdriveFolderId: text("gdrive_folder_id"),
-  sortOrder: integer("sort_order").notNull().default(0),
-  ...timestamps(),
-}, (t) => [
-  uniqueIndex("project_code_key").on(t.code),
-]);
-
-// =============================================================================
-// Subject
+// Subject (only `id` and `name` read by /export for label rendering)
 // =============================================================================
 
 export const subject = pgTable("subject", {
   id: id(),
   code: code(),
   name: name(),
-  projectId: uuid("project_id").notNull().references(() => project.id, { onDelete: "cascade" }),
+  projectId: uuid("project_id").notNull(),
   color: text("color"),
   sortOrder: integer("sort_order").notNull().default(0),
   ...timestamps(),
@@ -53,14 +37,14 @@ export const subject = pgTable("subject", {
 ]);
 
 // =============================================================================
-// Level
+// Level (only `id` and `name` read by /export for label rendering)
 // =============================================================================
 
 export const level = pgTable("level", {
   id: id(),
   code: code(),
   name: name(),
-  projectId: uuid("project_id").notNull().references(() => project.id, { onDelete: "cascade" }),
+  projectId: uuid("project_id").notNull(),
   color: text("color"),
   sortOrder: integer("sort_order").notNull().default(0),
   ...timestamps(),
@@ -75,7 +59,7 @@ export const level = pgTable("level", {
 export const problem = pgTable("problem", {
   id: id(),
   code: code(),
-  projectId: uuid("project_id").notNull().references(() => project.id, { onDelete: "cascade" }),
+  projectId: uuid("project_id").notNull(),
   subjectId: uuid("subject_id").references(() => subject.id, { onDelete: "set null" }),
   levelId: uuid("level_id").references(() => level.id, { onDelete: "set null" }),
   topicId: uuid("topic_id"),
