@@ -27,9 +27,34 @@ const app = new Hono()
       },
       body: JSON.stringify(body),
     });
-    return new Response(res.body, {
-      status: res.status,
-      headers: res.headers,
+
+    // On error, forward the upstream error body as JSON
+    if (!res.ok) {
+      const errorText = await res.text().catch(() => "");
+      return c.json(
+        { error: errorText || `PDF service returned ${res.status}` },
+        500,
+      );
+    }
+
+    // Buffer the entire PDF in CF Worker before responding. Streaming
+    // through with raw upstream headers caused intermittent client-side
+    // failures (idle disconnects during Render cold-start, header/encoding
+    // mismatches across browsers).
+    const buffer = await res.arrayBuffer();
+    const contentType =
+      res.headers.get("content-type") ?? "application/pdf";
+    const contentDisposition =
+      res.headers.get("content-disposition") ??
+      'attachment; filename="exported.pdf"';
+
+    return new Response(buffer, {
+      status: 200,
+      headers: {
+        "Content-Type": contentType,
+        "Content-Disposition": contentDisposition,
+        "Content-Length": String(buffer.byteLength),
+      },
     });
   });
 
