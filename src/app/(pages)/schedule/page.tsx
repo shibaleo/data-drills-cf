@@ -616,6 +616,7 @@ export default function SchedulePage() {
   const tableRef = useRef<HTMLDivElement>(null);
   const [exportSelected, setExportSelected] = useState<Set<string>>(new Set());
   const [exporting, setExporting] = useState(false);
+  const [exportPhase, setExportPhase] = useState<"waking" | "generating" | "downloading" | null>(null);
 
   // Filter state
   const [summaryFilter, setSummaryFilter] = useState<SummaryFilter | null>(null);
@@ -731,7 +732,17 @@ export default function SchedulePage() {
   const handleExport = useCallback(async () => {
     if (exportSelected.size === 0) return;
     setExporting(true);
+    setExportPhase("waking");
     try {
+      // Phase 1: ensure Render PDF service is warm (cold start can take 30-60s)
+      const healthRes = await rpc.api.v1["pdf-export"].health.$get();
+      if (!healthRes.ok) {
+        const body = (await healthRes.json().catch(() => ({ error: healthRes.statusText }))) as { error?: string };
+        throw new Error(body.error || "PDF service unhealthy");
+      }
+
+      // Phase 2: generate the PDF
+      setExportPhase("generating");
       const res = await rpc.api.v1["pdf-export"].$post({
         json: { problem_ids: Array.from(exportSelected) },
       });
@@ -739,6 +750,9 @@ export default function SchedulePage() {
         const body = (await res.json().catch(() => ({ error: res.statusText }))) as { error?: string };
         throw new Error(body.error || "Export failed");
       }
+
+      // Phase 3: download to browser
+      setExportPhase("downloading");
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -751,6 +765,7 @@ export default function SchedulePage() {
       toast.error(`エクスポート失敗: ${err instanceof Error ? err.message : err}`);
     } finally {
       setExporting(false);
+      setExportPhase(null);
     }
   }, [exportSelected, todayStr]);
 
@@ -884,7 +899,15 @@ export default function SchedulePage() {
                   ) : (
                     <Download className="size-3 mr-1" />
                   )}
-                  {exporting ? "エクスポート中..." : `PDF (${exportSelected.size})`}
+                  {exporting
+                    ? exportPhase === "waking"
+                      ? "Render 起床中..."
+                      : exportPhase === "generating"
+                        ? "PDF 処理中..."
+                        : exportPhase === "downloading"
+                          ? "ダウンロード中..."
+                          : "エクスポート中..."
+                    : `PDF (${exportSelected.size})`}
                 </Button>
               )}
             </div>

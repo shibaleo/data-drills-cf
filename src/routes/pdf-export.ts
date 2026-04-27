@@ -13,6 +13,25 @@ export const pdfExportInputSchema = z.object({
 });
 
 const app = new Hono()
+  /**
+   * GET /health — proxy to the PDF service's /health endpoint.
+   *
+   * On Render's free plan, the service sleeps after inactivity. Hitting
+   * /health from CF triggers wake-up; the request hangs until Render is
+   * ready (typically 30-60s) and then returns 200. The client uses this
+   * to distinguish the "起床中" phase from "PDF 処理中".
+   */
+  .get("/health", async (c) => {
+    const pdfApiUrl = process.env.PDF_API_URL;
+    if (!pdfApiUrl) {
+      return c.json({ error: "PDF_API_URL is not configured" }, 500);
+    }
+    const res = await fetch(`${pdfApiUrl}/health`);
+    if (!res.ok) {
+      return c.json({ error: `PDF service unhealthy (${res.status})` }, 503);
+    }
+    return c.json({ ok: true });
+  })
   .post("/", zValidator("json", pdfExportInputSchema), async (c) => {
     const pdfApiUrl = process.env.PDF_API_URL;
     if (!pdfApiUrl) {
