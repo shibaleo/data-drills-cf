@@ -30,7 +30,6 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<AuthState>("loading");
   const [me, setMe] = useState<MeUser | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [checkKey, setCheckKey] = useState(0);
 
   const fetchMe = useCallback(async (): Promise<boolean> => {
     try {
@@ -69,7 +68,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
         setState(ok ? "authenticated" : "unauthenticated");
       });
     }
-  }, [isLoaded, isSignedIn, checkKey, verifySession, fetchMe]);
+  }, [isLoaded, isSignedIn, verifySession, fetchMe]);
 
   if (state === "loading" || (state === "authenticated" && !me)) {
     return (
@@ -80,12 +79,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   }
 
   if (state === "unauthenticated" || !me) {
-    return (
-      <LoginPage
-        error={error}
-        onPasswordLogin={() => setCheckKey((k) => k + 1)}
-      />
-    );
+    return <LoginPage error={error} />;
   }
 
   return (

@@ -12,7 +12,6 @@ import flashcardReviews from "@/routes/flashcard-reviews";
 import reviews from "@/routes/reviews";
 import apiKeys from "@/routes/api-keys";
 import users from "@/routes/users";
-import authRoutes from "@/routes/auth";
 import statuses from "@/routes/statuses";
 import tags from "@/routes/tags";
 import reviewTags from "@/routes/review-tags";
@@ -41,7 +40,6 @@ const v1 = new Hono<Env>()
   })
   // Public routes (before auth middleware)
   .route("/health", health)
-  .route("/auth", authRoutes)
   // Auth middleware for all subsequent routes
   .use("*", async (c, next) => {
     const result = await authenticate(c.req.raw);

@@ -4,20 +4,14 @@ import { useState } from "react";
 import { useSignIn } from "@clerk/react";
 import { SITE_NAME } from "@/lib/site";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 
 interface LoginPageProps {
-  onPasswordLogin: () => void;
   error?: string | null;
 }
 
-export function LoginPage({ onPasswordLogin, error: externalError }: LoginPageProps) {
+export function LoginPage({ error: externalError }: LoginPageProps) {
   const { signIn } = useSignIn();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
 
   async function handleGoogleLogin() {
     if (!signIn) return;
@@ -29,29 +23,6 @@ export function LoginPage({ onPasswordLogin, error: externalError }: LoginPagePr
       });
     } catch {
       setError("Google login failed");
-    }
-  }
-
-  async function handlePasswordLogin(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
-    setLoading(true);
-    try {
-      const res = await fetch("/api/v1/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
-      });
-      if (!res.ok) {
-        const body = await res.json() as { error?: string };
-        setError(body.error ?? "Login failed");
-        return;
-      }
-      onPasswordLogin();
-    } catch {
-      setError("Login failed");
-    } finally {
-      setLoading(false);
     }
   }
 
@@ -96,43 +67,6 @@ export function LoginPage({ onPasswordLogin, error: externalError }: LoginPagePr
           </svg>
           Sign in with Google
         </Button>
-
-        <div className="relative">
-          <div className="absolute inset-0 flex items-center">
-            <span className="w-full border-t" />
-          </div>
-          <div className="relative flex justify-center text-xs uppercase">
-            <span className="bg-background px-2 text-muted-foreground">or</span>
-          </div>
-        </div>
-
-        <form onSubmit={handlePasswordLogin} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
-            <Input
-              id="email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              autoComplete="email"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="password">Password</Label>
-            <Input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              autoComplete="current-password"
-            />
-          </div>
-          <Button type="submit" className="w-full" disabled={loading}>
-            {loading ? "Signing in..." : "Sign in"}
-          </Button>
-        </form>
       </div>
     </div>
   );

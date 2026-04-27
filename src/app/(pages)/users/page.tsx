@@ -22,8 +22,6 @@ import {
   useCreateUser,
   useDeactivateUser,
   useActivateUser,
-  useSetUserPassword,
-  type UserRow,
 } from "@/hooks/queries/use-users";
 
 export default function UsersPage() {
@@ -32,17 +30,11 @@ export default function UsersPage() {
   const createUser = useCreateUser();
   const deactivate = useDeactivateUser();
   const activate = useActivateUser();
-  const setPassword = useSetUserPassword();
 
   // Create dialog
   const [createOpen, setCreateOpen] = useState(false);
   const [newEmail, setNewEmail] = useState("");
   const [newName, setNewName] = useState("");
-
-  // Password dialog
-  const [pwOpen, setPwOpen] = useState(false);
-  const [pwUser, setPwUser] = useState<UserRow | null>(null);
-  const [newPassword, setNewPassword] = useState("");
 
   const handleCreate = () => {
     if (!newEmail.trim() || !newName.trim()) {
@@ -78,21 +70,6 @@ export default function UsersPage() {
     });
   };
 
-  const handleSetPassword = () => {
-    if (!pwUser || !newPassword.trim()) return;
-    setPassword.mutate(
-      { id: pwUser.id, password: newPassword },
-      {
-        onSuccess: () => {
-          toast.success("Password updated");
-          setPwOpen(false);
-        },
-        onError: (e) =>
-          toast.error(e instanceof ApiError ? e.body.error : "Failed to set password"),
-      },
-    );
-  };
-
   return (
     <div className="p-4 md:p-6">
       {loading ? (
@@ -115,14 +92,6 @@ export default function UsersPage() {
                         )}
                       </div>
                       <div className="flex gap-1">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="text-xs h-6"
-                          onClick={() => { setPwUser(item); setNewPassword(""); setPwOpen(true); }}
-                        >
-                          Password
-                        </Button>
                         {item.isActive ? (
                           <Button
                             variant="outline"
@@ -174,26 +143,6 @@ export default function UsersPage() {
             <Button onClick={handleCreate} disabled={createUser.isPending}>
               {createUser.isPending ? "Creating..." : "Create"}
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Set Password Dialog */}
-      <Dialog open={pwOpen} onOpenChange={setPwOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Set Password</DialogTitle>
-            <DialogDescription>{pwUser?.name} ({pwUser?.email})</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label>New Password</Label>
-              <Input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="Min 4 characters" />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setPwOpen(false)}>Cancel</Button>
-            <Button onClick={handleSetPassword}>Save</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

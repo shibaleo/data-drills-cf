@@ -44,15 +44,3 @@ export function useActivateUser() {
     onSuccess: () => qc.invalidateQueries({ queryKey: usersKeys.list() }),
   });
 }
-
-export function useSetUserPassword() {
-  return useMutation({
-    mutationFn: (vars: { id: string; password: string }) =>
-      unwrap(
-        rpc.api.v1.users[":id"].password.$post({
-          param: { id: vars.id },
-          json: { password: vars.password },
-        }),
-      ),
-  });
-}

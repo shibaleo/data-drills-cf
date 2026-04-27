@@ -25,11 +25,6 @@ export function UserSettingsDialog({ open, onOpenChange }: Props) {
   const [name, setName] = useState(me.name);
   const [nameSaving, setNameSaving] = useState(false);
 
-  // Password
-  const [password, setPassword] = useState("");
-  const [passwordConfirm, setPasswordConfirm] = useState("");
-  const [passwordSaving, setPasswordSaving] = useState(false);
-
   // Google Drive
   const [driveConnected, setDriveConnected] = useState<boolean | null>(null);
   const [driveLoading, setDriveLoading] = useState(false);
@@ -49,8 +44,6 @@ export function UserSettingsDialog({ open, onOpenChange }: Props) {
   useEffect(() => {
     if (open) {
       setName(me.name);
-      setPassword("");
-      setPasswordConfirm("");
       fetchDriveStatus();
     }
   }, [open, me.name, fetchDriveStatus]);
@@ -70,31 +63,6 @@ export function UserSettingsDialog({ open, onOpenChange }: Props) {
     } catch (e) {
       toast.error(e instanceof ApiError ? e.body.error : "Failed to update");
     } finally { setNameSaving(false); }
-  };
-
-  const handleChangePassword = async () => {
-    if (password.length < 4) {
-      toast.error("Password must be at least 4 characters");
-      return;
-    }
-    if (password !== passwordConfirm) {
-      toast.error("Passwords do not match");
-      return;
-    }
-    setPasswordSaving(true);
-    try {
-      await unwrap(
-        rpc.api.v1.users[":id"].password.$post({
-          param: { id: me.id },
-          json: { password },
-        }),
-      );
-      setPassword("");
-      setPasswordConfirm("");
-      toast.success("Password changed");
-    } catch (e) {
-      toast.error(e instanceof ApiError ? e.body.error : "Failed to update");
-    } finally { setPasswordSaving(false); }
   };
 
   const handleDisconnectDrive = async () => {
@@ -144,38 +112,6 @@ export function UserSettingsDialog({ open, onOpenChange }: Props) {
                 {nameSaving ? "Saving..." : "Save"}
               </Button>
             </div>
-          </section>
-
-          {/* ── Password ── */}
-          <section className="space-y-3">
-            <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Change Password</h3>
-            <div className="space-y-2">
-              <Label htmlFor="settings-pw">New Password</Label>
-              <Input
-                id="settings-pw"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                autoComplete="new-password"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="settings-pw-confirm">Confirm</Label>
-              <Input
-                id="settings-pw-confirm"
-                type="password"
-                value={passwordConfirm}
-                onChange={(e) => setPasswordConfirm(e.target.value)}
-                autoComplete="new-password"
-              />
-            </div>
-            <Button
-              size="sm"
-              onClick={handleChangePassword}
-              disabled={passwordSaving || password.length < 4}
-            >
-              {passwordSaving ? "Changing..." : "Change Password"}
-            </Button>
           </section>
 
           {/* ── Google Drive ── */}

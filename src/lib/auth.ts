@@ -1,6 +1,6 @@
 /**
  * Auth for data-drills.
- * Supports: API Key (dd_ prefix) → Clerk JWT (email verified against DB) → Local password session (HS256).
+ * Supports: API Key (dd_ prefix) and Clerk JWT (email verified against DB).
  */
 
 import * as jose from "jose";
@@ -171,51 +171,6 @@ async function findUser(email: string): Promise<AuthResult | null> {
   return { authenticated: true, userId: row.id, name: row.name, email: row.email };
 }
 
-// ── Dev HS256 token (local password session / curl testing) ──
-
-function getSecret(): Uint8Array | null {
-  const secret = process.env.JWT_SECRET;
-  if (!secret) return null;
-  return new TextEncoder().encode(secret);
-}
-
-async function verifyDevToken(token: string): Promise<AuthResult | null> {
-  const secret = getSecret();
-  if (!secret) return null;
-  try {
-    const { payload } = await jose.jwtVerify(token, secret, { algorithms: ["HS256"] });
-    const email = payload.email as string | undefined;
-    if (email) {
-      return findUser(email);
-    }
-    // Legacy tokens without email — look up first active user
-    const rows = await db
-      .select({ id: user.id, name: user.name, email: user.email })
-      .from(user)
-      .where(eq(user.isActive, true))
-      .limit(1);
-    if (rows.length === 0) return null;
-    const row = rows[0];
-    return { authenticated: true, userId: row.id, name: row.name, email: row.email };
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Sign a local session JWT token (for email+password login).
- */
-export async function signToken(email: string): Promise<string> {
-  const secret = getSecret();
-  if (!secret) throw new Error("JWT_SECRET is not set");
-  return new jose.SignJWT({ email })
-    .setProtectedHeader({ alg: "HS256" })
-    .setSubject("local")
-    .setIssuedAt()
-    .setExpirationTime("24h")
-    .sign(secret);
-}
-
 // ── Token extraction ──
 
 function extractBearerToken(req: Request): string | null {
@@ -230,10 +185,6 @@ function extractBearerToken(req: Request): string | null {
 function extractSessionCookie(req: Request): string | null {
   const cookieHeader = req.headers.get("cookie");
   if (!cookieHeader) return null;
-  // Local password session takes priority
-  const local = cookieHeader.match(/(?:^|;\s*)__local_session=([^;]*)/);
-  if (local) return local[1];
-  // Clerk session
   const clerk = cookieHeader.match(/(?:^|;\s*)__session=([^;]*)/);
   return clerk ? clerk[1] : null;
 }
@@ -272,10 +223,6 @@ export async function authenticate(req: Request): Promise<AuthResult | null> {
       console.log("[auth] Clerk token valid but no email or user not in DB");
       return null;
     }
-
-    // Fallback: dev HS256 token (local password session)
-    const devResult = await verifyDevToken(token);
-    if (devResult) return devResult;
   }
 
   console.log("[auth] no valid token found");
