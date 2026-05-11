@@ -159,7 +159,7 @@ export function ProblemCard({
             <Pencil className="size-3" />
           </button>
           {p.standard_time != null && (
-            <span className="text-[10px] font-mono text-foreground/50">{secondsToHms(p.standard_time)}</span>
+            <span className="ml-auto text-[10px] font-mono tabular-nums text-primary">{secondsToHms(p.standard_time)}</span>
           )}
         </div>
 
