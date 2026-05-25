@@ -21,6 +21,7 @@ import answersList from "@/routes/answers-list";
 import schedule from "@/routes/schedule";
 import notes from "@/routes/notes";
 import pdfExport from "@/routes/pdf-export";
+import plans from "@/routes/plans";
 import googleAuth from "@/routes/google-auth";
 import drive from "@/routes/drive";
 
@@ -67,6 +68,7 @@ const v1 = new Hono<Env>()
   .route("/schedule", schedule)
   .route("/notes", notes)
   .route("/pdf-export", pdfExport)
+  .route("/plans", plans)
   // /me endpoint — return authenticated user info
   .get("/me", (c) => {
     const authResult = c.get("authResult");

@@ -29,6 +29,9 @@ const UsersPage = lazy(() => import("./app/(pages)/users/page"));
 const ApiKeysPage = lazy(() => import("./app/(pages)/api-keys/page"));
 const MastersPage = lazy(() => import("./app/(pages)/masters/page"));
 const AboutPage = lazy(() => import("./app/(pages)/about/page"));
+const PlansPage = lazy(() => import("./app/(pages)/plans/page"));
+const PlanNewPage = lazy(() => import("./app/(pages)/plans/new/page"));
+const PlanDetailPage = lazy(() => import("./app/(pages)/plans/$planId/page"));
 
 /* ── Route tree ── */
 
@@ -80,6 +83,17 @@ const usersRoute = lazyRoute("/users", UsersPage);
 const apiKeysRoute = lazyRoute("/api-keys", ApiKeysPage);
 const mastersRoute = lazyRoute("/masters", MastersPage);
 const aboutRoute = lazyRoute("/about", AboutPage);
+const plansRoute = lazyRoute("/plans", PlansPage);
+const planNewRoute = lazyRoute("/plans/new", PlanNewPage);
+const planDetailRoute = createRoute({
+  getParentRoute: () => authLayout,
+  path: "/plans/$planId",
+  component: () => (
+    <Suspense>
+      <PlanDetailPage />
+    </Suspense>
+  ),
+});
 
 // / → /schedule redirect
 const indexRoute = createRoute({
@@ -115,6 +129,9 @@ const routeTree = rootRoute.addChildren([
     apiKeysRoute,
     mastersRoute,
     aboutRoute,
+    plansRoute,
+    planNewRoute,
+    planDetailRoute,
   ]),
   indexRoute,
   ssoCallbackRoute,

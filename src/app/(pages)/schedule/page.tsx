@@ -245,11 +245,10 @@ function ScheduleChart({
                   </g>
                 );
               })}
-              {/* Top axis: relative days (every 7 days from today, plus today itself) */}
+              {/* Top axis: absolute dates */}
               {(() => {
                 const diff = todayIdx >= 0 ? colIdx - todayIdx : 0;
                 if (diff % 7 !== 0) return null;
-                const label = diff === 0 ? "今日" : diff > 0 ? `+${diff}` : `▲ ${Math.abs(diff)}`;
                 return (
                   <text
                     x={x + CELL / 2}
@@ -259,14 +258,15 @@ function ScheduleChart({
                     fontSize={9}
                     fontWeight={isToday ? 700 : 400}
                   >
-                    {label}
+                    {`${new Date(date + "T12:00:00").getMonth() + 1} / ${new Date(date + "T12:00:00").getDate()}`}
                   </text>
                 );
               })()}
-              {/* Bottom axis: absolute dates (same cadence) */}
+              {/* Bottom axis: relative days */}
               {(() => {
                 const diff = todayIdx >= 0 ? colIdx - todayIdx : 0;
                 if (diff % 7 !== 0) return null;
+                const label = diff === 0 ? "今日" : diff > 0 ? `+${diff}` : `▲ ${Math.abs(diff)}`;
                 return (
                   <text
                     x={x + CELL / 2}
@@ -276,7 +276,7 @@ function ScheduleChart({
                     fontSize={9}
                     fontWeight={isToday ? 700 : 400}
                   >
-                    {`${new Date(date + "T12:00:00").getMonth() + 1} / ${new Date(date + "T12:00:00").getDate()}`}
+                    {label}
                   </text>
                 );
               })()}
@@ -333,10 +333,28 @@ function StabilitySlider({
     try { e.currentTarget.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
   };
 
+  // 軸目盛 (max を 6 等分前後で切りのいい間隔に。30 日刻みで概ね収まる想定)
+  const tickStep = max <= 30 ? 5 : max <= 90 ? 15 : max <= 200 ? 30 : 60;
+  const ticks: number[] = [];
+  for (let v = 0; v <= max; v += tickStep) ticks.push(v);
+
   return (
     <div ref={trackRef} className="relative h-14 select-none touch-none">
       {/* Track line */}
       <div className="absolute top-1/2 left-0 right-0 h-0.5 -translate-y-1/2 bg-border rounded" />
+      {/* Axis ticks */}
+      {ticks.map((v) => {
+        const pct = (v / max) * 100;
+        return (
+          <div key={`tick-${v}`} className="absolute top-1/2 -translate-y-1/2 pointer-events-none"
+            style={{ left: `${pct}%` }}>
+            <div className="w-px h-2 -mt-1 mx-auto bg-muted-foreground/40" />
+            <div className="absolute top-2 left-1/2 -translate-x-1/2 text-[8px] text-muted-foreground/60 tabular-nums whitespace-nowrap">
+              {v}d
+            </div>
+          </div>
+        );
+      })}
       {/* Thumbs */}
       {statuses.map((s) => {
         const v = overrides.get(s.name) ?? s.stabilityDays;

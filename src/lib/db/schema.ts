@@ -8,6 +8,7 @@ import {
   jsonb,
   primaryKey,
   uniqueIndex,
+  index,
 } from "drizzle-orm/pg-core";
 
 // =============================================================================
@@ -347,4 +348,45 @@ export const filterPref = pgTable("filter_pref", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
   uniqueIndex("filter_pref_project_key").on(t.projectId),
+]);
+
+// =============================================================================
+// 24. Plan (bitemporal append-only)
+//
+// 目標管理。(id, revision) PK で各 revision を 1 行として持つ。
+// 編集時は revision+1 を INSERT し、旧 revision の valid_to に NOW() を塗る。
+// archive は is_active=false の新 revision を INSERT。
+// メンバー問題は filter から導出するので plan_problem テーブルは持たない。
+// =============================================================================
+
+export type PlanFilter = {
+  subjectIds?: string[];
+  levelIds?: string[];
+  topicIds?: string[];
+  tagIds?: string[];
+};
+
+export type PlanMilestone = {
+  count: number;   // 累積問題数
+  date: string;    // "YYYY-MM-DD"
+};
+
+export const plan = pgTable("plan", {
+  id: uuid("id").notNull(),
+  revision: integer("revision").notNull(),
+  projectId: uuid("project_id").notNull().references(() => project.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  dailyMinutes: integer("daily_minutes").notNull(),
+  /** standard_time に掛ける係数 (% 表現、100 = 1.0x)。動画視聴等で実時間が伸びる分を見込む。 */
+  timeMultiplierPct: integer("time_multiplier_pct").notNull().default(100),
+  filter: jsonb("filter").$type<PlanFilter>().notNull().default({}),
+  milestones: jsonb("milestones").$type<PlanMilestone[]>().notNull().default([]),
+  isActive: boolean("is_active").notNull().default(true),
+  validFrom: timestamp("valid_from", { withTimezone: true }).notNull().defaultNow(),
+  validTo: timestamp("valid_to", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  primaryKey({ columns: [t.id, t.revision] }),
+  index("plan_current_idx").on(t.id, t.revision.desc()),
+  index("plan_project_active_idx").on(t.projectId, t.isActive, t.validTo),
 ]);
