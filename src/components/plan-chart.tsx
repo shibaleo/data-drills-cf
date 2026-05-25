@@ -26,18 +26,23 @@ export function PlanChart({
   today,
   selectedId,
   onSelect,
+  onOpen,
   onMilestoneDateChange,
   showMilestonePins,
+  milestoneAnchors,
 }: {
   items: AllocatedProblem[];
   milestones: Milestone[];
   today: string;
   selectedId?: string | null;
   onSelect?: (problemId: string) => void;
+  onOpen?: (problemId: string) => void;
   /** milestone のドラッグハンドルを動かした時のコールバック。index は milestones 配列のインデックス。 */
   onMilestoneDateChange?: (index: number, newDate: string) => void;
   /** milestone ピン (count ラベル + 円ハンドル) を描画するか。false の時も縦線と横トラック線は出す。 */
   showMilestonePins?: boolean;
+  /** 各 milestone の「実際に N 問目に相当する problem」をハイライトするためのアンカー */
+  milestoneAnchors?: { count: number; problemId: string | null }[];
 }) {
   const _showPins = showMilestonePins ?? true;
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -132,8 +137,8 @@ export function PlanChart({
           {todayIdx >= 0 && (
             <line x1={todayIdx * STEP + CELL / 2} y1={TOP_AXIS_H}
               x2={todayIdx * STEP + CELL / 2} y2={chartHeight - BOTTOM_AXIS_H}
-              stroke="hsl(var(--foreground))" strokeWidth={1}
-              strokeDasharray="3 3" opacity={0.4}/>
+              stroke="hsl(var(--foreground))" strokeWidth={1.5}
+              strokeDasharray="4 3" opacity={0.7}/>
           )}
           {dates.map((date, colIdx) => {
             const dayItems = grouped.get(date) ?? [];
@@ -143,7 +148,7 @@ export function PlanChart({
               <g key={date}>
                 {isToday && (
                   <rect x={x - 1} y={TOP_AXIS_H} width={CELL + 2} height={maxStack * STEP}
-                    fill="hsl(var(--foreground))" opacity={0.06}/>
+                    fill="hsl(var(--foreground))" opacity={0.1}/>
                 )}
                 {Array.from({ length: maxStack }, (_, i) => (
                   <rect key={`bg-${i}`}
@@ -154,6 +159,7 @@ export function PlanChart({
                 {dayItems.map((item, stackIdx) => {
                   const color = item.overflow ? COLOR_OVERFLOW : item.side === "past" ? COLOR_PAST : COLOR_FUTURE;
                   const isSelected = item.problemId === selectedId;
+                  const anchor = milestoneAnchors?.find((a) => a.problemId === item.problemId);
                   const by = chartHeight - BOTTOM_AXIS_H - (stackIdx + 1) * STEP;
                   return (
                     <g key={`${item.problemId}-${stackIdx}`}>
@@ -163,15 +169,39 @@ export function PlanChart({
                       )}
                       <rect x={x} y={by} width={CELL} height={CELL} rx={2}
                         fill={color} opacity={isSelected ? 1 : 0.85}
-                        stroke={item.overBudget ? "#eab308" : "none"}
-                        strokeWidth={item.overBudget ? 1.5 : 0}
+                        stroke={anchor ? MS_COLOR : item.overBudget ? "#eab308" : "none"}
+                        strokeWidth={anchor ? 2 : item.overBudget ? 1.5 : 0}
                         className="cursor-pointer"
-                        onClick={() => onSelect?.(item.problemId)}>
-                        <title>{item.code} {item.name ?? ""} ({Math.round(item.standardTimeSec / 60)}分){item.overBudget ? " ⚠ 1日の枠超" : ""}</title>
+                        onClick={() => (isSelected ? onOpen?.(item.problemId) : onSelect?.(item.problemId))}
+                        onDoubleClick={() => onOpen?.(item.problemId)}>
+                        <title>
+                          {anchor ? `[${anchor.count}問目] ` : ""}
+                          {item.code} {item.name ?? ""} ({Math.round(item.standardTimeSec / 60)}分)
+                          {item.overBudget ? " ⚠ 1日の枠超" : ""}
+                        </title>
                       </rect>
                     </g>
                   );
                 })}
+                {/* anchor ラベルはスタックの最上段の上に出す (他ブロックに埋もれない) */}
+                {(() => {
+                  const anchorsHere = dayItems
+                    .map((it, idx) => ({ it, idx }))
+                    .filter(({ it }) => milestoneAnchors?.some((a) => a.problemId === it.problemId));
+                  if (anchorsHere.length === 0) return null;
+                  const topY = chartHeight - BOTTOM_AXIS_H - dayItems.length * STEP - 4;
+                  return anchorsHere.map(({ it }) => {
+                    const a = milestoneAnchors!.find((x) => x.problemId === it.problemId)!;
+                    return (
+                      <text key={`anchor-${it.problemId}`}
+                        x={x + CELL / 2} y={topY} textAnchor="middle"
+                        fontSize={10} fontWeight={700} fill={MS_COLOR}
+                        className="pointer-events-none select-none">
+                        {a.count}
+                      </text>
+                    );
+                  });
+                })()}
                 {/* 上: 絶対日付 (7 日おき + 今日) */}
                 {(() => {
                   const diff = todayIdx >= 0 ? colIdx - todayIdx : 0;

@@ -59,10 +59,17 @@ export function allocate(
   dailyMinutes: number,
   today: string,
   timeMultiplierPct: number = 100,
+  weekdayWeights: number[] = [1, 1, 1, 1, 1, 1, 1],
 ): AllocatedProblem[] {
   const result: AllocatedProblem[] = [];
-  const dailySec = Math.max(1, dailyMinutes) * 60;
+  const baseDailySec = Math.max(1, dailyMinutes) * 60;
   const mult = Math.max(1, timeMultiplierPct) / 100;
+  // 各日の実効 daily 秒。曜日ウェイトを反映 (= その曜日に確保する枠)。
+  const weightOf = (dateStr: string): number => {
+    const dow = new Date(`${dateStr}T00:00:00Z`).getUTCDay();
+    return weekdayWeights[dow] ?? 1;
+  };
+  const dailySecOn = (dateStr: string): number => Math.max(0, Math.round(baseDailySec * weightOf(dateStr)));
   // 未来側の問題時間に係数を掛けるため、members を複製して書き換える。
   // 過去側は実時間 (= 解答済) なので係数は掛けない。
   const adjustedMembers: MemberInput[] = members.map((m) => {
@@ -133,8 +140,12 @@ export function allocate(
       continue;
     }
 
-    const days = diffDays(segmentStart, periodEnd) + 1;
-    const capacitySec = days * dailySec;
+    // セグメント期間の容量 = 各日の (daily × 曜日ウェイト) の合計
+    let capacitySec = 0;
+    {
+      let d = segmentStart;
+      while (d <= periodEnd) { capacitySec += dailySecOn(d); d = addDays(d, 1); }
+    }
     const totalSec = segment.reduce((s, p) => s + (p.standardTimeSec ?? DEFAULT_SEC), 0);
 
     if (totalSec > capacitySec) {
@@ -143,8 +154,8 @@ export function allocate(
         result.push(toAlloc(p, periodEnd, true));
       }
     } else {
-      // セグメント期間内に等間隔分散 (milestone を動かすと密度が変わる視覚)
-      evenFill(segment, segmentStart, periodEnd, dailySec, result);
+      // セグメント期間内に等間隔分散
+      evenFill(segment, segmentStart, periodEnd, dailySecOn, result);
     }
     segmentStart = addDays(periodEnd, 1);
   }
@@ -152,7 +163,7 @@ export function allocate(
   // ── 3. 最終 milestone 以降の残余 → 自由ペース (pile-up 無し、greedy パック) ──
   if (futureCursor < future.length) {
     const remaining = future.slice(futureCursor);
-    greedyFill(remaining, segmentStart, null, dailySec, result);
+    greedyFill(remaining, segmentStart, null, dailySecOn, result);
   }
 
   return result;
@@ -180,24 +191,25 @@ function evenFill(
   segment: MemberInput[],
   startDate: string,
   periodEnd: string,
-  dailySec: number,
+  dailySecOn: (date: string) => number,
   out: AllocatedProblem[],
 ): void {
   const N = segment.length;
   if (N === 0) return;
   const days = Math.max(1, diffDays(startDate, periodEnd) + 1);
-  const dayLoad = new Map<string, number>();  // 日 → その日の sec 合計
+  const dayLoad = new Map<string, number>();
 
   for (let i = 0; i < N; i++) {
     const sec = segment[i].standardTimeSec ?? DEFAULT_SEC;
     const targetOffset = N === 1 ? 0 : Math.round((i * (days - 1)) / (N - 1));
     let day = addDays(startDate, targetOffset);
-    // 空き日 (load=0) なら sec が daily 枠を超えていても乗せる (1 問 > daily の場合に詰みを防ぐ)。
-    // 既存 load があり、かつ追加すると daily 枠を超えるなら翌日へずらす。
+    // その日の daily が 0 (= 休息日設定) なら自動で翌日へずらす。
+    // 既存 load > 0 で枠超えるならずらす。
     while (
       day <= periodEnd
-      && (dayLoad.get(day) ?? 0) > 0
-      && (dayLoad.get(day) ?? 0) + sec > dailySec
+      && (dailySecOn(day) === 0
+          || ((dayLoad.get(day) ?? 0) > 0
+              && (dayLoad.get(day) ?? 0) + sec > dailySecOn(day)))
     ) {
       day = addDays(day, 1);
     }
@@ -205,7 +217,7 @@ function evenFill(
       out.push(toAlloc(segment[i], periodEnd, true));
       continue;
     }
-    const overBudget = sec > dailySec;
+    const overBudget = sec > dailySecOn(day) && dailySecOn(day) > 0;
     dayLoad.set(day, (dayLoad.get(day) ?? 0) + sec);
     out.push(toAlloc(segment[i], day, false, overBudget));
   }
@@ -220,28 +232,34 @@ function greedyFill(
   segment: MemberInput[],
   startDate: string,
   periodEnd: string | null,
-  dailySec: number,
+  dailySecOn: (date: string) => number,
   out: AllocatedProblem[],
 ): void {
   let day = startDate;
-  let remainingSec = dailySec;
+  // weight=0 (休息日) ならスキップ
+  while (dailySecOn(day) === 0 && (!periodEnd || day <= periodEnd)) {
+    day = addDays(day, 1);
+  }
+  let remainingSec = dailySecOn(day);
   for (const p of segment) {
     const sec = p.standardTimeSec ?? DEFAULT_SEC;
-    if (sec > remainingSec && remainingSec < dailySec) {
+    const todayCap = dailySecOn(day);
+    if (todayCap > 0 && sec > remainingSec && remainingSec < todayCap) {
       day = addDays(day, 1);
-      remainingSec = dailySec;
+      while (dailySecOn(day) === 0 && (!periodEnd || day <= periodEnd)) day = addDays(day, 1);
+      remainingSec = dailySecOn(day);
     }
     if (periodEnd && day > periodEnd) {
-      // periodEnd 制約内で収まると判定したのに溢れた = 計算ミス。
-      // セーフティとして periodEnd に pile-up。
       out.push(toAlloc(p, periodEnd, true));
       continue;
     }
-    out.push(toAlloc(p, day, false, sec > dailySec));
+    const overBudget = todayCap > 0 && sec > todayCap;
+    out.push(toAlloc(p, day, false, overBudget));
     remainingSec -= sec;
     if (remainingSec <= 0) {
       day = addDays(day, 1);
-      remainingSec = dailySec;
+      while (dailySecOn(day) === 0 && (!periodEnd || day <= periodEnd)) day = addDays(day, 1);
+      remainingSec = dailySecOn(day);
     }
   }
 }

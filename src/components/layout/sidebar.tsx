@@ -16,7 +16,7 @@ import {
   PenLine,
   TableProperties,
   Tag,
-  Target,
+  TrendingUp,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useProject } from "@/hooks/use-project";
@@ -65,7 +65,7 @@ function OverdueBadge() {
 
 const navItems: NavItem[] = [
   { href: "/schedule", label: "Schedule", icon: CalendarDays, Badge: OverdueBadge },
-  { href: "/plans", label: "目標", icon: Target, dividerAfter: true },
+  { href: "/plans", label: "Progress", icon: TrendingUp, dividerAfter: true },
   { href: "/problems", label: "Problems", icon: TableProperties },
   { href: "/answers", label: "Answers", icon: PenLine },
   { href: "/timeline", label: "Timeline", icon: Clock, dividerAfter: true },

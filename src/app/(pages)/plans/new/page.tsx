@@ -30,6 +30,7 @@ export default function PlanNewPage() {
       name: name.trim(),
       daily_minutes: dailyMinutes,
       time_multiplier_pct: Math.round(timeMultiplier * 100),
+      weekday_weights: [1, 1, 1, 1, 1, 1, 1],
       filter,
       milestones,
     });

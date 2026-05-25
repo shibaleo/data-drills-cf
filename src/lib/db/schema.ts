@@ -379,6 +379,8 @@ export const plan = pgTable("plan", {
   dailyMinutes: integer("daily_minutes").notNull(),
   /** standard_time に掛ける係数 (% 表現、100 = 1.0x)。動画視聴等で実時間が伸びる分を見込む。 */
   timeMultiplierPct: integer("time_multiplier_pct").notNull().default(100),
+  /** 曜日別の daily 枠ウェイト [日,月,火,水,木,金,土]。各曜日の実効 daily = daily_minutes × weight。 */
+  weekdayWeights: jsonb("weekday_weights").$type<number[]>().notNull().default([1, 1, 1, 1, 1, 1, 1]),
   filter: jsonb("filter").$type<PlanFilter>().notNull().default({}),
   milestones: jsonb("milestones").$type<PlanMilestone[]>().notNull().default([]),
   isActive: boolean("is_active").notNull().default(true),

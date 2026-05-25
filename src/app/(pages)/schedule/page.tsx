@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { toast } from "sonner";
 import { Download, Filter, Loader2, RotateCcw, Save, SlidersHorizontal } from "lucide-react";
+import { ResizableTableShell } from "@/components/resizable-table-shell";
 import {
   useReactTable,
   getCoreRowModel,
@@ -167,9 +168,9 @@ function ScheduleChart({
             x2={todayIdx * STEP + CELL / 2}
             y2={chartHeight - BOTTOM_AXIS_H}
             stroke="hsl(var(--foreground))"
-            strokeWidth={1}
-            strokeDasharray="3 3"
-            opacity={0.3}
+            strokeWidth={1.5}
+            strokeDasharray="4 3"
+            opacity={0.7}
           />
         )}
         {dates.map((date, colIdx) => {
@@ -187,7 +188,7 @@ function ScheduleChart({
                   width={CELL + 2}
                   height={maxStack * STEP}
                   fill="hsl(var(--foreground))"
-                  opacity={0.06}
+                  opacity={0.1}
                 />
               )}
               {/* Empty background blocks */}
@@ -1026,11 +1027,7 @@ export default function SchedulePage() {
           </div>
 
           {/* Table */}
-          <div
-            ref={tableRef}
-            className="rounded-md border overflow-auto resize-y"
-            style={{ height: "calc(10 * 2.25rem)", minHeight: "6rem", maxHeight: "80vh" }}
-          >
+          <ResizableTableShell ref={tableRef}>
             <Table className="table-fixed">
               <TableHeader>
                 {table.getHeaderGroups().map((hg) => (
@@ -1095,7 +1092,7 @@ export default function SchedulePage() {
                 })}
               </TableBody>
             </Table>
-          </div>
+          </ResizableTableShell>
         </>
       )}
 
