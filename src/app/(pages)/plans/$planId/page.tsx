@@ -39,7 +39,7 @@ export default function PlanDetailPage() {
   const [milestones, setMilestones] = useState<MilestoneInput[]>([]);
   const [name, setName] = useState<string>("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [showMilestonePins, setShowMilestonePins] = useState(true);
+  const [showMilestonePins, setShowMilestonePins] = useState(false);
   const [hideCompleted, setHideCompleted] = useState(false);
   const [hideFuture, setHideFuture] = useState(false);
   const [overflowOnly, setOverflowOnly] = useState(false);
