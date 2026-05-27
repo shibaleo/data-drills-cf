@@ -74,7 +74,7 @@ CF Pages (React + Vite SPA, TanStack Router)
 
 #### 3. Vitest 導入
 - リグレッション防止。フレームワーク刷新直後で土台を敷く好機
-- framework-proposal.md §5 で保留判断
+- docs/framework-proposal.md §5 で保留判断
 
 #### 4. CodeMirror バンドル分割
 - 現状 1.5MB の単一 chunk。動的 import で code-split 可能
@@ -83,13 +83,13 @@ CF Pages (React + Vite SPA, TanStack Router)
 
 #### 5. `@hono/zod-openapi` への移行
 - API を外部クライアント (SaaS、MCP モジュール等) に公開するタイミングで
-- Zod スキーマは再利用できるので移行コストは低い (framework-proposal.md §4.4)
+- Zod スキーマは再利用できるので移行コストは低い (docs/framework-proposal.md §4.4)
 
 #### 6. Sentry 等のエラー監視
-- 本番運用開始時に導入 (framework-proposal.md §5)
+- 本番運用開始時に導入 (docs/framework-proposal.md §5)
 
 #### 7. `AppType` コンパイル時間
-- 現状問題なし。ルート数が増えて肥大化したら v1 を複数アプリに分割 (framework-proposal.md §7)
+- 現状問題なし。ルート数が増えて肥大化したら v1 を複数アプリに分割 (docs/framework-proposal.md §7)
 
 #### 8. `unwrap` 内部の narrowing cast
 - [src/lib/rpc-client.ts](src/lib/rpc-client.ts) の `as SuccessBody<T>` 1 箇所
