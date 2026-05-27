@@ -250,44 +250,7 @@ export const flashcardReview = pgTable("flashcard_review", {
 });
 
 // =============================================================================
-// 16. Note
-// =============================================================================
-
-export const note = pgTable("note", {
-  id: id(),
-  projectId: uuid("project_id").notNull().references(() => project.id, { onDelete: "cascade" }),
-  topicId: uuid("topic_id").references(() => topic.id, { onDelete: "set null" }),
-  title: text("title").notNull(),
-  content: text("content").notNull().default(""),
-  pinned: boolean("pinned").notNull().default(false),
-  sortOrder: integer("sort_order").notNull().default(0),
-  ...timestamps(),
-});
-
-// =============================================================================
-// 17. NoteTag (M:N)
-// =============================================================================
-
-export const noteTag = pgTable("note_tag", {
-  noteId: uuid("note_id").notNull().references(() => note.id, { onDelete: "cascade" }),
-  tagId: uuid("tag_id").notNull().references(() => tag.id, { onDelete: "cascade" }),
-}, (t) => [
-  primaryKey({ columns: [t.noteId, t.tagId] }),
-]);
-
-// =============================================================================
-// 18. NoteProblem (M:N)
-// =============================================================================
-
-export const noteProblem = pgTable("note_problem", {
-  noteId: uuid("note_id").notNull().references(() => note.id, { onDelete: "cascade" }),
-  problemId: uuid("problem_id").notNull().references(() => problem.id, { onDelete: "cascade" }),
-}, (t) => [
-  primaryKey({ columns: [t.noteId, t.problemId] }),
-]);
-
-// =============================================================================
-// 19. User
+// 16. User
 // =============================================================================
 
 export const user = pgTable("user", {

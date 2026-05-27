@@ -22,7 +22,7 @@ import { useProblemDialogs } from "@/hooks/use-problem-dialogs";
 import { useReviewList, reviewKeys } from "@/hooks/queries/use-review";
 import { useProblemsList, problemsKeys } from "@/hooks/queries/use-problems";
 import { useUpdateStatus } from "@/hooks/queries/use-statuses";
-import { SortHeader } from "@/app/(pages)/problems/columns";
+import { SortHeader } from "@/components/sort-header";
 import { toJSTDateString } from "@/lib/date-utils";
 import { StatusTag } from "@/components/color-tags";
 import { Button } from "@/components/ui/button";

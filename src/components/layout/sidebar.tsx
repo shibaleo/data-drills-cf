@@ -4,19 +4,15 @@ import { useState, useEffect } from "react";
 import { Link, usePathname } from "@/lib/router";
 import { SITE_NAME } from "@/lib/site";
 import {
-  CalendarDays,
-  Clock,
-  FileText,
   Info,
+  Inbox,
   LayoutGrid,
   Layers,
-  List,
   PanelLeftClose,
   PanelLeftOpen,
   PenLine,
-  TableProperties,
+  Repeat,
   Tag,
-  TrendingUp,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useProject } from "@/hooks/use-project";
@@ -87,14 +83,9 @@ function BacklogBadge() {
 }
 
 const navItems: NavItem[] = [
-  { href: "/review", label: "Review", icon: CalendarDays, Badge: OverdueBadge },
-  { href: "/backlog", label: "Backlog", icon: TrendingUp, Badge: BacklogBadge, dividerAfter: true },
-  { href: "/problems", label: "Problems", icon: TableProperties },
-  { href: "/answers", label: "Answers", icon: PenLine },
-  { href: "/timeline", label: "Timeline", icon: Clock, dividerAfter: true },
+  { href: "/review", label: "Review", icon: Repeat, Badge: OverdueBadge },
+  { href: "/backlog", label: "Backlog", icon: Inbox, Badge: BacklogBadge, dividerAfter: true },
   { href: "/flashcards", label: "Flashcards", icon: Layers },
-  { href: "/notes", label: "Notes", icon: FileText, dividerAfter: true },
-  { href: "/topics", label: "Topics", icon: List },
   { href: "/tags", label: "Tags", icon: Tag, dividerAfter: true },
   { href: "/masters", label: "Masters", icon: LayoutGrid },
   { href: "/about", label: "About", icon: Info },

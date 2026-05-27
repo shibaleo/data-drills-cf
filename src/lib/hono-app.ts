@@ -19,7 +19,6 @@ import problemFiles from "@/routes/problem-files";
 import problemsList from "@/routes/problems-list";
 import answersList from "@/routes/answers-list";
 import review from "@/routes/review";
-import notes from "@/routes/notes";
 import pdfExport from "@/routes/pdf-export";
 import backlog from "@/routes/backlog";
 import filterPrefs from "@/routes/filter-prefs";
@@ -67,7 +66,6 @@ const v1 = new Hono<Env>()
   .route("/problems-list", problemsList)
   .route("/answers-list", answersList)
   .route("/review", review)
-  .route("/notes", notes)
   .route("/pdf-export", pdfExport)
   .route("/backlog", backlog)
   .route("/filter-prefs", filterPrefs)
