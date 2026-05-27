@@ -1,10 +1,8 @@
 /**
- * Plan allocation engine (pure function, client-side).
+ * Backlog allocation engine (pure function, client-side).
  *
- * メンバー問題を、過去側 (= 初回 answer 済み問題を answer.date に配置) と
- * 未来側 (= 未解問題を milestone 制約付き greedy 配分) に振り分けて返す。
- *
- * 設計判断は docs/plan-management.md §1.3 参照。
+ * Splits members into past side (first-answered problems placed at answer.date)
+ * and future side (unanswered problems greedy-allocated under milestone targets).
  */
 
 export type MemberInput = {

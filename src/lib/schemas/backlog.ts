@@ -1,0 +1,90 @@
+import { z } from "zod";
+
+/* ── Backlog (strategy numbers) ──────────────────────────────── */
+
+export const backlogFilterSchema = z.object({
+  subjectIds: z.array(z.string().uuid()).optional(),
+  levelIds: z.array(z.string().uuid()).optional(),
+  topicIds: z.array(z.string().uuid()).optional(),
+  tagIds: z.array(z.string().uuid()).optional(),
+});
+export type BacklogFilterInput = z.infer<typeof backlogFilterSchema>;
+
+export const weekdayWeightsSchema = z.array(z.number().nonnegative()).length(7);
+
+export const backlogCreateInputSchema = z.object({
+  project_id: z.string().uuid(),
+  name: z.string().min(1),
+  daily_minutes: z.number().int().positive(),
+  time_multiplier_pct: z.number().int().positive().default(100),
+  weekday_weights: weekdayWeightsSchema.default([1, 1, 1, 1, 1, 1, 1]),
+  filter: backlogFilterSchema.default({}),
+});
+export type BacklogCreateInput = z.infer<typeof backlogCreateInputSchema>;
+
+export const backlogUpdateInputSchema = z.object({
+  name: z.string().min(1).optional(),
+  daily_minutes: z.number().int().positive().optional(),
+  time_multiplier_pct: z.number().int().positive().optional(),
+  weekday_weights: weekdayWeightsSchema.optional(),
+  filter: backlogFilterSchema.optional(),
+});
+export type BacklogUpdateInput = z.infer<typeof backlogUpdateInputSchema>;
+
+/* ── GoalLayer (bitemporal) ──────────────────────────────────── */
+
+export const goalLayerCreateInputSchema = z.object({
+  backlog_id: z.string().uuid(),
+  name: z.string().default(""),
+  color: z.string().nullish(),
+  opacity_pct: z.number().int().min(0).max(100).nullish(),
+  line_style: z.enum(["solid", "dashed", "dotted"]).nullish(),
+  line_width: z.number().int().min(1).max(10).nullish(),
+  sort_order: z.number().int().nonnegative().default(0),
+});
+export type GoalLayerCreateInput = z.infer<typeof goalLayerCreateInputSchema>;
+
+export const goalLayerUpdateInputSchema = z.object({
+  name: z.string().optional(),
+  color: z.string().nullish(),
+  opacity_pct: z.number().int().min(0).max(100).nullish(),
+  line_style: z.enum(["solid", "dashed", "dotted"]).nullish(),
+  line_width: z.number().int().min(1).max(10).nullish(),
+  sort_order: z.number().int().nonnegative().optional(),
+});
+export type GoalLayerUpdateInput = z.infer<typeof goalLayerUpdateInputSchema>;
+
+export const goalLayerReorderInputSchema = z.object({
+  backlog_id: z.string().uuid(),
+  layer_ids: z.array(z.string().min(1)),
+});
+export type GoalLayerReorderInput = z.infer<typeof goalLayerReorderInputSchema>;
+
+/* ── GoalMilestone (bitemporal) ──────────────────────────────── */
+
+export const goalMilestoneCreateInputSchema = z.object({
+  backlog_id: z.string().uuid(),
+  layer_id: z.string().uuid(),
+  target: z.number().int().nonnegative(),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "expected YYYY-MM-DD"),
+});
+export type GoalMilestoneCreateInput = z.infer<typeof goalMilestoneCreateInputSchema>;
+
+export const goalMilestoneUpdateInputSchema = z.object({
+  layer_id: z.string().uuid().optional(),
+  target: z.number().int().nonnegative().optional(),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "expected YYYY-MM-DD").optional(),
+});
+export type GoalMilestoneUpdateInput = z.infer<typeof goalMilestoneUpdateInputSchema>;
+
+/* ── Backlog View Pref (UI filter, mutable) ──────────────────── */
+
+export const backlogViewPrefSchema = z.object({
+  hideCompleted: z.boolean().optional(),
+  hideFuture: z.boolean().optional(),
+  overflowOnly: z.boolean().optional(),
+  subjectIds: z.array(z.string()).optional(),
+  levelIds: z.array(z.string()).optional(),
+  topicIds: z.array(z.string()).optional(),
+});
+export type BacklogViewPrefInput = z.infer<typeof backlogViewPrefSchema>;

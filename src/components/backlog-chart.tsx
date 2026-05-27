@@ -1,6 +1,6 @@
 /**
- * Plan 用 Tetris チャート。
- * layers (= 横トラックの一覧) と milestones (= 各 layer 上の pin) を別エンティティとして受け取る。
+ * Backlog Tetris chart.
+ * Receives layers (horizontal tracks) and milestones (pins on layers) as separate entities.
  */
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { Hash, CalendarDays, Trash2, Eye, EyeOff, GripVertical } from "lucide-react";
@@ -12,9 +12,9 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import type { AllocatedProblem, Milestone } from "@/lib/plan-allocate";
+import type { AllocatedProblem, Milestone } from "@/lib/backlog-allocate";
 
-export type PlanChartHandle = {
+export type BacklogChartHandle = {
   getCenterDate(): string;
 };
 
@@ -35,7 +35,7 @@ export type MilestoneView = {
   date: string;
 };
 
-type PlanChartProps = {
+type BacklogChartProps = {
   items: AllocatedProblem[];
   layers: LayerView[];
   milestones: MilestoneView[];
@@ -85,7 +85,7 @@ function addDays(dateStr: string, days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-export const PlanChart = forwardRef<PlanChartHandle, PlanChartProps>(function PlanChartImpl({
+export const BacklogChart = forwardRef<BacklogChartHandle, BacklogChartProps>(function BacklogChartImpl({
   items,
   layers,
   milestones,
@@ -107,7 +107,7 @@ export const PlanChart = forwardRef<PlanChartHandle, PlanChartProps>(function Pl
   rightPanelExtra,
   showMilestonePins,
   milestoneAnchors,
-}: PlanChartProps, ref) {
+}: BacklogChartProps, ref) {
   const _showPins = showMilestonePins ?? true;
   const scrollRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);

@@ -13,7 +13,7 @@ import { AuthenticateWithRedirectCallback } from "@clerk/react";
 
 /* ── Lazy page imports ── */
 
-const SchedulePage = lazy(() => import("./app/(pages)/schedule/page"));
+const ReviewPage = lazy(() => import("./app/(pages)/review/page"));
 const ProblemsPage = lazy(() => import("./app/(pages)/problems/page"));
 const AnswersPage = lazy(() => import("./app/(pages)/answers/page"));
 const TimelinePage = lazy(() => import("./app/(pages)/timeline/page"));
@@ -29,9 +29,9 @@ const UsersPage = lazy(() => import("./app/(pages)/users/page"));
 const ApiKeysPage = lazy(() => import("./app/(pages)/api-keys/page"));
 const MastersPage = lazy(() => import("./app/(pages)/masters/page"));
 const AboutPage = lazy(() => import("./app/(pages)/about/page"));
-const PlansPage = lazy(() => import("./app/(pages)/plans/page"));
-const PlanNewPage = lazy(() => import("./app/(pages)/plans/new/page"));
-const PlanDetailPage = lazy(() => import("./app/(pages)/plans/$planId/page"));
+const BacklogPage = lazy(() => import("./app/(pages)/backlog/page"));
+const BacklogNewPage = lazy(() => import("./app/(pages)/backlog/new/page"));
+const BacklogDetailPage = lazy(() => import("./app/(pages)/backlog/$backlogId/page"));
 
 /* ── Route tree ── */
 
@@ -67,7 +67,7 @@ function lazyRoute(
   });
 }
 
-const scheduleRoute = lazyRoute("/schedule", SchedulePage);
+const reviewRoute = lazyRoute("/review", ReviewPage);
 const problemsRoute = lazyRoute("/problems", ProblemsPage);
 const answersRoute = lazyRoute("/answers", AnswersPage);
 const timelineRoute = lazyRoute("/timeline", TimelinePage);
@@ -83,24 +83,24 @@ const usersRoute = lazyRoute("/users", UsersPage);
 const apiKeysRoute = lazyRoute("/api-keys", ApiKeysPage);
 const mastersRoute = lazyRoute("/masters", MastersPage);
 const aboutRoute = lazyRoute("/about", AboutPage);
-const plansRoute = lazyRoute("/plans", PlansPage);
-const planNewRoute = lazyRoute("/plans/new", PlanNewPage);
-const planDetailRoute = createRoute({
+const backlogRoute = lazyRoute("/backlog", BacklogPage);
+const backlogNewRoute = lazyRoute("/backlog/new", BacklogNewPage);
+const backlogDetailRoute = createRoute({
   getParentRoute: () => authLayout,
-  path: "/plans/$planId",
+  path: "/backlog/$backlogId",
   component: () => (
     <Suspense>
-      <PlanDetailPage />
+      <BacklogDetailPage />
     </Suspense>
   ),
 });
 
-// / → /schedule redirect
+// / → /review redirect
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/",
   beforeLoad: () => {
-    throw redirect({ to: "/schedule" as string });
+    throw redirect({ to: "/review" as string });
   },
 });
 
@@ -113,7 +113,7 @@ const ssoCallbackRoute = createRoute({
 
 const routeTree = rootRoute.addChildren([
   authLayout.addChildren([
-    scheduleRoute,
+    reviewRoute,
     problemsRoute,
     answersRoute,
     timelineRoute,
@@ -129,9 +129,9 @@ const routeTree = rootRoute.addChildren([
     apiKeysRoute,
     mastersRoute,
     aboutRoute,
-    plansRoute,
-    planNewRoute,
-    planDetailRoute,
+    backlogRoute,
+    backlogNewRoute,
+    backlogDetailRoute,
   ]),
   indexRoute,
   ssoCallbackRoute,

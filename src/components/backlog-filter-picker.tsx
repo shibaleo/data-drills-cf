@@ -1,24 +1,24 @@
-/** Plan の filter spec (subject/level/topic/tag) を選択する UI。各カテゴリで複数選択可。 */
+/** Backlog filter spec (subject/level/topic/tag) selector. Multi-select per category. */
 import { useSubjectsList } from "@/hooks/queries/use-subjects";
 import { useLevelsList } from "@/hooks/queries/use-levels";
 import { useTopicsList } from "@/hooks/queries/use-topics";
 import { useTags } from "@/hooks/queries/use-tags";
 import { Checkbox } from "@/components/ui/checkbox";
-import type { PlanFilterInput } from "@/lib/schemas/plan";
+import type { BacklogFilterInput } from "@/lib/schemas/backlog";
 
 type Props = {
   projectId: string;
-  value: PlanFilterInput;
-  onChange: (v: PlanFilterInput) => void;
+  value: BacklogFilterInput;
+  onChange: (v: BacklogFilterInput) => void;
 };
 
-export function PlanFilterPicker({ projectId, value, onChange }: Props) {
+export function BacklogFilterPicker({ projectId, value, onChange }: Props) {
   const { data: subjects = [] } = useSubjectsList(projectId);
   const { data: levels = [] } = useLevelsList(projectId);
   const { data: topics = [] } = useTopicsList(projectId);
   const { data: tags = [] } = useTags();
 
-  function toggle(field: keyof PlanFilterInput, id: string) {
+  function toggle(field: keyof BacklogFilterInput, id: string) {
     const cur = value[field] ?? [];
     const next = cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id];
     onChange({ ...value, [field]: next.length ? next : undefined });

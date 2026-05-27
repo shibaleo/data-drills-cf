@@ -2,19 +2,19 @@
 import { useMemo, useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "@tanstack/react-router";
 import {
-  usePlan, useUpdatePlan, useArchivePlan,
-  useCreateLayer, useUpdateLayer, useDeleteLayer,
-  useCreateMilestone, useUpdateMilestone, useDeleteMilestone,
-  type PlanMember,
-} from "@/hooks/queries/use-plans";
+  useBacklog, useUpdateBacklog, useArchiveBacklog,
+  useCreateGoalLayer, useUpdateGoalLayer, useDeleteGoalLayer,
+  useCreateGoalMilestone, useUpdateGoalMilestone, useDeleteGoalMilestone,
+  type BacklogMember,
+} from "@/hooks/queries/use-backlog";
 import { useProject } from "@/hooks/use-project";
 import { useProblemsList } from "@/hooks/queries/use-problems";
 import { useProblemDialogs } from "@/hooks/use-problem-dialogs";
 import { useQueryClient } from "@tanstack/react-query";
-import { plansKeys } from "@/hooks/queries/use-plans";
+import { backlogKeys } from "@/hooks/queries/use-backlog";
 import { problemsKeys } from "@/hooks/queries/use-problems";
-import { PlanChart, type PlanChartHandle } from "@/components/plan-chart";
-import { allocate, type MemberInput } from "@/lib/plan-allocate";
+import { BacklogChart, type BacklogChartHandle } from "@/components/backlog-chart";
+import { allocate, type MemberInput } from "@/lib/backlog-allocate";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -26,23 +26,22 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Filter, SlidersHorizontal, ArrowLeft, Archive, Save, RotateCcw, Loader2 } from "lucide-react";
 import { useTopicsList } from "@/hooks/queries/use-topics";
 
-export default function PlanDetailPage() {
-  const { planId } = useParams({ strict: false }) as { planId: string };
+export default function BacklogDetailPage() {
+  const { backlogId } = useParams({ strict: false }) as { backlogId: string };
   const { currentProject, subjects, levels } = useProject();
   const subjectMap = useMemo(() => new Map(subjects.map((s) => [s.id, s])), [subjects]);
   const levelMap = useMemo(() => new Map(levels.map((l) => [l.id, l])), [levels]);
   const navigate = useNavigate();
-  const { data, isLoading } = usePlan(planId);
-  const update = useUpdatePlan(currentProject?.id);
-  const archive = useArchivePlan(currentProject?.id);
+  const { data, isLoading } = useBacklog(backlogId);
+  const update = useUpdateBacklog(currentProject?.id);
+  const archive = useArchiveBacklog(currentProject?.id);
 
-  // 即時 mutation (layer/milestone は plan revision を作らない)
-  const createLayer = useCreateLayer(planId);
-  const updateLayer = useUpdateLayer(planId);
-  const deleteLayer = useDeleteLayer(planId);
-  const createMilestone = useCreateMilestone(planId);
-  const updateMilestone = useUpdateMilestone(planId);
-  const deleteMilestone = useDeleteMilestone(planId);
+  const createLayer = useCreateGoalLayer(backlogId);
+  const updateLayer = useUpdateGoalLayer(backlogId);
+  const deleteLayer = useDeleteGoalLayer(backlogId);
+  const createMilestone = useCreateGoalMilestone(backlogId);
+  const updateMilestone = useUpdateGoalMilestone(backlogId);
+  const deleteMilestone = useDeleteGoalMilestone(backlogId);
 
   // 編集はすべてローカル state、「確定」で diff を計算して mutations を発火する。
   const [dailyMinutes, setDailyMinutes] = useState<number>(60);
@@ -66,13 +65,13 @@ export default function PlanDetailPage() {
   const qc = useQueryClient();
   const allProblems = useProblemsList(currentProject?.id).data ?? [];
   const tableRef = useRef<HTMLDivElement>(null);
-  const chartRef = useRef<PlanChartHandle>(null);
+  const chartRef = useRef<BacklogChartHandle>(null);
   const handleDataChanged = useCallback(() => {
     if (currentProject) {
-      qc.invalidateQueries({ queryKey: plansKeys.detail(planId) });
+      qc.invalidateQueries({ queryKey: backlogKeys.detail(backlogId) });
       qc.invalidateQueries({ queryKey: problemsKeys.list(currentProject.id) });
     }
-  }, [qc, currentProject, planId]);
+  }, [qc, currentProject, backlogId]);
   const { openDetail, renderDialogs } = useProblemDialogs({ allProblems, onDataChanged: handleDataChanged });
   const handleSelect = useCallback((problemId: string) => {
     setSelectedId((prev) => (prev === problemId ? null : problemId));
@@ -86,12 +85,12 @@ export default function PlanDetailPage() {
   useEffect(() => {
     if (!data) return;
     // 初回ロード or 保存後 (revision が増えた) のみローカル state を server data から再同期する。
-    if (lastSyncRevRef.current === data.plan.revision) return;
-    lastSyncRevRef.current = data.plan.revision;
-    setDailyMinutes(data.plan.daily_minutes);
-    setTimeMultiplier(data.plan.time_multiplier_pct / 100);
-    setWeekdayWeights(data.plan.weekday_weights);
-    setName(data.plan.name);
+    if (lastSyncRevRef.current === data.backlog.revision) return;
+    lastSyncRevRef.current = data.backlog.revision;
+    setDailyMinutes(data.backlog.daily_minutes);
+    setTimeMultiplier(data.backlog.time_multiplier_pct / 100);
+    setWeekdayWeights(data.backlog.weekday_weights);
+    setName(data.backlog.name);
     setLocalLayers(data.layers.map((l) => ({ id: l.id, name: l.name, color: l.color ?? null, opacity_pct: l.opacity_pct ?? null, line_style: (l.line_style as "solid" | "dashed" | "dotted" | null) ?? null, line_width: l.line_width ?? null })));
     setLocalMilestones(data.milestones.map((m) => ({ id: m.id, layer_id: m.layer_id, target: m.target, date: m.date })));
   }, [data]);
@@ -116,10 +115,10 @@ export default function PlanDetailPage() {
 
   const multPct = Math.round(timeMultiplier * 100);
   const planDirty =
-    name !== data.plan.name ||
-    dailyMinutes !== data.plan.daily_minutes ||
-    multPct !== data.plan.time_multiplier_pct ||
-    JSON.stringify(weekdayWeights) !== JSON.stringify(data.plan.weekday_weights);
+    name !== data.backlog.name ||
+    dailyMinutes !== data.backlog.daily_minutes ||
+    multPct !== data.backlog.time_multiplier_pct ||
+    JSON.stringify(weekdayWeights) !== JSON.stringify(data.backlog.weekday_weights);
   const layersDirty = JSON.stringify(localLayers) !== JSON.stringify(data.layers.map((l) => ({ id: l.id, name: l.name, color: l.color ?? null, opacity_pct: l.opacity_pct ?? null, line_style: (l.line_style as "solid" | "dashed" | "dotted" | null) ?? null, line_width: l.line_width ?? null })));
   const milestonesDirty = JSON.stringify(localMilestones) !== JSON.stringify(data.milestones.map((m) => ({ id: m.id, layer_id: m.layer_id, target: m.target, date: m.date })));
   const dirty = planDirty || layersDirty || milestonesDirty;
@@ -153,7 +152,7 @@ export default function PlanDetailPage() {
   const lastMs = [...localMilestones].sort((a, b) => a.date.localeCompare(b.date)).pop();
   const daysToDeadline = lastMs ? diffDays(today, lastMs.date) : null;
 
-  function passesDisplayFilter(m: PlanMember): boolean {
+  function passesDisplayFilter(m: BacklogMember): boolean {
     if (filterSubjects.size > 0 && (!m.subject_id || !filterSubjects.has(m.subject_id))) return false;
     if (filterLevels.size > 0 && (!m.level_id || !filterLevels.has(m.level_id))) return false;
     if (filterTopics.size > 0 && (!m.topic_id || !filterTopics.has(m.topic_id))) return false;
@@ -180,7 +179,7 @@ export default function PlanDetailPage() {
     // plan-level
     if (planDirty) {
       await update.mutateAsync({
-        id: planId,
+        id: backlogId,
         payload: { name, daily_minutes: dailyMinutes, time_multiplier_pct: multPct, weekday_weights: weekdayWeights },
       });
     }
@@ -198,7 +197,7 @@ export default function PlanDetailPage() {
       const l = localLayers[i];
       if (isTmp(l.id)) {
         const res = await createLayer.mutateAsync({
-          plan_id: planId, name: l.name,
+          backlog_id: backlogId, name: l.name,
           color: l.color ?? undefined,
           opacity_pct: l.opacity_pct ?? undefined,
           line_style: l.line_style ?? undefined,
@@ -238,7 +237,7 @@ export default function PlanDetailPage() {
     for (const m of localMilestones) {
       if (isTmp(m.id)) {
         const layerId = isTmp(m.layer_id) ? layerIdMap.get(m.layer_id)! : m.layer_id;
-        await createMilestone.mutateAsync({ plan_id: planId, layer_id: layerId, target: m.target, date: m.date });
+        await createMilestone.mutateAsync({ backlog_id: backlogId, layer_id: layerId, target: m.target, date: m.date });
       }
     }
     // milestone 既存編集
@@ -256,9 +255,9 @@ export default function PlanDetailPage() {
     }
   }
   async function onArchive() {
-    if (!confirm("Archive this plan? (History will be preserved)")) return;
-    await archive.mutateAsync(planId);
-    navigate({ to: "/plans" as string });
+    if (!confirm("Archive this backlog? (History will be preserved)")) return;
+    await archive.mutateAsync(backlogId);
+    navigate({ to: "/backlog" as string });
   }
 
   function centerDate(): string {
@@ -268,7 +267,7 @@ export default function PlanDetailPage() {
   return (
     <div className="p-4 md:p-6 space-y-4">
       <div className="flex items-start gap-4">
-        <button onClick={() => navigate({ to: "/plans" as string })}
+        <button onClick={() => navigate({ to: "/backlog" as string })}
           className="mt-1 text-muted-foreground hover:text-foreground transition-colors" title="Back to list">
           <ArrowLeft className="size-5"/>
         </button>
@@ -276,7 +275,7 @@ export default function PlanDetailPage() {
           <div className="flex items-center gap-2">
             <Input value={name} onChange={(e) => setName(e.target.value)}
               className="text-xl font-semibold h-9 max-w-md"/>
-            <span className="text-[10px] tabular-nums px-1.5 py-0.5 rounded border text-muted-foreground">rev {data.plan.revision}</span>
+            <span className="text-[10px] tabular-nums px-1.5 py-0.5 rounded border text-muted-foreground">rev {data.backlog.revision}</span>
           </div>
           <div className="flex items-center gap-3">
             <div className="flex-1 max-w-md h-1.5 bg-muted rounded-full overflow-hidden">
@@ -350,9 +349,9 @@ export default function PlanDetailPage() {
               <>
                 <button type="button"
                   onClick={() => {
-                    setName(data.plan.name); setDailyMinutes(data.plan.daily_minutes);
-                    setTimeMultiplier(data.plan.time_multiplier_pct / 100);
-                    setWeekdayWeights(data.plan.weekday_weights);
+                    setName(data.backlog.name); setDailyMinutes(data.backlog.daily_minutes);
+                    setTimeMultiplier(data.backlog.time_multiplier_pct / 100);
+                    setWeekdayWeights(data.backlog.weekday_weights);
                     setLocalLayers(data.layers.map((l) => ({ id: l.id, name: l.name, color: l.color ?? null, opacity_pct: l.opacity_pct ?? null, line_style: (l.line_style as "solid" | "dashed" | "dotted" | null) ?? null, line_width: l.line_width ?? null })));
                     setLocalMilestones(data.milestones.map((m) => ({ id: m.id, layer_id: m.layer_id, target: m.target, date: m.date })));
                   }}
@@ -374,7 +373,7 @@ export default function PlanDetailPage() {
             </button>
           </div>
         </div>
-        <PlanChart
+        <BacklogChart
           ref={chartRef}
           rightPanelExtra={
             <div className="space-y-3 text-xs" style={{ width: 200 }}>

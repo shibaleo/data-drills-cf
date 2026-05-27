@@ -18,10 +18,10 @@ import reviewTags from "@/routes/review-tags";
 import problemFiles from "@/routes/problem-files";
 import problemsList from "@/routes/problems-list";
 import answersList from "@/routes/answers-list";
-import schedule from "@/routes/schedule";
+import review from "@/routes/review";
 import notes from "@/routes/notes";
 import pdfExport from "@/routes/pdf-export";
-import plans from "@/routes/plans";
+import backlog from "@/routes/backlog";
 import filterPrefs from "@/routes/filter-prefs";
 import googleAuth from "@/routes/google-auth";
 import drive from "@/routes/drive";
@@ -66,10 +66,10 @@ const v1 = new Hono<Env>()
   .route("/problem-files", problemFiles)
   .route("/problems-list", problemsList)
   .route("/answers-list", answersList)
-  .route("/schedule", schedule)
+  .route("/review", review)
   .route("/notes", notes)
   .route("/pdf-export", pdfExport)
-  .route("/plans", plans)
+  .route("/backlog", backlog)
   .route("/filter-prefs", filterPrefs)
   // /me endpoint — return authenticated user info
   .get("/me", (c) => {

@@ -1,8 +1,6 @@
 /**
- * filter_pref: project ごとに 1 行の UI フィルタ設定 (mutable, no history)。
- * scope ごとに JSON でまとめて持つ:
- *   { "schedule": { subjectIds, levelIds, statuses } }
- *   別 scope (例: plan) を後追いする場合もここに足す。
+ * filter_pref: one row per project, mutable UI filter settings (no history).
+ * JSON bag keyed by scope, e.g. { "review": { subjectIds, levelIds, statuses } }.
  */
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";

@@ -19,7 +19,7 @@ import { useFilterPrefs, useSaveFilterPrefs } from "@/hooks/queries/use-filter-p
 import { usePageTitle } from "@/lib/page-context";
 import { OpaqueTag } from "@/components/problem-card";
 import { useProblemDialogs } from "@/hooks/use-problem-dialogs";
-import { useScheduleList, scheduleKeys } from "@/hooks/queries/use-schedule";
+import { useReviewList, reviewKeys } from "@/hooks/queries/use-review";
 import { useProblemsList, problemsKeys } from "@/hooks/queries/use-problems";
 import { useUpdateStatus } from "@/hooks/queries/use-statuses";
 import { SortHeader } from "@/app/(pages)/problems/columns";
@@ -40,12 +40,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import type { ScheduleRow as ScheduleApiRow } from "@/hooks/queries/use-schedule";
+import type { ReviewRow as ReviewApiRow } from "@/hooks/queries/use-review";
 
 /* ── Row types ── */
 
 /** Display row — adds reviewCount for the "next 4 weeks" forecast cell. */
-interface ScheduleRow extends Omit<ScheduleApiRow, "answerCount"> {
+interface ScheduleRow extends Omit<ReviewApiRow, "answerCount"> {
   reviewCount: number;
   standardTime: number | null;
 }
@@ -563,7 +563,7 @@ export default function SchedulePage() {
   const qc = useQueryClient();
 
   // Fast path: /schedule API (driven by TanStack Query)
-  const scheduleQuery = useScheduleList(currentProject?.id);
+  const scheduleQuery = useReviewList(currentProject?.id);
   const serverRows = useMemo<ScheduleRow[]>(() => {
     return (scheduleQuery.data ?? []).map((r) => ({
       problemId: r.problemId,
@@ -649,7 +649,7 @@ export default function SchedulePage() {
   const prefsLoadedRef = useRef<string | null>(null);
   useEffect(() => {
     if (!currentProject || prefsLoadedRef.current === currentProject.id) return;
-    const data = filterPrefsQuery.data?.schedule;
+    const data = filterPrefsQuery.data?.review;
     if (data) {
       setFilterSubjects(new Set(data.subjectIds ?? []));
       setFilterLevels(new Set(data.levelIds ?? []));
@@ -662,7 +662,7 @@ export default function SchedulePage() {
     if (!currentProject || prefsLoadedRef.current !== currentProject.id) return;
     saveFilterPrefs.mutate({
       ...(filterPrefsQuery.data ?? {}),
-      schedule: {
+      review: {
         subjectIds: [...filterSubjects],
         levelIds: [...filterLevels],
         statuses: [...filterStatuses],
@@ -710,7 +710,7 @@ export default function SchedulePage() {
 
   const handleDataChanged = useCallback(() => {
     if (!currentProject) return;
-    qc.invalidateQueries({ queryKey: scheduleKeys.list(currentProject.id) });
+    qc.invalidateQueries({ queryKey: reviewKeys.list(currentProject.id) });
     qc.invalidateQueries({ queryKey: problemsKeys.list(currentProject.id) });
   }, [qc, currentProject]);
 

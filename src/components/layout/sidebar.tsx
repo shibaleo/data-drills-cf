@@ -20,11 +20,11 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useProject } from "@/hooks/use-project";
-import { useScheduleList } from "@/hooks/queries/use-schedule";
+import { useReviewList } from "@/hooks/queries/use-review";
 import { useFilterPrefs } from "@/hooks/queries/use-filter-prefs";
-import { usePlanTodayCount } from "@/hooks/queries/use-plans";
+import { useBacklogTodayCount } from "@/hooks/queries/use-backlog";
 import { useQueryClient } from "@tanstack/react-query";
-import { scheduleKeys } from "@/hooks/queries/use-schedule";
+import { reviewKeys } from "@/hooks/queries/use-review";
 import { UserMenu } from "./user-menu";
 
 const EXPANDED_WIDTH = 224;
@@ -43,13 +43,12 @@ interface NavItem {
 function OverdueBadge() {
   const { currentProject } = useProject();
   const qc = useQueryClient();
-  const { data = [] } = useScheduleList(currentProject?.id);
+  const { data = [] } = useReviewList(currentProject?.id);
   const { data: prefs } = useFilterPrefs(currentProject?.id);
-  // 未回答 (answerCount=0) は除外、今日以前 (daysUntil<=0) のみ、schedule の filter も加味
-  const sched = prefs?.schedule ?? {};
-  const subjSet = new Set(sched.subjectIds ?? []);
-  const lvlSet = new Set(sched.levelIds ?? []);
-  const stSet = new Set(sched.statuses ?? []);
+  const rev = prefs?.review ?? {};
+  const subjSet = new Set(rev.subjectIds ?? []);
+  const lvlSet = new Set(rev.levelIds ?? []);
+  const stSet = new Set(rev.statuses ?? []);
   const count = data.filter((r) => {
     if (r.answerCount === 0 || r.daysUntil > 0) return false;
     if (subjSet.size > 0 && (!r.subjectId || !subjSet.has(r.subjectId))) return false;
@@ -58,15 +57,14 @@ function OverdueBadge() {
     return true;
   }).length;
 
-  // Legacy "schedule-changed" event — re-invalidate to pick up updates.
   useEffect(() => {
     const invalidate = () => {
       if (currentProject) {
-        qc.invalidateQueries({ queryKey: scheduleKeys.list(currentProject.id) });
+        qc.invalidateQueries({ queryKey: reviewKeys.list(currentProject.id) });
       }
     };
-    window.addEventListener("schedule-changed", invalidate);
-    return () => window.removeEventListener("schedule-changed", invalidate);
+    window.addEventListener("review-changed", invalidate);
+    return () => window.removeEventListener("review-changed", invalidate);
   }, [qc, currentProject]);
 
   if (count <= 0) return null;
@@ -77,9 +75,9 @@ function OverdueBadge() {
   );
 }
 
-function ProgressBadge() {
+function BacklogBadge() {
   const { currentProject } = useProject();
-  const { data: count = 0 } = usePlanTodayCount(currentProject?.id);
+  const { data: count = 0 } = useBacklogTodayCount(currentProject?.id);
   if (count <= 0) return null;
   return (
     <span className="absolute -right-2 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-0.5 text-[10px] font-bold leading-none text-destructive-foreground">
@@ -89,8 +87,8 @@ function ProgressBadge() {
 }
 
 const navItems: NavItem[] = [
-  { href: "/schedule", label: "Schedule", icon: CalendarDays, Badge: OverdueBadge },
-  { href: "/plans", label: "Progress", icon: TrendingUp, Badge: ProgressBadge, dividerAfter: true },
+  { href: "/review", label: "Review", icon: CalendarDays, Badge: OverdueBadge },
+  { href: "/backlog", label: "Backlog", icon: TrendingUp, Badge: BacklogBadge, dividerAfter: true },
   { href: "/problems", label: "Problems", icon: TableProperties },
   { href: "/answers", label: "Answers", icon: PenLine },
   { href: "/timeline", label: "Timeline", icon: Clock, dividerAfter: true },

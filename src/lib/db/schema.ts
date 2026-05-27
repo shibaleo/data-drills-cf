@@ -352,55 +352,53 @@ export const filterPref = pgTable("filter_pref", {
 ]);
 
 // =============================================================================
-// 24. Plan (bitemporal append-only)
+// 24. Backlog (bitemporal append-only)
 //
-// 目標管理。(id, revision) PK で各 revision を 1 行として持つ。
+// 新規問題配分の戦略エンティティ。(id, revision) PK。
 // 編集時は revision+1 を INSERT し、旧 revision の valid_to に NOW() を塗る。
 // archive は is_active=false の新 revision を INSERT。
-// メンバー問題は filter から導出するので plan_problem テーブルは持たない。
+// メンバー問題は filter から導出する。
 // =============================================================================
 
-export type PlanFilter = {
+export type BacklogFilter = {
   subjectIds?: string[];
   levelIds?: string[];
   topicIds?: string[];
   tagIds?: string[];
 };
 
-export const plan = pgTable("plan", {
+export const backlog = pgTable("backlog", {
   id: uuid("id").notNull(),
   revision: integer("revision").notNull(),
   projectId: uuid("project_id").notNull().references(() => project.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   dailyMinutes: integer("daily_minutes").notNull(),
-  /** standard_time に掛ける係数 (% 表現、100 = 1.0x)。 */
   timeMultiplierPct: integer("time_multiplier_pct").notNull().default(100),
-  /** 曜日別の daily 枠ウェイト [日,月,火,水,木,金,土]。 */
   weekdayWeights: jsonb("weekday_weights").$type<number[]>().notNull().default([1, 1, 1, 1, 1, 1, 1]),
-  filter: jsonb("filter").$type<PlanFilter>().notNull().default({}),
+  filter: jsonb("filter").$type<BacklogFilter>().notNull().default({}),
   isActive: boolean("is_active").notNull().default(true),
   validFrom: timestamp("valid_from", { withTimezone: true }).notNull().defaultNow(),
   validTo: timestamp("valid_to", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
   primaryKey({ columns: [t.id, t.revision] }),
-  index("plan_current_idx").on(t.id, t.revision.desc()),
-  index("plan_project_active_idx").on(t.projectId, t.isActive, t.validTo),
+  index("backlog_current_idx").on(t.id, t.revision.desc()),
+  index("backlog_project_active_idx").on(t.projectId, t.isActive, t.validTo),
 ]);
 
 // =============================================================================
-// 25. PlanLayer (bitemporal append-only)
+// 25. GoalLayer (bitemporal append-only)
 // =============================================================================
 
-export const planLayer = pgTable("plan_layer", {
+export const goalLayer = pgTable("goal_layer", {
   id: uuid("id").notNull(),
   revision: integer("revision").notNull(),
-  planId: uuid("plan_id").notNull(),  // plan.id 論理参照 (FK 貼れないので index のみ)
+  backlogId: uuid("backlog_id").notNull(),
   name: text("name").notNull().default(""),
-  color: text("color"),  // ピン・縦線・count に使う色 (null なら既定オレンジ)
-  opacityPct: integer("opacity_pct"),  // 0-100。null は既定 40
-  lineStyle: text("line_style"),  // "solid" | "dashed" | "dotted" (null なら既定 solid)
-  lineWidth: integer("line_width"),  // 縦線の太さ px (null は既定 1.5)
+  color: text("color"),
+  opacityPct: integer("opacity_pct"),
+  lineStyle: text("line_style"),
+  lineWidth: integer("line_width"),
   sortOrder: integer("sort_order").notNull().default(0),
   isActive: boolean("is_active").notNull().default(true),
   validFrom: timestamp("valid_from", { withTimezone: true }).notNull().defaultNow(),
@@ -408,28 +406,24 @@ export const planLayer = pgTable("plan_layer", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
   primaryKey({ columns: [t.id, t.revision] }),
-  index("plan_layer_current_idx").on(t.id, t.revision.desc()),
-  index("plan_layer_plan_idx").on(t.planId, t.isActive, t.validTo),
+  index("goal_layer_current_idx").on(t.id, t.revision.desc()),
+  index("goal_layer_backlog_idx").on(t.backlogId, t.isActive, t.validTo),
 ]);
 
 // =============================================================================
-// 26. PlanMilestone (bitemporal append-only)
+// 26. GoalMilestone (bitemporal append-only) + BacklogViewPref
 // =============================================================================
 
-/**
- * Plan の表示フィルタ (UI 状態、bitemporal なし、即時更新)。
- * filter は { hideCompleted, hideFuture, overflowOnly, subjectIds[], levelIds[], topicIds[] } 等の任意 JSON。
- */
-export const planViewPref = pgTable("plan_view_pref", {
-  planId: uuid("plan_id").primaryKey(),
+export const backlogViewPref = pgTable("backlog_view_pref", {
+  backlogId: uuid("backlog_id").primaryKey(),
   filter: jsonb("filter").$type<Record<string, unknown>>().notNull().default({}),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-export const planMilestone = pgTable("plan_milestone", {
+export const goalMilestone = pgTable("goal_milestone", {
   id: uuid("id").notNull(),
   revision: integer("revision").notNull(),
-  planId: uuid("plan_id").notNull(),
+  backlogId: uuid("backlog_id").notNull(),
   layerId: uuid("layer_id").notNull(),
   target: integer("target").notNull(),
   date: date("date").notNull(),
@@ -439,7 +433,7 @@ export const planMilestone = pgTable("plan_milestone", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
   primaryKey({ columns: [t.id, t.revision] }),
-  index("plan_milestone_current_idx").on(t.id, t.revision.desc()),
-  index("plan_milestone_plan_idx").on(t.planId, t.isActive, t.validTo),
-  index("plan_milestone_layer_idx").on(t.layerId),
+  index("goal_milestone_current_idx").on(t.id, t.revision.desc()),
+  index("goal_milestone_backlog_idx").on(t.backlogId, t.isActive, t.validTo),
+  index("goal_milestone_layer_idx").on(t.layerId),
 ]);

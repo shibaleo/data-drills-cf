@@ -43,7 +43,7 @@ export function useProblemDialogs({
 
   const notifyAndRefresh = useCallback(() => {
     onDataChanged();
-    window.dispatchEvent(new Event("schedule-changed"));
+    window.dispatchEvent(new Event("review-changed"));
   }, [onDataChanged]);
 
   // Answer forms

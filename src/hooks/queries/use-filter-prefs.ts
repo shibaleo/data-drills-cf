@@ -6,13 +6,13 @@ export const filterPrefsKeys = {
   byProject: (projectId: string) => [...filterPrefsKeys.all, projectId] as const,
 };
 
-export type SchedulePrefs = {
+export type ReviewPrefs = {
   subjectIds?: string[];
   levelIds?: string[];
   statuses?: string[];
 };
 export type FilterPrefsBag = {
-  schedule?: SchedulePrefs;
+  review?: ReviewPrefs;
 };
 
 export function useFilterPrefs(projectId: string | undefined) {
