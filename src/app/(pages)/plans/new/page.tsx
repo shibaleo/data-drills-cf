@@ -7,7 +7,7 @@ import { PlanFilterPicker } from "@/components/plan-filter-picker";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import type { PlanFilterInput, MilestoneInput } from "@/lib/schemas/plan";
+import type { PlanFilterInput } from "@/lib/schemas/plan";
 
 export default function PlanNewPage() {
   const { currentProject } = useProject();
@@ -18,7 +18,6 @@ export default function PlanNewPage() {
   const [dailyMinutes, setDailyMinutes] = useState(60);
   const [timeMultiplier, setTimeMultiplier] = useState(1.0);
   const [filter, setFilter] = useState<PlanFilterInput>({});
-  const [milestones, setMilestones] = useState<MilestoneInput[]>([]);
 
   if (!currentProject) return <div className="p-6 text-muted-foreground">Please select a project</div>;
 
@@ -32,23 +31,8 @@ export default function PlanNewPage() {
       time_multiplier_pct: Math.round(timeMultiplier * 100),
       weekday_weights: [1, 1, 1, 1, 1, 1, 1],
       filter,
-      milestones,
     });
-    navigate({ to: "/plans/$planId", params: { planId: res.data.id } });
-  }
-
-  function newId(): string {
-    return (crypto as Crypto & { randomUUID(): string }).randomUUID();
-  }
-  function addMilestone() {
-    const today = new Date().toISOString().slice(0, 10);
-    setMilestones([...milestones, { id: newId(), parent_id: null, count: 100, date: today }]);
-  }
-  function updateMilestone(i: number, patch: Partial<MilestoneInput>) {
-    setMilestones(milestones.map((m, idx) => (idx === i ? { ...m, ...patch } : m)));
-  }
-  function removeMilestone(i: number) {
-    setMilestones(milestones.filter((_, idx) => idx !== i));
+    navigate({ to: "/plans/$planId" as string, params: { planId: res.data.id } });
   }
 
   return (
@@ -76,20 +60,8 @@ export default function PlanNewPage() {
         <PlanFilterPicker projectId={currentProject.id} value={filter} onChange={setFilter} />
       </div>
 
-      <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <Label>マイルストーン (累積問題数 と 締切日のペア)</Label>
-          <Button type="button" variant="outline" size="sm" onClick={addMilestone}>+ 追加</Button>
-        </div>
-        {milestones.length === 0 && <div className="text-xs text-muted-foreground">マイルストーン無しの自由ペース計画も可</div>}
-        {milestones.map((m, i) => (
-          <div key={i} className="flex items-center gap-2">
-            <Input type="number" min={1} value={m.count} onChange={(e) => updateMilestone(i, { count: Math.max(1, parseInt(e.target.value) || 1) })} className="w-24"/>
-            <span className="text-xs">問 by</span>
-            <Input type="date" value={m.date} onChange={(e) => updateMilestone(i, { date: e.target.value })} className="w-44"/>
-            <Button type="button" variant="ghost" size="sm" onClick={() => removeMilestone(i)}>削除</Button>
-          </div>
-        ))}
+      <div className="text-xs text-muted-foreground italic">
+        作成後、詳細ページでレイヤ・マイルストーンを追加できます。
       </div>
 
       <div className="flex gap-2">

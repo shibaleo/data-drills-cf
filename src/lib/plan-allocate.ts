@@ -15,7 +15,7 @@ export type MemberInput = {
   firstAnswerDate: string | null;  // "YYYY-MM-DD" or null (未解)
 };
 
-export type Milestone = { count: number; date: string; id?: string; parent_id?: string | null; name?: string };
+export type Milestone = { target: number; date: string; id?: string; layer_id?: string };
 
 export type AllocatedProblem = {
   problemId: string;
@@ -119,7 +119,7 @@ export function allocate(
 
   for (const ms of milestones) {
     // この milestone までに必要な future 配分数
-    const needTotal = Math.max(0, ms.count - pastDoneByDate(ms.date));
+    const needTotal = Math.max(0, ms.target - pastDoneByDate(ms.date));
     const take = Math.min(future.length, needTotal) - futureCursor;
     if (take <= 0) {
       // 既に十分配分済 or 過去だけで達成済

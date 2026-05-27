@@ -24,26 +24,15 @@ export default function PlansPage() {
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {plans.map((p) => {
-          const lastMs = p.milestones?.[p.milestones.length - 1];
-          return (
-            <Link key={p.id} to="/plans/$planId" params={{ planId: p.id }}
-              className="block border rounded p-4 hover:bg-accent transition">
-              <div className="font-semibold">{p.name}</div>
-              <div className="text-xs text-muted-foreground mt-1">
-                {p.daily_minutes} 分/日 · revision {p.revision}
-              </div>
-              {lastMs && (
-                <div className="text-xs mt-2">
-                  最終: {lastMs.count} 問 by {lastMs.date}
-                </div>
-              )}
-              {!lastMs && (
-                <div className="text-xs mt-2 text-muted-foreground">milestone 無し</div>
-              )}
-            </Link>
-          );
-        })}
+        {plans.map((p) => (
+          <Link key={p.id} to="/plans/$planId" params={{ planId: p.id }}
+            className="block border rounded p-4 hover:bg-accent transition">
+            <div className="font-semibold">{p.name}</div>
+            <div className="text-xs text-muted-foreground mt-1">
+              {p.daily_minutes} 分/日 · revision {p.revision}
+            </div>
+          </Link>
+        ))}
       </div>
     </div>
   );

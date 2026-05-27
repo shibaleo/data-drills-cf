@@ -9,6 +9,7 @@ import {
   primaryKey,
   uniqueIndex,
   index,
+  date,
 } from "drizzle-orm/pg-core";
 
 // =============================================================================
@@ -366,26 +367,17 @@ export type PlanFilter = {
   tagIds?: string[];
 };
 
-export type PlanMilestone = {
-  id: string;            // client-generated uuid
-  parent_id: string | null;  // 親 milestone id (root なら null)
-  name?: string;         // 表示用の名前 (例: "中間目標", "5月末", "週次")
-  count: number;         // 累積問題数
-  date: string;          // "YYYY-MM-DD"
-};
-
 export const plan = pgTable("plan", {
   id: uuid("id").notNull(),
   revision: integer("revision").notNull(),
   projectId: uuid("project_id").notNull().references(() => project.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   dailyMinutes: integer("daily_minutes").notNull(),
-  /** standard_time に掛ける係数 (% 表現、100 = 1.0x)。動画視聴等で実時間が伸びる分を見込む。 */
+  /** standard_time に掛ける係数 (% 表現、100 = 1.0x)。 */
   timeMultiplierPct: integer("time_multiplier_pct").notNull().default(100),
-  /** 曜日別の daily 枠ウェイト [日,月,火,水,木,金,土]。各曜日の実効 daily = daily_minutes × weight。 */
+  /** 曜日別の daily 枠ウェイト [日,月,火,水,木,金,土]。 */
   weekdayWeights: jsonb("weekday_weights").$type<number[]>().notNull().default([1, 1, 1, 1, 1, 1, 1]),
   filter: jsonb("filter").$type<PlanFilter>().notNull().default({}),
-  milestones: jsonb("milestones").$type<PlanMilestone[]>().notNull().default([]),
   isActive: boolean("is_active").notNull().default(true),
   validFrom: timestamp("valid_from", { withTimezone: true }).notNull().defaultNow(),
   validTo: timestamp("valid_to", { withTimezone: true }),
@@ -394,4 +386,46 @@ export const plan = pgTable("plan", {
   primaryKey({ columns: [t.id, t.revision] }),
   index("plan_current_idx").on(t.id, t.revision.desc()),
   index("plan_project_active_idx").on(t.projectId, t.isActive, t.validTo),
+]);
+
+// =============================================================================
+// 25. PlanLayer (bitemporal append-only)
+// =============================================================================
+
+export const planLayer = pgTable("plan_layer", {
+  id: uuid("id").notNull(),
+  revision: integer("revision").notNull(),
+  planId: uuid("plan_id").notNull(),  // plan.id 論理参照 (FK 貼れないので index のみ)
+  name: text("name").notNull().default(""),
+  sortOrder: integer("sort_order").notNull().default(0),
+  isActive: boolean("is_active").notNull().default(true),
+  validFrom: timestamp("valid_from", { withTimezone: true }).notNull().defaultNow(),
+  validTo: timestamp("valid_to", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  primaryKey({ columns: [t.id, t.revision] }),
+  index("plan_layer_current_idx").on(t.id, t.revision.desc()),
+  index("plan_layer_plan_idx").on(t.planId, t.isActive, t.validTo),
+]);
+
+// =============================================================================
+// 26. PlanMilestone (bitemporal append-only)
+// =============================================================================
+
+export const planMilestone = pgTable("plan_milestone", {
+  id: uuid("id").notNull(),
+  revision: integer("revision").notNull(),
+  planId: uuid("plan_id").notNull(),
+  layerId: uuid("layer_id").notNull(),
+  target: integer("target").notNull(),
+  date: date("date").notNull(),
+  isActive: boolean("is_active").notNull().default(true),
+  validFrom: timestamp("valid_from", { withTimezone: true }).notNull().defaultNow(),
+  validTo: timestamp("valid_to", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  primaryKey({ columns: [t.id, t.revision] }),
+  index("plan_milestone_current_idx").on(t.id, t.revision.desc()),
+  index("plan_milestone_plan_idx").on(t.planId, t.isActive, t.validTo),
+  index("plan_milestone_layer_idx").on(t.layerId),
 ]);

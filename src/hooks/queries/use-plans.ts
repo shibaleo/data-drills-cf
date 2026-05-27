@@ -1,10 +1,20 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { rpc, unwrap, type RpcData } from "@/lib/rpc-client";
-import type { PlanCreateInput, PlanUpdateInput } from "@/lib/schemas/plan";
+import type {
+  PlanCreateInput,
+  PlanUpdateInput,
+  LayerCreateInput,
+  LayerUpdateInput,
+  LayerReorderInput,
+  MilestoneCreateInput,
+  MilestoneUpdateInput,
+} from "@/lib/schemas/plan";
 
 export type PlanRow = RpcData<typeof rpc.api.v1.plans.$get>["data"][number];
 export type PlanDetail = RpcData<typeof rpc.api.v1.plans[":id"]["$get"]>["data"];
 export type PlanMember = PlanDetail["members"][number];
+export type PlanLayerRow = PlanDetail["layers"][number];
+export type PlanMilestoneRow = PlanDetail["milestones"][number];
 
 export const plansKeys = {
   all: ["plans"] as const,
@@ -66,5 +76,67 @@ export function useArchivePlan(projectId: string | undefined) {
       qc.invalidateQueries({ queryKey: plansKeys.detail(id) });
       if (projectId) qc.invalidateQueries({ queryKey: plansKeys.list(projectId) });
     },
+  });
+}
+
+/* ── Layer mutations ────────────────────────────────────────── */
+
+export function useCreateLayer(planId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: LayerCreateInput) =>
+      unwrap(rpc.api.v1.plans.layers.$post({ json: payload })),
+    onSuccess: () => qc.invalidateQueries({ queryKey: plansKeys.detail(planId) }),
+  });
+}
+export function useUpdateLayer(planId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { id: string; payload: LayerUpdateInput }) =>
+      unwrap(rpc.api.v1.plans.layers[":id"].$put({ param: { id: vars.id }, json: vars.payload })),
+    onSuccess: () => qc.invalidateQueries({ queryKey: plansKeys.detail(planId) }),
+  });
+}
+export function useDeleteLayer(planId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      unwrap(rpc.api.v1.plans.layers[":id"].$delete({ param: { id } })),
+    onSuccess: () => qc.invalidateQueries({ queryKey: plansKeys.detail(planId) }),
+  });
+}
+export function useReorderLayers(planId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: LayerReorderInput) =>
+      unwrap(rpc.api.v1.plans.layers.reorder.$post({ json: payload })),
+    onSuccess: () => qc.invalidateQueries({ queryKey: plansKeys.detail(planId) }),
+  });
+}
+
+/* ── Milestone mutations ─────────────────────────────────────── */
+
+export function useCreateMilestone(planId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: MilestoneCreateInput) =>
+      unwrap(rpc.api.v1.plans.milestones.$post({ json: payload })),
+    onSuccess: () => qc.invalidateQueries({ queryKey: plansKeys.detail(planId) }),
+  });
+}
+export function useUpdateMilestone(planId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { id: string; payload: MilestoneUpdateInput }) =>
+      unwrap(rpc.api.v1.plans.milestones[":id"].$put({ param: { id: vars.id }, json: vars.payload })),
+    onSuccess: () => qc.invalidateQueries({ queryKey: plansKeys.detail(planId) }),
+  });
+}
+export function useDeleteMilestone(planId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      unwrap(rpc.api.v1.plans.milestones[":id"].$delete({ param: { id } })),
+    onSuccess: () => qc.invalidateQueries({ queryKey: plansKeys.detail(planId) }),
   });
 }

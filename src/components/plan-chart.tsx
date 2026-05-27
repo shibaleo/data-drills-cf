@@ -1,30 +1,60 @@
 /**
  * Plan 用 Tetris チャート。
- * milestone 縦線にドラッグハンドルを付けて、線そのものを動かして日付を変更できる。
+ * layers (= 横トラックの一覧) と milestones (= 各 layer 上の pin) を別エンティティとして受け取る。
  */
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
-import { Hash, CalendarDays, Trash2 } from "lucide-react";
+import { Hash, CalendarDays, Trash2, Eye, EyeOff, GripVertical } from "lucide-react";
+import {
+  DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext, verticalListSortingStrategy, useSortable, arrayMove,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import type { AllocatedProblem, Milestone } from "@/lib/plan-allocate";
 
 export type PlanChartHandle = {
-  /** スクロール領域の現在の中央に対応する日付 (YYYY-MM-DD) を返す。 */
   getCenterDate(): string;
+};
+
+export type LayerView = {
+  id: string;
+  name: string;
+};
+export type MilestoneView = {
+  id: string;
+  layer_id: string;
+  target: number;
+  date: string;
 };
 
 type PlanChartProps = {
   items: AllocatedProblem[];
-  milestones: Milestone[];
+  layers: LayerView[];
+  milestones: MilestoneView[];
   today: string;
   selectedId?: string | null;
   onSelect?: (problemId: string) => void;
   onOpen?: (problemId: string) => void;
-  onMilestoneDateChange?: (index: number, newDate: string) => void;
-  onMilestoneCountChange?: (index: number, newCount: number) => void;
-  onMilestoneNameChange?: (index: number, newName: string) => void;
-  onMilestoneAddToTrack?: (index: number) => void;
-  onMilestoneRemove?: (index: number) => void;
+  /** ピンドラッグ中 (= live preview)。連続的に発火するので API mutation には使わない。 */
+  onMilestoneDateDraft?: (id: string, newDate: string) => void;
+  /** ピンドラッグ完了 / メニューでの日付変更 (= 確定)。API mutation はこっち。 */
+  onMilestoneDateChange?: (id: string, newDate: string) => void;
+  onMilestoneTargetChange?: (id: string, newTarget: number) => void;
+  onMilestoneRemove?: (id: string) => void;
+  /** 各 layer に milestone 追加 */
+  onMilestoneAddToLayer?: (layerId: string) => void;
+  /** 各 layer の名前変更 */
+  onLayerNameChange?: (id: string, newName: string) => void;
+  /** layer 削除 */
+  onLayerRemove?: (id: string) => void;
+  /** layer 追加 */
+  onAddLayer?: () => void;
+  /** layer 並び替え (= 並び替え後の id 配列を渡す) */
+  onReorderLayers?: (orderedLayerIds: string[]) => void;
   showMilestonePins?: boolean;
-  milestoneAnchors?: { count: number; problemId: string | null }[];
+  /** 各 milestone の「実際に N 問目に相当する problem」をハイライトするためのアンカー */
+  milestoneAnchors?: { target: number; problemId: string | null }[];
 };
 
 const CELL = 14;
@@ -36,15 +66,6 @@ const COLOR_FUTURE = "#3b82f6";
 const COLOR_OVERFLOW = "#ef4444";
 const MS_COLOR = "#f59e0b";
 
-/** 1〜50 を ①②… に変換。50 を超えたら "(N)" 表記。 */
-function circledNumber(n: number): string {
-  if (n <= 0) return "";
-  if (n <= 20) return String.fromCodePoint(0x2460 + (n - 1));  // ① = U+2460
-  if (n <= 35) return String.fromCodePoint(0x3251 + (n - 21)); // ㉑ = U+3251
-  if (n <= 50) return String.fromCodePoint(0x32B1 + (n - 36)); // ㊱ = U+32B1
-  return `(${n})`;
-}
-
 function addDays(dateStr: string, days: number): string {
   const d = new Date(`${dateStr}T00:00:00Z`);
   d.setUTCDate(d.getUTCDate() + days);
@@ -53,30 +74,35 @@ function addDays(dateStr: string, days: number): string {
 
 export const PlanChart = forwardRef<PlanChartHandle, PlanChartProps>(function PlanChartImpl({
   items,
+  layers,
   milestones,
   today,
   selectedId,
   onSelect,
   onOpen,
+  onMilestoneDateDraft,
   onMilestoneDateChange,
-  onMilestoneCountChange,
-  onMilestoneNameChange,
-  onMilestoneAddToTrack,
+  onMilestoneTargetChange,
   onMilestoneRemove,
+  onMilestoneAddToLayer,
+  onLayerNameChange,
+  onLayerRemove,
+  onAddLayer,
+  onReorderLayers,
   showMilestonePins,
   milestoneAnchors,
 }: PlanChartProps, ref) {
   const _showPins = showMilestonePins ?? true;
   const scrollRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
-  const draggingRef = useRef<number | null>(null);
+  const draggingRef = useRef<string | null>(null);
   const dragMovedRef = useRef(false);
-  // pin の右クリックメニュー
-  const [menu, setMenu] = useState<{ index: number; x: number; y: number } | null>(null);
+  const [menu, setMenu] = useState<{ id: string; x: number; y: number } | null>(null);
+  const [hiddenLayers, setHiddenLayers] = useState<Set<string>>(new Set());
+
   useEffect(() => {
     if (!menu) return;
     const close = () => setMenu(null);
-    // メニューを開いた直後の click イベントが伝播して即閉じるのを防ぐため遅延登録
     const t = setTimeout(() => {
       window.addEventListener("click", close);
       window.addEventListener("scroll", close, true);
@@ -87,6 +113,15 @@ export const PlanChart = forwardRef<PlanChartHandle, PlanChartProps>(function Pl
       window.removeEventListener("scroll", close, true);
     };
   }, [menu]);
+
+  function toggleLayerHidden(layerId: string) {
+    setHiddenLayers((prev) => {
+      const next = new Set(prev);
+      if (next.has(layerId)) next.delete(layerId); else next.add(layerId);
+      return next;
+    });
+  }
+  const isLayerHidden = (layerId: string) => hiddenLayers.has(layerId);
 
   const grouped = useMemo(() => {
     const map = new Map<string, AllocatedProblem[]>();
@@ -139,48 +174,9 @@ export const PlanChart = forwardRef<PlanChartHandle, PlanChartProps>(function Pl
   const maxCount = Math.max(0, ...dates.map((d) => (grouped.get(d) ?? []).length));
   const maxStack = Math.max(MIN_ROWS, maxCount + 2);
 
-  // milestones を「トラック」に分割: 同じ parent_id を共有する milestone は同じトラック (= 同じ y) に配置する。
-  // トラックの順序は、root → 各 root の子 (深さ優先) で決定。
-  type TrackRow = {
-    parentId: string | null;
-    depth: number;
-    /** どの parent milestone の origIndex に対応するか (root なら null) */
-    parentOrigIndex: number | null;
-    members: { origIndex: number; m: Milestone }[];
-  };
-  const { tracks, trackIndexByOrigIndex } = useMemo(() => {
-    const byParent = new Map<string | null, { origIndex: number; m: Milestone }[]>();
-    milestones.forEach((m, origIndex) => {
-      const pid = m.parent_id ?? null;
-      const list = byParent.get(pid) ?? [];
-      list.push({ origIndex, m });
-      byParent.set(pid, list);
-    });
-    const orderedTracks: TrackRow[] = [];
-    const indexMap = new Map<number, number>();
-    function walk(parentId: string | null, parentOrigIndex: number | null, depth: number) {
-      const ms = byParent.get(parentId);
-      if (!ms || ms.length === 0) return;
-      const sorted = ms.slice().sort((a, b) => a.m.date.localeCompare(b.m.date));
-      const trackIdx = orderedTracks.length;
-      orderedTracks.push({ parentId, parentOrigIndex, depth, members: sorted });
-      for (const e of sorted) indexMap.set(e.origIndex, trackIdx);
-      for (const e of sorted) walk(e.m.id ?? null, e.origIndex, depth + 1);
-    }
-    walk(null, null, 0);
-    // 親が消えた孤立 milestone は末尾に 1 件ずつ track として追加
-    for (let i = 0; i < milestones.length; i++) {
-      if (!indexMap.has(i)) {
-        orderedTracks.push({ parentId: null, parentOrigIndex: null, depth: 0, members: [{ origIndex: i, m: milestones[i] }] });
-        indexMap.set(i, orderedTracks.length - 1);
-      }
-    }
-    return { tracks: orderedTracks, trackIndexByOrigIndex: indexMap };
-  }, [milestones]);
-
   const ROW_H = 22;
   const MS_TOP_PAD = 8;
-  const MS_AREA_H = _showPins ? tracks.length * ROW_H + MS_TOP_PAD : 0;
+  const MS_AREA_H = _showPins ? layers.length * ROW_H + MS_TOP_PAD : 0;
   const DATE_AXIS_H = 16;
   const TOP_AXIS_H = MS_AREA_H + DATE_AXIS_H + 4;
   const DATE_AXIS_Y = TOP_AXIS_H - 6;
@@ -189,14 +185,12 @@ export const PlanChart = forwardRef<PlanChartHandle, PlanChartProps>(function Pl
   const chartHeight = maxStack * STEP + TOP_AXIS_H + BOTTOM_AXIS_H;
   const Y_AXIS_W = 28;
 
-  /** milestone origIndex → 中心 y */
-  const msYByIndex = new Map<number, number>();
-  tracks.forEach((t, trackIdx) => {
-    const y = MS_TOP_PAD + trackIdx * ROW_H + ROW_H / 2;
-    for (const e of t.members) msYByIndex.set(e.origIndex, y);
+  /** layer id → row y 中心 */
+  const layerYById = new Map<string, number>();
+  layers.forEach((l, i) => {
+    layerYById.set(l.id, MS_TOP_PAD + i * ROW_H + ROW_H / 2);
   });
 
-  /** SVG client X 座標 → date 文字列。range 外でも addDays で算出 (chart は再 render で伸びる)。 */
   function clientXToDate(clientX: number): string {
     const rect = svgRef.current?.getBoundingClientRect();
     if (!rect) return today;
@@ -205,63 +199,72 @@ export const PlanChart = forwardRef<PlanChartHandle, PlanChartProps>(function Pl
     return addDays(dates[0], colIdx);
   }
 
-  const onPinDown = (i: number) => (e: React.PointerEvent<SVGCircleElement>) => {
+  /** ドラッグ中の最終 date を ref に保持 (pointerUp で commit) */
+  const dragLatestDateRef = useRef<string | null>(null);
+
+  const onPinDown = (id: string) => (e: React.PointerEvent<SVGCircleElement>) => {
     if (!onMilestoneDateChange) return;
     e.preventDefault();
     e.stopPropagation();
-    draggingRef.current = i;
+    draggingRef.current = id;
     dragMovedRef.current = false;
+    dragLatestDateRef.current = null;
     (e.target as Element).setPointerCapture(e.pointerId);
-    // 即時 date 変更はしない (click とドラッグを区別するため)
   };
-  const onPinMove = (i: number) => (e: React.PointerEvent<SVGCircleElement>) => {
-    if (draggingRef.current !== i) return;
+  const onPinMove = (id: string) => (e: React.PointerEvent<SVGCircleElement>) => {
+    if (draggingRef.current !== id) return;
     dragMovedRef.current = true;
-    onMilestoneDateChange?.(i, clientXToDate(e.clientX));
-    // カーソルがスクロール領域を「はみ出した」時だけ追従させる
-    // (端の近くで止まれない問題を避けるため、領域内では発動しない)
+    const newDate = clientXToDate(e.clientX);
+    dragLatestDateRef.current = newDate;
+    onMilestoneDateDraft?.(id, newDate);  // live preview のみ (API は叩かない)
     const container = scrollRef.current;
     if (!container) return;
     const rect = container.getBoundingClientRect();
-    const speed = 24;
-    if (e.clientX < rect.left) {
-      container.scrollLeft -= speed;
-    } else if (e.clientX > rect.right) {
-      container.scrollLeft += speed;
-    }
+    if (e.clientX < rect.left) container.scrollLeft -= 24;
+    else if (e.clientX > rect.right) container.scrollLeft += 24;
   };
-  const onPinUp = (i: number) => (e: React.PointerEvent<SVGCircleElement>) => {
-    const wasDragging = draggingRef.current === i;
+  const onPinUp = (id: string) => (e: React.PointerEvent<SVGCircleElement>) => {
+    const wasDragging = draggingRef.current === id;
     if (wasDragging) draggingRef.current = null;
     try { (e.target as Element).releasePointerCapture(e.pointerId); } catch { /* ignore */ }
-    // 左クリック (ドラッグ移動なし) でメニューを開く
+    if (wasDragging && dragMovedRef.current && dragLatestDateRef.current) {
+      // ドラッグ離した瞬間に 1 回だけ commit
+      onMilestoneDateChange?.(id, dragLatestDateRef.current);
+    }
+    dragLatestDateRef.current = null;
     if (wasDragging && !dragMovedRef.current && e.button === 0) {
       e.preventDefault();
       e.stopPropagation();
-      setMenu({ index: i, x: e.clientX, y: e.clientY });
+      setMenu({ id, x: e.clientX, y: e.clientY });
     }
   };
 
   return (
     <div className="flex">
-      <svg width={Y_AXIS_W} height={chartHeight} className="block shrink-0">
-        {Array.from({ length: Math.floor(maxStack / 5) }, (_, i) => (i + 1) * 5).map((n) => (
-          <text key={n} x={Y_AXIS_W - 4}
-            y={chartHeight - BOTTOM_AXIS_H - n * STEP + CELL / 2}
-            textAnchor="end" dominantBaseline="central"
-            className="fill-muted-foreground" fontSize={9}>{n}</text>
-        ))}
-        {/* トラック番号 (①②…) を track 線の左に表示 */}
-        {_showPins && tracks.map((_t, trackIdx) => (
-          <text key={`tn-${trackIdx}`}
-            x={Y_AXIS_W - 2}
-            y={MS_TOP_PAD + trackIdx * ROW_H + ROW_H / 2}
-            textAnchor="end" dominantBaseline="central"
-            className="fill-muted-foreground" fontSize={11}>
-            {circledNumber(trackIdx + 1)}
-          </text>
-        ))}
-      </svg>
+      <div className="shrink-0 relative" style={{ width: Y_AXIS_W, height: chartHeight }}>
+        <svg width={Y_AXIS_W} height={chartHeight} className="block">
+          {Array.from({ length: Math.floor(maxStack / 5) }, (_, i) => (i + 1) * 5).map((n) => (
+            <text key={n} x={Y_AXIS_W - 4}
+              y={chartHeight - BOTTOM_AXIS_H - n * STEP + CELL / 2}
+              textAnchor="end" dominantBaseline="central"
+              className="fill-muted-foreground" fontSize={9}>{n}</text>
+          ))}
+        </svg>
+        {_showPins && layers.map((l, i) => {
+          const top = MS_TOP_PAD + i * ROW_H + ROW_H / 2 - 8;
+          const hidden = isLayerHidden(l.id);
+          return (
+            <button key={`vis-${l.id}`} type="button"
+              onClick={() => toggleLayerHidden(l.id)}
+              className="absolute right-1 size-4 inline-flex items-center justify-center text-muted-foreground hover:text-foreground"
+              style={{ top }}
+              title={hidden ? "レイヤを表示" : "レイヤを非表示"}>
+              {hidden ? <EyeOff className="size-3"/> : <Eye className="size-3"/>}
+            </button>
+          );
+        })}
+      </div>
+
       <div ref={scrollRef} className="overflow-x-auto pb-2 flex-1 min-w-0">
         <svg ref={svgRef} width={chartWidth} height={chartHeight} className="block touch-none">
           {todayIdx >= 0 && (
@@ -270,6 +273,8 @@ export const PlanChart = forwardRef<PlanChartHandle, PlanChartProps>(function Pl
               stroke="hsl(var(--foreground))" strokeWidth={1.5}
               strokeDasharray="4 3" opacity={0.7}/>
           )}
+
+          {/* グリッド + tetris ボックス */}
           {dates.map((date, colIdx) => {
             const dayItems = grouped.get(date) ?? [];
             const x = colIdx * STEP;
@@ -305,7 +310,7 @@ export const PlanChart = forwardRef<PlanChartHandle, PlanChartProps>(function Pl
                         onClick={() => (isSelected ? onOpen?.(item.problemId) : onSelect?.(item.problemId))}
                         onDoubleClick={() => onOpen?.(item.problemId)}>
                         <title>
-                          {anchor ? `[${anchor.count}問目] ` : ""}
+                          {anchor ? `[${anchor.target}問目] ` : ""}
                           {item.code} {item.name ?? ""} ({Math.round(item.standardTimeSec / 60)}分)
                           {item.overBudget ? " ⚠ 1日の枠超" : ""}
                         </title>
@@ -313,10 +318,10 @@ export const PlanChart = forwardRef<PlanChartHandle, PlanChartProps>(function Pl
                     </g>
                   );
                 })}
-                {/* anchor ラベルはスタックの最上段の上に出す (他ブロックに埋もれない) */}
+                {/* anchor ラベル */}
                 {(() => {
                   const anchorsHere = dayItems
-                    .map((it, idx) => ({ it, idx }))
+                    .map((it) => ({ it }))
                     .filter(({ it }) => milestoneAnchors?.some((a) => a.problemId === it.problemId));
                   if (anchorsHere.length === 0) return null;
                   const topY = chartHeight - BOTTOM_AXIS_H - dayItems.length * STEP - 4;
@@ -326,13 +331,10 @@ export const PlanChart = forwardRef<PlanChartHandle, PlanChartProps>(function Pl
                       <text key={`anchor-${it.problemId}`}
                         x={x + CELL / 2} y={topY} textAnchor="middle"
                         fontSize={10} fontWeight={700} fill={MS_COLOR}
-                        className="pointer-events-none select-none">
-                        {a.count}
-                      </text>
+                        className="pointer-events-none select-none">{a.target}</text>
                     );
                   });
                 })()}
-                {/* 上: 絶対日付 (7 日おき + 今日) */}
                 {(() => {
                   const diff = todayIdx >= 0 ? colIdx - todayIdx : 0;
                   if (diff % 7 !== 0) return null;
@@ -340,12 +342,9 @@ export const PlanChart = forwardRef<PlanChartHandle, PlanChartProps>(function Pl
                   return (
                     <text x={x + CELL / 2} y={DATE_AXIS_Y} textAnchor="middle"
                       className="fill-muted-foreground" fontSize={9}
-                      fontWeight={isToday ? 700 : 400}>
-                      {`${d.getMonth() + 1}/${d.getDate()}`}
-                    </text>
+                      fontWeight={isToday ? 700 : 400}>{`${d.getMonth() + 1}/${d.getDate()}`}</text>
                   );
                 })()}
-                {/* 下: 相対日付 */}
                 {(() => {
                   const diff = todayIdx >= 0 ? colIdx - todayIdx : 0;
                   if (diff % 7 !== 0) return null;
@@ -359,66 +358,61 @@ export const PlanChart = forwardRef<PlanChartHandle, PlanChartProps>(function Pl
               </g>
             );
           })}
-          {/* milestone 横トラック線 (track 単位、同じ parent_id を共有する pin が同じ y に並ぶ) */}
-          {_showPins && tracks.map((t, trackIdx) => {
-            const y = MS_TOP_PAD + trackIdx * ROW_H + ROW_H / 2;
+
+          {/* layer 横トラック線 */}
+          {_showPins && layers.map((l, i) => {
+            if (isLayerHidden(l.id)) return null;
+            const y = MS_TOP_PAD + i * ROW_H + ROW_H / 2;
             return (
-              <line key={`track-${trackIdx}`}
+              <line key={`track-${l.id}`}
                 x1={0} y1={y} x2={chartWidth} y2={y}
-                stroke="hsl(var(--border))"
-                strokeWidth={2}
-                opacity={0.7}
+                stroke="hsl(var(--border))" strokeWidth={2} opacity={0.4}
                 strokeLinecap="round"/>
             );
           })}
-          {/* milestone 縦線 + ピン + count ラベル */}
-          {milestones.map((ms, i) => {
+
+          {/* milestone 縦線 + ピン + count */}
+          {milestones.map((ms) => {
+            const layer = layers.find((l) => l.id === ms.layer_id);
+            if (!layer) return null;
+            const hidden = isLayerHidden(layer.id);
             const idx = dates.indexOf(ms.date);
             const colIdx = idx >= 0 ? idx : Math.max(0, Math.round((new Date(`${ms.date}T00:00:00Z`).getTime() - new Date(`${dates[0]}T00:00:00Z`).getTime()) / 86400000));
             const cx = colIdx * STEP + CELL / 2;
-            const trackIdx = trackIndexByOrigIndex.get(i) ?? 0;
-            void trackIdx;
-            const rowY = msYByIndex.get(i) ?? MS_TOP_PAD;
-            const pinR = 8.1;
-            const strokeW = 2;
-            const vLineOpacity = 0.6;
-            const vLineW = 1.5;
+            const rowY = layerYById.get(layer.id) ?? MS_TOP_PAD;
+            const lineY1 = hidden ? MS_TOP_PAD + ROW_H / 2 : rowY;
             return (
-              <g key={`ms-${i}`}>
-                <line x1={cx} y1={rowY} x2={cx} y2={chartHeight - BOTTOM_AXIS_H}
-                  stroke={MS_COLOR} strokeWidth={vLineW} opacity={vLineOpacity}/>
-                {_showPins && (
-                  <circle cx={cx} cy={rowY} r={pinR}
-                    fill={MS_COLOR}
-                    stroke="hsl(var(--background))" strokeWidth={strokeW}
+              <g key={`ms-${ms.id}`}>
+                <line x1={cx} y1={lineY1} x2={cx} y2={chartHeight - BOTTOM_AXIS_H}
+                  stroke={MS_COLOR} strokeWidth={1.5} opacity={0.4}/>
+                {_showPins && !hidden && (
+                  <circle cx={cx} cy={rowY} r={8.1}
+                    fill={MS_COLOR} opacity={0.4}
+                    stroke="hsl(var(--background))" strokeWidth={2}
                     className={onMilestoneDateChange ? "cursor-grab active:cursor-grabbing" : ""}
-                    onPointerDown={onPinDown(i)}
-                    onPointerMove={onPinMove(i)}
-                    onPointerUp={onPinUp(i)}
-                    onPointerCancel={onPinUp(i)}
+                    onPointerDown={onPinDown(ms.id)}
+                    onPointerMove={onPinMove(ms.id)}
+                    onPointerUp={onPinUp(ms.id)}
+                    onPointerCancel={onPinUp(ms.id)}
                     onContextMenu={(e) => {
-                      // 右クリックでもメニューを開く (左クリックと同じ挙動)
                       e.preventDefault();
                       e.stopPropagation();
-                      setMenu({ index: i, x: e.clientX, y: e.clientY });
+                      setMenu({ id: ms.id, x: e.clientX, y: e.clientY });
                     }}
                   />
                 )}
-                {/* count: 縦線の真下、ボトムブロックと相対日付軸の間に */}
                 <text x={cx} y={chartHeight - BOTTOM_AXIS_H + 12} textAnchor="middle"
                   fontSize={10} fontWeight={700} fill={MS_COLOR}
-                  opacity={vLineOpacity + 0.2}
-                  className="pointer-events-none select-none">
-                  {ms.count}
-                </text>
+                  className="pointer-events-none select-none">{ms.target}</text>
               </g>
             );
           })}
         </svg>
       </div>
-      {/* マイルストーン編集メニュー (左クリック / 右クリックで開く) */}
+
+      {/* マイルストーン編集メニュー */}
       {menu && (() => {
-        const m = milestones[menu.index];
+        const m = milestones.find((x) => x.id === menu.id);
         if (!m) return null;
         return (
           <div
@@ -428,15 +422,12 @@ export const PlanChart = forwardRef<PlanChartHandle, PlanChartProps>(function Pl
           >
             <div className="flex items-center gap-2 px-1">
               <Hash className="size-3.5 text-muted-foreground"/>
-              <input
-                type="number"
-                min={0}
-                defaultValue={m.count}
-                key={`count-${m.id}-${m.count}`}
+              <input type="number" min={0} defaultValue={m.target}
+                key={`target-${m.id}-${m.target}`}
                 className="h-7 w-20 px-1 text-xs border rounded bg-background tabular-nums"
                 onBlur={(e) => {
                   const n = parseInt(e.target.value, 10);
-                  if (Number.isFinite(n) && n >= 0 && n !== m.count) onMilestoneCountChange?.(menu.index, n);
+                  if (Number.isFinite(n) && n >= 0 && n !== m.target) onMilestoneTargetChange?.(m.id, n);
                 }}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") (e.target as HTMLInputElement).blur();
@@ -447,65 +438,149 @@ export const PlanChart = forwardRef<PlanChartHandle, PlanChartProps>(function Pl
             </div>
             <div className="flex items-center gap-2 px-1">
               <CalendarDays className="size-3.5 text-muted-foreground"/>
-              <input
-                type="date"
-                defaultValue={m.date}
+              <input type="date" defaultValue={m.date}
                 key={`date-${m.id}-${m.date}`}
                 className="h-7 px-1 text-xs border rounded bg-background"
                 onChange={(e) => {
                   if (e.target.value && e.target.value !== m.date) {
-                    onMilestoneDateChange?.(menu.index, e.target.value);
+                    onMilestoneDateChange?.(m.id, e.target.value);
                   }
                 }}
               />
             </div>
             <button type="button"
               className="w-full flex items-center gap-2 px-1 py-1 rounded text-destructive hover:bg-destructive hover:text-destructive-foreground"
-              onClick={() => {
-                onMilestoneRemove?.(menu.index);
-                setMenu(null);
-              }}>
-              <Trash2 className="size-3.5"/>
-              <span>削除</span>
+              onClick={() => { onMilestoneRemove?.(m.id); setMenu(null); }}>
+              <Trash2 className="size-3.5"/><span>削除</span>
             </button>
           </div>
         );
       })()}
-      {/* 右側: track 名 + 同じトラックに milestone を追加するアイコン (ピン表示時のみ) */}
-      {_showPins && tracks.length > 0 && (
-        <div className="shrink-0 pl-2" style={{ width: 180 }}>
-          <div style={{ height: MS_TOP_PAD }}/>
-          {tracks.map((t, trackIdx) => {
-            // 各 track の代表 milestone (= 最初のメンバー) で名前を編集する。
-            const lead = t.members[0];
-            const label = t.parentId === null ? "ルート" : (t.members[0]?.m.name ?? "");
-            return (
-              <div key={`track-name-${trackIdx}`}
-                className="flex items-center gap-1"
-                style={{ height: ROW_H }}>
-                {onMilestoneAddToTrack && lead && (
-                  <button type="button"
-                    className="text-muted-foreground hover:text-foreground p-0.5"
-                    onClick={() => onMilestoneAddToTrack(lead.origIndex)}
-                    title="このトラックにマイルストーンを追加 (同じ親)">
-                    <svg viewBox="0 0 24 24" className="size-3" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M12 5v14M5 12h14"/>
-                    </svg>
-                  </button>
-                )}
-                <input
-                  type="text"
-                  value={lead?.m.name ?? ""}
-                  placeholder={t.parentId === null ? "ルート" : "(無題)"}
-                  onChange={(e) => lead && onMilestoneNameChange?.(lead.origIndex, e.target.value)}
-                  className="flex-1 min-w-0 h-5 px-1 text-[10px] bg-transparent border-0 border-b border-transparent hover:border-border focus:border-foreground focus:outline-none"
-                  title={label}
-                />
-              </div>
-            );
-          })}
-        </div>
+
+      {/* 右パネル: layer 名と操作 (ドラッグ並び替え対応) */}
+      {_showPins && (
+        <LayerListPanel
+          layers={layers}
+          rowHeight={ROW_H}
+          topPad={MS_TOP_PAD}
+          onMilestoneAddToLayer={onMilestoneAddToLayer}
+          onLayerNameChange={onLayerNameChange}
+          onLayerRemove={onLayerRemove}
+          onAddLayer={onAddLayer}
+          onReorderLayers={onReorderLayers}
+        />
       )}
     </div>
   );
 });
+
+/* ── Layer list (sortable) ────────────────────────────────── */
+
+function LayerListPanel({
+  layers, rowHeight, topPad, onMilestoneAddToLayer, onLayerNameChange, onLayerRemove, onAddLayer, onReorderLayers,
+}: {
+  layers: LayerView[];
+  rowHeight: number;
+  topPad: number;
+  onMilestoneAddToLayer?: (layerId: string) => void;
+  onLayerNameChange?: (id: string, newName: string) => void;
+  onLayerRemove?: (id: string) => void;
+  onAddLayer?: () => void;
+  onReorderLayers?: (orderedLayerIds: string[]) => void;
+}) {
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
+  function handleDragEnd(e: DragEndEvent) {
+    if (!onReorderLayers) return;
+    const { active, over } = e;
+    if (!over || active.id === over.id) return;
+    const ids = layers.map((l) => l.id);
+    const fromIdx = ids.indexOf(String(active.id));
+    const toIdx = ids.indexOf(String(over.id));
+    if (fromIdx < 0 || toIdx < 0) return;
+    onReorderLayers(arrayMove(ids, fromIdx, toIdx));
+  }
+  return (
+    <div className="shrink-0 pl-2" style={{ width: 200 }}>
+      <div style={{ height: topPad }}/>
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+        <SortableContext items={layers.map((l) => l.id)} strategy={verticalListSortingStrategy}>
+          {layers.map((l) => (
+            <SortableLayerRow key={l.id} layer={l} rowHeight={rowHeight}
+              onMilestoneAddToLayer={onMilestoneAddToLayer}
+              onLayerNameChange={onLayerNameChange}
+              onLayerRemove={onLayerRemove}/>
+          ))}
+        </SortableContext>
+      </DndContext>
+      {onAddLayer && (
+        <button type="button" onClick={onAddLayer}
+          className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground w-full"
+          style={{ height: rowHeight }}
+          title="新規レイヤを追加">
+          <span className="size-4 shrink-0"/>
+          <span className="size-4 shrink-0"/>
+          <span className="size-4 shrink-0"/>
+          <span className="flex-1 italic text-left px-1">新規レイヤ</span>
+          <svg viewBox="0 0 24 24" className="size-3" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M12 5v14M5 12h14"/>
+          </svg>
+        </button>
+      )}
+    </div>
+  );
+}
+
+function SortableLayerRow({
+  layer, rowHeight, onMilestoneAddToLayer, onLayerNameChange, onLayerRemove,
+}: {
+  layer: LayerView;
+  rowHeight: number;
+  onMilestoneAddToLayer?: (layerId: string) => void;
+  onLayerNameChange?: (id: string, newName: string) => void;
+  onLayerRemove?: (id: string) => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: layer.id });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    height: rowHeight,
+    opacity: isDragging ? 0.5 : 1,
+  };
+  return (
+    <div ref={setNodeRef} style={style}
+      className="flex items-center gap-1 group bg-background">
+      {/* 1. プラスマーク */}
+      {onMilestoneAddToLayer ? (
+        <button type="button"
+          className="text-muted-foreground hover:text-foreground p-0.5"
+          onClick={() => onMilestoneAddToLayer(layer.id)}
+          title="このレイヤに milestone 追加">
+          <svg viewBox="0 0 24 24" className="size-3" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M12 5v14M5 12h14"/>
+          </svg>
+        </button>
+      ) : <span className="size-4 shrink-0"/>}
+      {/* 2. ドラッグハンドル (ホバー時のみ表示) */}
+      <button type="button"
+        {...attributes} {...listeners}
+        className="text-muted-foreground hover:text-foreground p-0.5 cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-opacity"
+        title="ドラッグして並び替え">
+        <GripVertical className="size-3"/>
+      </button>
+      {/* 3. 名前 */}
+      <input type="text" value={layer.name}
+        placeholder="(無題)"
+        onChange={(e) => onLayerNameChange?.(layer.id, e.target.value)}
+        className="flex-1 min-w-0 h-5 px-1 text-[10px] bg-transparent border-0 border-b border-transparent hover:border-border focus:border-foreground focus:outline-none"/>
+      {/* 4. ゴミ箱 */}
+      {onLayerRemove && (
+        <button type="button"
+          className="text-muted-foreground hover:text-destructive p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+          onClick={() => onLayerRemove(layer.id)}
+          title="レイヤ削除">
+          <Trash2 className="size-3"/>
+        </button>
+      )}
+    </div>
+  );
+}

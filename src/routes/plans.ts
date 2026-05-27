@@ -1,26 +1,22 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { db } from "@/lib/db";
-import {
-  plan,
-  problem,
-  answer,
-  problemTag,
-  type PlanFilter,
-} from "@/lib/db/schema";
+import { plan, planLayer, planMilestone, problem, problemTag, type PlanFilter } from "@/lib/db/schema";
 import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import {
   planCreateInputSchema,
   planUpdateInputSchema,
+  layerCreateInputSchema,
+  layerUpdateInputSchema,
+  layerReorderInputSchema,
+  milestoneCreateInputSchema,
+  milestoneUpdateInputSchema,
 } from "@/lib/schemas/plan";
 import { projectIdQuerySchema } from "@/lib/schemas/common";
 
-/**
- * メンバー問題を filter 条件で絞り込む。
- * subjectIds/levelIds/topicIds は OR で各カラムにマッチ、tagIds は problem_tag を経由。
- * 全て optional + 未指定なら制約なし。
- */
+/* ── helpers ──────────────────────────────────────────────────── */
+
 async function fetchMembers(projectId: string, filter: PlanFilter) {
   const conds = [eq(problem.projectId, projectId)];
   if (filter.subjectIds?.length) conds.push(inArray(problem.subjectId, filter.subjectIds));
@@ -47,34 +43,39 @@ async function fetchMembers(projectId: string, filter: PlanFilter) {
   return rows;
 }
 
-/**
- * メンバー問題の初回 answer.date を集める (= 過去側ボックスの x 座標)。
- */
 async function fetchFirstAnswers(problemIds: string[]) {
   if (problemIds.length === 0) return new Map<string, string>();
-  const rows = await db.select({
-    problemId: answer.problemId,
-    minDate: sql<string>`min(${answer.date})::text`,
-  })
-    .from(answer)
-    .where(inArray(answer.problemId, problemIds))
-    .groupBy(answer.problemId);
-  return new Map(rows.map((r) => [r.problemId, r.minDate.slice(0, 10)]));
+  const rows = await db.execute<{ problem_id: string; min_date: string }>(sql`
+    SELECT problem_id, MIN(date)::date::text AS min_date
+    FROM answer WHERE problem_id IN ${problemIds}
+    GROUP BY problem_id
+  `);
+  return new Map(rows.map((r) => [r.problem_id, r.min_date.slice(0, 10)]));
 }
 
-/**
- * 現行 revision (= valid_to IS NULL かつ is_active=true) を 1 件返す。
- */
-async function fetchCurrent(planId: string) {
+async function fetchCurrentPlan(planId: string) {
   const [row] = await db.select().from(plan)
     .where(and(eq(plan.id, planId), isNull(plan.validTo), eq(plan.isActive, true)))
     .orderBy(desc(plan.revision))
     .limit(1);
   return row ?? null;
 }
+async function fetchCurrentLayer(layerId: string) {
+  const [row] = await db.select().from(planLayer)
+    .where(and(eq(planLayer.id, layerId), isNull(planLayer.validTo), eq(planLayer.isActive, true)))
+    .orderBy(desc(planLayer.revision))
+    .limit(1);
+  return row ?? null;
+}
+async function fetchCurrentMilestone(milestoneId: string) {
+  const [row] = await db.select().from(planMilestone)
+    .where(and(eq(planMilestone.id, milestoneId), isNull(planMilestone.validTo), eq(planMilestone.isActive, true)))
+    .orderBy(desc(planMilestone.revision))
+    .limit(1);
+  return row ?? null;
+}
 
-/** Drizzle camelCase row → API snake_case shape。 */
-function toApi(row: typeof plan.$inferSelect) {
+function planToApi(row: typeof plan.$inferSelect) {
   return {
     id: row.id,
     revision: row.revision,
@@ -84,7 +85,33 @@ function toApi(row: typeof plan.$inferSelect) {
     time_multiplier_pct: row.timeMultiplierPct,
     weekday_weights: row.weekdayWeights,
     filter: row.filter,
-    milestones: row.milestones,
+    is_active: row.isActive,
+    valid_from: (row.validFrom as Date | string).toString(),
+    valid_to: row.validTo ? (row.validTo as Date | string).toString() : null,
+    created_at: (row.createdAt as Date | string).toString(),
+  };
+}
+function layerToApi(row: typeof planLayer.$inferSelect) {
+  return {
+    id: row.id,
+    revision: row.revision,
+    plan_id: row.planId,
+    name: row.name,
+    sort_order: row.sortOrder,
+    is_active: row.isActive,
+    valid_from: (row.validFrom as Date | string).toString(),
+    valid_to: row.validTo ? (row.validTo as Date | string).toString() : null,
+    created_at: (row.createdAt as Date | string).toString(),
+  };
+}
+function milestoneToApi(row: typeof planMilestone.$inferSelect) {
+  return {
+    id: row.id,
+    revision: row.revision,
+    plan_id: row.planId,
+    layer_id: row.layerId,
+    target: row.target,
+    date: typeof row.date === "string" ? row.date : (row.date as Date).toISOString().slice(0, 10),
     is_active: row.isActive,
     valid_from: (row.validFrom as Date | string).toString(),
     valid_to: row.validTo ? (row.validTo as Date | string).toString() : null,
@@ -93,16 +120,14 @@ function toApi(row: typeof plan.$inferSelect) {
 }
 
 const app = new Hono()
-  /** GET /  — プロジェクトのアクティブ plan 一覧 (現行 revision のみ) */
+  /* ── Plan ──────────────────────────────────────────────────── */
   .get("/", zValidator("query", projectIdQuerySchema), async (c) => {
     const { project_id: projectId } = c.req.valid("query");
     const rows = await db.select().from(plan)
       .where(and(eq(plan.projectId, projectId), isNull(plan.validTo), eq(plan.isActive, true)))
       .orderBy(desc(plan.createdAt));
-    return c.json({ data: rows.map(toApi) });
+    return c.json({ data: rows.map(planToApi) });
   })
-
-  /** POST / — 新規 plan 作成 (revision=1) */
   .post("/", zValidator("json", planCreateInputSchema), async (c) => {
     const body = c.req.valid("json");
     const id = randomUUID();
@@ -115,22 +140,31 @@ const app = new Hono()
       timeMultiplierPct: body.time_multiplier_pct,
       weekdayWeights: body.weekday_weights,
       filter: body.filter,
-      milestones: body.milestones,
     }).returning();
-    return c.json({ data: toApi(row) }, 201);
+    return c.json({ data: planToApi(row) }, 201);
   })
-
-  /** GET /:id — 現行 revision + メンバー問題 + 初回 answer.date */
   .get("/:id", async (c) => {
-    const current = await fetchCurrent(c.req.param("id"));
+    const planId = c.req.param("id");
+    const current = await fetchCurrentPlan(planId);
     if (!current) return c.json({ error: "Not found" }, 404);
 
     const members = await fetchMembers(current.projectId, current.filter);
     const firstAnswers = await fetchFirstAnswers(members.map((m) => m.id));
 
+    // 現行 layers (sort_order 順)
+    const layers = await db.select().from(planLayer)
+      .where(and(eq(planLayer.planId, planId), isNull(planLayer.validTo), eq(planLayer.isActive, true)))
+      .orderBy(asc(planLayer.sortOrder));
+
+    // 現行 milestones
+    const milestones = await db.select().from(planMilestone)
+      .where(and(eq(planMilestone.planId, planId), isNull(planMilestone.validTo), eq(planMilestone.isActive, true)));
+
     return c.json({
       data: {
-        plan: toApi(current),
+        plan: planToApi(current),
+        layers: layers.map(layerToApi),
+        milestones: milestones.map(milestoneToApi),
         members: members.map((m) => ({
           id: m.id,
           code: m.code,
@@ -144,21 +178,14 @@ const app = new Hono()
       },
     });
   })
-
-  /**
-   * PUT /:id — 編集 = 新 revision INSERT + 旧 revision の valid_to に NOW() を塗る (1 tx)。
-   * archive 済 (is_active=false) plan は 404。
-   */
   .put("/:id", zValidator("json", planUpdateInputSchema), async (c) => {
     const id = c.req.param("id");
     const body = c.req.valid("json");
-
-    const current = await fetchCurrent(id);
+    const current = await fetchCurrentPlan(id);
     if (!current) return c.json({ error: "Not found" }, 404);
 
     const newRow = await db.transaction(async (tx) => {
-      await tx.update(plan)
-        .set({ validTo: new Date() })
+      await tx.update(plan).set({ validTo: new Date() })
         .where(and(eq(plan.id, id), eq(plan.revision, current.revision)));
       const [row] = await tx.insert(plan).values({
         id,
@@ -169,23 +196,18 @@ const app = new Hono()
         timeMultiplierPct: body.time_multiplier_pct ?? current.timeMultiplierPct,
         weekdayWeights: body.weekday_weights ?? current.weekdayWeights,
         filter: body.filter ?? current.filter,
-        milestones: body.milestones ?? current.milestones,
         isActive: current.isActive,
       }).returning();
       return row;
     });
-    return c.json({ data: toApi(newRow) });
+    return c.json({ data: planToApi(newRow) });
   })
-
-  /** DELETE /:id — archive (is_active=false の新 revision を INSERT)。物理削除しない。 */
   .delete("/:id", async (c) => {
     const id = c.req.param("id");
-    const current = await fetchCurrent(id);
+    const current = await fetchCurrentPlan(id);
     if (!current) return c.json({ error: "Not found" }, 404);
-
     const newRow = await db.transaction(async (tx) => {
-      await tx.update(plan)
-        .set({ validTo: new Date() })
+      await tx.update(plan).set({ validTo: new Date() })
         .where(and(eq(plan.id, id), eq(plan.revision, current.revision)));
       const [row] = await tx.insert(plan).values({
         id,
@@ -196,21 +218,125 @@ const app = new Hono()
         timeMultiplierPct: current.timeMultiplierPct,
         weekdayWeights: current.weekdayWeights,
         filter: current.filter,
-        milestones: current.milestones,
         isActive: false,
       }).returning();
       return row;
     });
-    return c.json({ data: toApi(newRow) });
+    return c.json({ data: planToApi(newRow) });
   })
 
-  /** GET /:id/history — 全 revision (新しい順) */
-  .get("/:id/history", async (c) => {
-    const rows = await db.select().from(plan)
-      .where(eq(plan.id, c.req.param("id")))
-      .orderBy(desc(plan.revision));
-    if (rows.length === 0) return c.json({ error: "Not found" }, 404);
-    return c.json({ data: rows.map(toApi) });
+  /* ── Layer ─────────────────────────────────────────────────── */
+  .post("/layers", zValidator("json", layerCreateInputSchema), async (c) => {
+    const body = c.req.valid("json");
+    const id = randomUUID();
+    const [row] = await db.insert(planLayer).values({
+      id, revision: 1, planId: body.plan_id, name: body.name, sortOrder: body.sort_order,
+    }).returning();
+    return c.json({ data: layerToApi(row) }, 201);
+  })
+  .put("/layers/:id", zValidator("json", layerUpdateInputSchema), async (c) => {
+    const id = c.req.param("id");
+    const body = c.req.valid("json");
+    const current = await fetchCurrentLayer(id);
+    if (!current) return c.json({ error: "Not found" }, 404);
+    const newRow = await db.transaction(async (tx) => {
+      await tx.update(planLayer).set({ validTo: new Date() })
+        .where(and(eq(planLayer.id, id), eq(planLayer.revision, current.revision)));
+      const [row] = await tx.insert(planLayer).values({
+        id, revision: current.revision + 1, planId: current.planId,
+        name: body.name ?? current.name,
+        sortOrder: body.sort_order ?? current.sortOrder,
+        isActive: current.isActive,
+      }).returning();
+      return row;
+    });
+    return c.json({ data: layerToApi(newRow) });
+  })
+  .delete("/layers/:id", async (c) => {
+    const id = c.req.param("id");
+    const current = await fetchCurrentLayer(id);
+    if (!current) return c.json({ error: "Not found" }, 404);
+    const newRow = await db.transaction(async (tx) => {
+      await tx.update(planLayer).set({ validTo: new Date() })
+        .where(and(eq(planLayer.id, id), eq(planLayer.revision, current.revision)));
+      const [row] = await tx.insert(planLayer).values({
+        id, revision: current.revision + 1, planId: current.planId,
+        name: current.name, sortOrder: current.sortOrder, isActive: false,
+      }).returning();
+      return row;
+    });
+    return c.json({ data: layerToApi(newRow) });
+  })
+  .post("/layers/reorder", zValidator("json", layerReorderInputSchema), async (c) => {
+    const { plan_id, layer_ids } = c.req.valid("json");
+    // 各 layer の sort_order を新規 revision で更新 (1 tx)
+    const updated = await db.transaction(async (tx) => {
+      const out: (typeof planLayer.$inferSelect)[] = [];
+      for (let i = 0; i < layer_ids.length; i++) {
+        const lid = layer_ids[i];
+        const [cur] = await tx.select().from(planLayer)
+          .where(and(eq(planLayer.id, lid), eq(planLayer.planId, plan_id), isNull(planLayer.validTo), eq(planLayer.isActive, true)))
+          .orderBy(desc(planLayer.revision))
+          .limit(1);
+        if (!cur) continue;
+        if (cur.sortOrder === i) { out.push(cur); continue; }
+        await tx.update(planLayer).set({ validTo: new Date() })
+          .where(and(eq(planLayer.id, lid), eq(planLayer.revision, cur.revision)));
+        const [row] = await tx.insert(planLayer).values({
+          id: lid, revision: cur.revision + 1, planId: cur.planId,
+          name: cur.name, sortOrder: i, isActive: cur.isActive,
+        }).returning();
+        out.push(row);
+      }
+      return out;
+    });
+    return c.json({ data: updated.map(layerToApi) });
+  })
+
+  /* ── Milestone ─────────────────────────────────────────────── */
+  .post("/milestones", zValidator("json", milestoneCreateInputSchema), async (c) => {
+    const body = c.req.valid("json");
+    const id = randomUUID();
+    const [row] = await db.insert(planMilestone).values({
+      id, revision: 1, planId: body.plan_id, layerId: body.layer_id, target: body.target, date: body.date,
+    }).returning();
+    return c.json({ data: milestoneToApi(row) }, 201);
+  })
+  .put("/milestones/:id", zValidator("json", milestoneUpdateInputSchema), async (c) => {
+    const id = c.req.param("id");
+    const body = c.req.valid("json");
+    const current = await fetchCurrentMilestone(id);
+    if (!current) return c.json({ error: "Not found" }, 404);
+    const newRow = await db.transaction(async (tx) => {
+      await tx.update(planMilestone).set({ validTo: new Date() })
+        .where(and(eq(planMilestone.id, id), eq(planMilestone.revision, current.revision)));
+      const [row] = await tx.insert(planMilestone).values({
+        id, revision: current.revision + 1, planId: current.planId,
+        layerId: body.layer_id ?? current.layerId,
+        target: body.target ?? current.target,
+        date: body.date ?? (typeof current.date === "string" ? current.date : (current.date as Date).toISOString().slice(0, 10)),
+        isActive: current.isActive,
+      }).returning();
+      return row;
+    });
+    return c.json({ data: milestoneToApi(newRow) });
+  })
+  .delete("/milestones/:id", async (c) => {
+    const id = c.req.param("id");
+    const current = await fetchCurrentMilestone(id);
+    if (!current) return c.json({ error: "Not found" }, 404);
+    const newRow = await db.transaction(async (tx) => {
+      await tx.update(planMilestone).set({ validTo: new Date() })
+        .where(and(eq(planMilestone.id, id), eq(planMilestone.revision, current.revision)));
+      const [row] = await tx.insert(planMilestone).values({
+        id, revision: current.revision + 1, planId: current.planId,
+        layerId: current.layerId, target: current.target,
+        date: typeof current.date === "string" ? current.date : (current.date as Date).toISOString().slice(0, 10),
+        isActive: false,
+      }).returning();
+      return row;
+    });
+    return c.json({ data: milestoneToApi(newRow) });
   });
 
 export default app;
