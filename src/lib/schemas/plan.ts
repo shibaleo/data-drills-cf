@@ -9,7 +9,10 @@ export const planFilterSchema = z.object({
 export type PlanFilterInput = z.infer<typeof planFilterSchema>;
 
 export const milestoneSchema = z.object({
-  count: z.number().int().positive(),
+  id: z.string().min(1),
+  parent_id: z.string().nullable(),
+  name: z.string().optional(),
+  count: z.number().int().nonnegative(),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "expected YYYY-MM-DD"),
 });
 export type MilestoneInput = z.infer<typeof milestoneSchema>;

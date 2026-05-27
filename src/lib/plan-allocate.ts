@@ -15,7 +15,7 @@ export type MemberInput = {
   firstAnswerDate: string | null;  // "YYYY-MM-DD" or null (未解)
 };
 
-export type Milestone = { count: number; date: string };
+export type Milestone = { count: number; date: string; id?: string; parent_id?: string | null; name?: string };
 
 export type AllocatedProblem = {
   problemId: string;

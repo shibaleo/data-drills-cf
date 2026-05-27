@@ -18,7 +18,7 @@ import { ResizableTableShell } from "@/components/resizable-table-shell";
 import { OpaqueTag } from "@/components/problem-card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Filter, SlidersHorizontal, X, ArrowLeft, Archive, Save, RotateCcw } from "lucide-react";
+import { Filter, SlidersHorizontal, ArrowLeft, Archive, Save, RotateCcw, Plus, Loader2 } from "lucide-react";
 import { useTopicsList } from "@/hooks/queries/use-topics";
 import type { MilestoneInput } from "@/lib/schemas/plan";
 
@@ -169,14 +169,54 @@ export default function PlanDetailPage() {
     await archive.mutateAsync(planId);
     navigate({ to: "/plans" as string });
   }
-  function addMilestone() {
-    setMilestones([...milestones, { count: memberCount, date: today }]);
+  function newId(): string {
+    return (crypto as Crypto & { randomUUID(): string }).randomUUID();
+  }
+  function addRootMilestone() {
+    // 空なら「開始 (count=0, today) + 最終 (count=memberCount, today+90日)」をシード。
+    // 既にある場合は単一 root を末尾に追加。
+    if (milestones.length === 0) {
+      const end = new Date(`${today}T00:00:00Z`);
+      end.setUTCDate(end.getUTCDate() + 90);
+      const endDate = end.toISOString().slice(0, 10);
+      setMilestones([
+        { id: newId(), parent_id: null, count: 0, date: today },
+        { id: newId(), parent_id: null, count: memberCount, date: endDate },
+      ]);
+      return;
+    }
+    setMilestones([...milestones, { id: newId(), parent_id: null, count: memberCount, date: today }]);
+  }
+  function addChildMilestone(parentIdx: number) {
+    const parent = milestones[parentIdx];
+    if (!parent) return;
+    setMilestones([...milestones, { id: newId(), parent_id: parent.id, count: Math.max(1, Math.floor(parent.count / 2)), date: parent.date }]);
+  }
+  /** sibling = 同じ parent を持つ milestone を追加 (= 同じトラック上の新エントリ)。 */
+  function addSiblingMilestone(idx: number) {
+    const ref = milestones[idx];
+    if (!ref) return;
+    setMilestones([...milestones, { id: newId(), parent_id: ref.parent_id, count: ref.count, date: ref.date }]);
   }
   function updateMilestone(i: number, patch: Partial<MilestoneInput>) {
     setMilestones(milestones.map((m, idx) => (idx === i ? { ...m, ...patch } : m)));
   }
   function removeMilestone(i: number) {
-    setMilestones(milestones.filter((_, idx) => idx !== i));
+    const target = milestones[i];
+    if (!target) return;
+    // 子も再帰的に削除
+    const toRemove = new Set<string>([target.id]);
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (const m of milestones) {
+        if (m.parent_id && toRemove.has(m.parent_id) && !toRemove.has(m.id)) {
+          toRemove.add(m.id);
+          changed = true;
+        }
+      }
+    }
+    setMilestones(milestones.filter((m) => !toRemove.has(m.id)));
   }
 
   return (
@@ -270,51 +310,12 @@ export default function PlanDetailPage() {
           <WeekdayWeightsInput value={weekdayWeights} onChange={setWeekdayWeights} dailyMinutes={dailyMinutes}/>
         </div>
 
-        <div className="p-3 space-y-2">
-          <div className="flex items-center justify-between">
-            <Label className="text-[10px] uppercase tracking-wide text-muted-foreground">マイルストーン</Label>
-            <Button type="button" variant="outline" size="sm" className="h-7 text-xs" onClick={addMilestone}>+ 追加</Button>
-          </div>
-          {milestones.length === 0 ? (
-            <div className="text-xs text-muted-foreground italic">マイルストーンなし — 自由ペース計画</div>
-          ) : (
-            <div className="space-y-1">
-              {milestones.map((m, i) => (
-                <div key={i} className="grid grid-cols-[auto,1fr,auto,auto] items-center gap-2">
-                  <Input type="number" min={1} value={m.count}
-                    onChange={(e) => updateMilestone(i, { count: Math.max(1, parseInt(e.target.value) || 1) })}
-                    className="w-20 h-8 text-sm tabular-nums"/>
-                  <span className="text-xs text-muted-foreground">問 by</span>
-                  <Input type="date" value={m.date}
-                    onChange={(e) => updateMilestone(i, { date: e.target.value })}
-                    className="w-40 h-8 text-sm"/>
-                  <button type="button"
-                    className="text-muted-foreground hover:text-destructive p-1"
-                    onClick={() => removeMilestone(i)}
-                    title="削除">
-                    <X className="size-3.5"/>
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
       </div>
 
       {/* ── Tetris chart ── */}
       <div className="rounded-md border p-3 space-y-2">
         <div className="flex items-center justify-between">
-          <div className="text-xs text-muted-foreground tabular-nums">
-            表示: {visibleMembers.length} / {memberCount}
-          </div>
           <div className="flex items-center gap-2">
-            <button type="button"
-              title="マイルストーンのピンを表示/非表示"
-              aria-pressed={showMilestonePins}
-              className={`inline-flex items-center justify-center size-[26px] rounded-md border transition-colors ${showMilestonePins ? "bg-accent text-accent-foreground border-accent-foreground/20" : "text-muted-foreground hover:bg-muted"}`}
-              onClick={() => setShowMilestonePins((p) => !p)}>
-              <SlidersHorizontal className="size-3"/>
-            </button>
             <Popover>
               <PopoverTrigger asChild>
                 <Button size="sm" variant="outline" className="h-7 text-xs relative">
@@ -327,7 +328,7 @@ export default function PlanDetailPage() {
                   )}
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className="w-56 p-3 space-y-3" align="end">
+              <PopoverContent className="w-56 p-3 space-y-3" align="start">
                 <FilterToggleSection>
                   <FilterToggle label="完了済みを隠す" checked={hideCompleted} onChange={setHideCompleted}/>
                   <FilterToggle label="未着手を隠す" checked={hideFuture} onChange={setHideFuture}/>
@@ -360,6 +361,48 @@ export default function PlanDetailPage() {
                 )}
               </PopoverContent>
             </Popover>
+            <span className="text-xs text-muted-foreground tabular-nums">
+              {visibleMembers.length} / {memberCount}
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            {showMilestonePins && dirty && (
+              <>
+                <button type="button"
+                  onClick={() => {
+                    setName(data.plan.name);
+                    setDailyMinutes(data.plan.daily_minutes);
+                    setTimeMultiplier(data.plan.time_multiplier_pct / 100);
+                    setWeekdayWeights(data.plan.weekday_weights);
+                    setMilestones(data.plan.milestones);
+                  }}
+                  disabled={update.isPending}
+                  className="inline-flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground disabled:opacity-50"
+                  title="編集を破棄">
+                  <RotateCcw className="size-3"/>Reset
+                </button>
+                <Button size="sm" variant="default" className="h-6 text-[10px] px-2"
+                  onClick={onConfirm} disabled={update.isPending}>
+                  {update.isPending ? <Loader2 className="size-3 mr-1 animate-spin"/> : <Save className="size-3 mr-1"/>}
+                  {update.isPending ? "保存中..." : "保存"}
+                </Button>
+              </>
+            )}
+            {showMilestonePins && (
+              <button type="button"
+                title={milestones.length === 0 ? "開始 + 最終マイルストーンを追加" : "ルートマイルストーンを追加"}
+                className="inline-flex items-center justify-center size-[26px] rounded-md border text-muted-foreground hover:bg-muted transition-colors"
+                onClick={addRootMilestone}>
+                <Plus className="size-3"/>
+              </button>
+            )}
+            <button type="button"
+              title="マイルストーンのピンを表示/非表示"
+              aria-pressed={showMilestonePins}
+              className={`inline-flex items-center justify-center size-[26px] rounded-md border transition-colors ${showMilestonePins ? "bg-accent text-accent-foreground border-accent-foreground/20" : "text-muted-foreground hover:bg-muted"}`}
+              onClick={() => setShowMilestonePins((p) => !p)}>
+              <SlidersHorizontal className="size-3"/>
+            </button>
           </div>
         </div>
         <PlanChart
@@ -370,6 +413,10 @@ export default function PlanDetailPage() {
           onSelect={handleSelect}
           onOpen={openDetail}
           onMilestoneDateChange={showMilestonePins ? (i, newDate) => updateMilestone(i, { date: newDate }) : undefined}
+          onMilestoneCountChange={showMilestonePins ? (i, newCount) => updateMilestone(i, { count: newCount }) : undefined}
+          onMilestoneNameChange={showMilestonePins ? (i, newName) => updateMilestone(i, { name: newName }) : undefined}
+          onMilestoneAddChild={showMilestonePins ? addSiblingMilestone : undefined}
+          onMilestoneRemove={showMilestonePins ? removeMilestone : undefined}
           showMilestonePins={showMilestonePins}
           milestoneAnchors={milestoneAnchors}
         />

@@ -37,9 +37,12 @@ export default function PlanNewPage() {
     navigate({ to: "/plans/$planId", params: { planId: res.data.id } });
   }
 
+  function newId(): string {
+    return (crypto as Crypto & { randomUUID(): string }).randomUUID();
+  }
   function addMilestone() {
     const today = new Date().toISOString().slice(0, 10);
-    setMilestones([...milestones, { count: 100, date: today }]);
+    setMilestones([...milestones, { id: newId(), parent_id: null, count: 100, date: today }]);
   }
   function updateMilestone(i: number, patch: Partial<MilestoneInput>) {
     setMilestones(milestones.map((m, idx) => (idx === i ? { ...m, ...patch } : m)));

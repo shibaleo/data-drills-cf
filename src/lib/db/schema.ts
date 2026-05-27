@@ -367,8 +367,11 @@ export type PlanFilter = {
 };
 
 export type PlanMilestone = {
-  count: number;   // 累積問題数
-  date: string;    // "YYYY-MM-DD"
+  id: string;            // client-generated uuid
+  parent_id: string | null;  // 親 milestone id (root なら null)
+  name?: string;         // 表示用の名前 (例: "中間目標", "5月末", "週次")
+  count: number;         // 累積問題数
+  date: string;          // "YYYY-MM-DD"
 };
 
 export const plan = pgTable("plan", {
