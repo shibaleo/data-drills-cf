@@ -49,7 +49,7 @@ export default function PlanDetailPage() {
   const [timeMultiplier, setTimeMultiplier] = useState<number>(1.0);
   const [weekdayWeights, setWeekdayWeights] = useState<number[]>([1, 1, 1, 1, 1, 1, 1]);
   const [name, setName] = useState<string>("");
-  type LocalLayer = { id: string; name: string };
+  type LocalLayer = { id: string; name: string; color: string | null; opacity_pct: number | null; line_style: "solid" | "dashed" | "dotted" | null; line_width: number | null };
   type LocalMilestone = { id: string; layer_id: string; target: number; date: string };
   const [localLayers, setLocalLayers] = useState<LocalLayer[]>([]);
   const [localMilestones, setLocalMilestones] = useState<LocalMilestone[]>([]);
@@ -92,7 +92,7 @@ export default function PlanDetailPage() {
     setTimeMultiplier(data.plan.time_multiplier_pct / 100);
     setWeekdayWeights(data.plan.weekday_weights);
     setName(data.plan.name);
-    setLocalLayers(data.layers.map((l) => ({ id: l.id, name: l.name })));
+    setLocalLayers(data.layers.map((l) => ({ id: l.id, name: l.name, color: l.color ?? null, opacity_pct: l.opacity_pct ?? null, line_style: (l.line_style as "solid" | "dashed" | "dotted" | null) ?? null, line_width: l.line_width ?? null })));
     setLocalMilestones(data.milestones.map((m) => ({ id: m.id, layer_id: m.layer_id, target: m.target, date: m.date })));
   }, [data]);
 
@@ -112,7 +112,6 @@ export default function PlanDetailPage() {
 
   const memberCount = data.members.length;
   const doneCount = data.members.filter((m) => m.first_answer_date).length;
-  const remainingCount = memberCount - doneCount;
   const progressPct = memberCount > 0 ? Math.round((doneCount * 100) / memberCount) : 0;
 
   const multPct = Math.round(timeMultiplier * 100);
@@ -121,7 +120,7 @@ export default function PlanDetailPage() {
     dailyMinutes !== data.plan.daily_minutes ||
     multPct !== data.plan.time_multiplier_pct ||
     JSON.stringify(weekdayWeights) !== JSON.stringify(data.plan.weekday_weights);
-  const layersDirty = JSON.stringify(localLayers) !== JSON.stringify(data.layers.map((l) => ({ id: l.id, name: l.name })));
+  const layersDirty = JSON.stringify(localLayers) !== JSON.stringify(data.layers.map((l) => ({ id: l.id, name: l.name, color: l.color ?? null, opacity_pct: l.opacity_pct ?? null, line_style: (l.line_style as "solid" | "dashed" | "dotted" | null) ?? null, line_width: l.line_width ?? null })));
   const milestonesDirty = JSON.stringify(localMilestones) !== JSON.stringify(data.milestones.map((m) => ({ id: m.id, layer_id: m.layer_id, target: m.target, date: m.date })));
   const dirty = planDirty || layersDirty || milestonesDirty;
 
@@ -131,6 +130,7 @@ export default function PlanDetailPage() {
   );
   const milestoneAnchors = localMilestones.map((ms) => ({
     target: ms.target,
+    layer_id: ms.layer_id,
     problemId: orderedMembers[ms.target - 1]?.id ?? null,
   }));
 
@@ -197,7 +197,14 @@ export default function PlanDetailPage() {
     for (let i = 0; i < localLayers.length; i++) {
       const l = localLayers[i];
       if (isTmp(l.id)) {
-        const res = await createLayer.mutateAsync({ plan_id: planId, name: l.name, sort_order: i });
+        const res = await createLayer.mutateAsync({
+          plan_id: planId, name: l.name,
+          color: l.color ?? undefined,
+          opacity_pct: l.opacity_pct ?? undefined,
+          line_style: l.line_style ?? undefined,
+          line_width: l.line_width ?? undefined,
+          sort_order: i,
+        });
         layerIdMap.set(l.id, res.data.id);
       }
     }
@@ -208,8 +215,12 @@ export default function PlanDetailPage() {
       const orig = data.layers.find((o) => o.id === l.id);
       if (!orig) continue;
       const origOrder = data.layers.findIndex((o) => o.id === l.id);
-      const payload: { name?: string; sort_order?: number } = {};
+      const payload: { name?: string; color?: string | null; opacity_pct?: number | null; line_style?: "solid" | "dashed" | "dotted" | null; line_width?: number | null; sort_order?: number } = {};
       if (orig.name !== l.name) payload.name = l.name;
+      if ((orig.color ?? null) !== (l.color ?? null)) payload.color = l.color;
+      if ((orig.opacity_pct ?? null) !== (l.opacity_pct ?? null)) payload.opacity_pct = l.opacity_pct;
+      if ((orig.line_style ?? null) !== (l.line_style ?? null)) payload.line_style = l.line_style;
+      if ((orig.line_width ?? null) !== (l.line_width ?? null)) payload.line_width = l.line_width;
       if (origOrder !== i) payload.sort_order = i;
       if (Object.keys(payload).length > 0) {
         await updateLayer.mutateAsync({ id: l.id, payload });
@@ -245,7 +256,7 @@ export default function PlanDetailPage() {
     }
   }
   async function onArchive() {
-    if (!confirm("この目標をアーカイブしますか? (履歴は残ります)")) return;
+    if (!confirm("Archive this plan? (History will be preserved)")) return;
     await archive.mutateAsync(planId);
     navigate({ to: "/plans" as string });
   }
@@ -258,7 +269,7 @@ export default function PlanDetailPage() {
     <div className="p-4 md:p-6 space-y-4">
       <div className="flex items-start gap-4">
         <button onClick={() => navigate({ to: "/plans" as string })}
-          className="mt-1 text-muted-foreground hover:text-foreground transition-colors" title="一覧に戻る">
+          className="mt-1 text-muted-foreground hover:text-foreground transition-colors" title="Back to list">
           <ArrowLeft className="size-5"/>
         </button>
         <div className="flex-1 min-w-0 space-y-1">
@@ -272,42 +283,22 @@ export default function PlanDetailPage() {
               <div className="h-full bg-green-500 transition-all" style={{ width: `${progressPct}%` }}/>
             </div>
             <div className="text-xs text-muted-foreground tabular-nums whitespace-nowrap">
-              {doneCount} / {memberCount} ({progressPct}%)
+              {doneCount} / {memberCount} ({progressPct} %)
             </div>
+            {daysToDeadline != null && (
+              <span className={`text-[10px] tabular-nums px-1.5 py-0.5 rounded border whitespace-nowrap ${daysToDeadline < 30 ? "border-red-500/50 text-red-500" : "text-muted-foreground"}`}
+                title={`Deadline: ${lastMs?.date}`}>
+                D{daysToDeadline >= 0 ? `-${daysToDeadline}` : `+${Math.abs(daysToDeadline)}`}
+              </span>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-2">
           <Button size="sm" variant="ghost" onClick={onArchive}
-            className="text-muted-foreground hover:text-destructive" title="アーカイブ">
+            className="text-muted-foreground hover:text-destructive" title="Archive">
             <Archive className="size-3.5"/>
           </Button>
         </div>
-      </div>
-
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-        <SummaryCard label="今日" value={todayCount} unit="問" tone="primary"/>
-        <SummaryCard label="今週" value={weekCount} unit="問" tone="default"/>
-        <SummaryCard label="残" value={remainingCount} unit="問" tone="default"/>
-        <SummaryCard label="締切まで" value={daysToDeadline ?? "—"}
-          unit={daysToDeadline != null ? "日" : ""}
-          tone={daysToDeadline != null && daysToDeadline < 30 ? "warn" : "default"}
-          sub={lastMs?.date}/>
-      </div>
-
-      <div className="rounded-md border p-3 grid grid-cols-1 md:grid-cols-2 gap-6 items-end">
-        <div className="flex gap-3 max-w-md">
-          <div className="space-y-1 w-28">
-            <Label className="text-[10px] uppercase tracking-wide text-muted-foreground">1 日の枠 (分)</Label>
-            <Input type="number" min={1} value={dailyMinutes}
-              onChange={(e) => setDailyMinutes(Math.max(1, parseInt(e.target.value) || 1))}/>
-          </div>
-          <div className="space-y-1 w-24">
-            <Label className="text-[10px] uppercase tracking-wide text-muted-foreground">係数 (×)</Label>
-            <Input type="number" min={0.1} step={0.1} value={timeMultiplier}
-              onChange={(e) => setTimeMultiplier(Math.max(0.1, parseFloat(e.target.value) || 1))}/>
-          </div>
-        </div>
-        <WeekdayWeightsInput value={weekdayWeights} onChange={setWeekdayWeights} dailyMinutes={dailyMinutes}/>
       </div>
 
       <div className="rounded-md border p-3 space-y-2">
@@ -326,9 +317,9 @@ export default function PlanDetailPage() {
               </PopoverTrigger>
               <PopoverContent className="w-56 p-3 space-y-3" align="start">
                 <FilterToggleSection>
-                  <FilterToggle label="完了済みを隠す" checked={hideCompleted} onChange={setHideCompleted}/>
-                  <FilterToggle label="未着手を隠す" checked={hideFuture} onChange={setHideFuture}/>
-                  <FilterToggle label="溢れのみ" checked={overflowOnly} onChange={setOverflowOnly}/>
+                  <FilterToggle label="Hide completed" checked={hideCompleted} onChange={setHideCompleted}/>
+                  <FilterToggle label="Hide pending" checked={hideFuture} onChange={setHideFuture}/>
+                  <FilterToggle label="Overflow only" checked={overflowOnly} onChange={setOverflowOnly}/>
                 </FilterToggleSection>
                 {subjects.length > 0 && (
                   <FilterSection label="Subject" items={subjects.map((s) => ({ value: s.id, label: s.name }))}
@@ -348,7 +339,7 @@ export default function PlanDetailPage() {
                     onClick={() => {
                       setFilterSubjects(new Set()); setFilterLevels(new Set()); setFilterTopics(new Set());
                       setHideCompleted(false); setHideFuture(false); setOverflowOnly(false);
-                    }}>すべて解除</button>
+                    }}>Clear all</button>
                 )}
               </PopoverContent>
             </Popover>
@@ -362,16 +353,16 @@ export default function PlanDetailPage() {
                     setName(data.plan.name); setDailyMinutes(data.plan.daily_minutes);
                     setTimeMultiplier(data.plan.time_multiplier_pct / 100);
                     setWeekdayWeights(data.plan.weekday_weights);
-                    setLocalLayers(data.layers.map((l) => ({ id: l.id, name: l.name })));
+                    setLocalLayers(data.layers.map((l) => ({ id: l.id, name: l.name, color: l.color ?? null, opacity_pct: l.opacity_pct ?? null, line_style: (l.line_style as "solid" | "dashed" | "dotted" | null) ?? null, line_width: l.line_width ?? null })));
                     setLocalMilestones(data.milestones.map((m) => ({ id: m.id, layer_id: m.layer_id, target: m.target, date: m.date })));
                   }}
                   disabled={update.isPending}
                   className="inline-flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground disabled:opacity-50"
-                  title="編集を破棄"><RotateCcw className="size-3"/>Reset</button>
+                  title="Discard changes"><RotateCcw className="size-3"/>Reset</button>
                 <Button size="sm" onClick={onConfirm} disabled={update.isPending}
                   className="h-7 text-xs">
                   {update.isPending ? <Loader2 className="size-3 mr-1 animate-spin"/> : <Save className="size-3 mr-1"/>}
-                  {update.isPending ? "保存中..." : "確定"}
+                  {update.isPending ? "Saving..." : "Save"}
                 </Button>
               </>
             )}
@@ -385,8 +376,57 @@ export default function PlanDetailPage() {
         </div>
         <PlanChart
           ref={chartRef}
+          rightPanelExtra={
+            <div className="space-y-3 text-xs" style={{ width: 200 }}>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-0.5">
+                  <Label className="text-[9px] uppercase tracking-wide text-muted-foreground">Max (min)</Label>
+                  <Input type="number" min={1} value={dailyMinutes}
+                    onChange={(e) => setDailyMinutes(Math.max(1, parseInt(e.target.value) || 1))}
+                    className="h-7 text-xs tabular-nums text-center"/>
+                </div>
+                <div className="space-y-0.5">
+                  <Label className="text-[9px] uppercase tracking-wide text-muted-foreground">Mult ×</Label>
+                  <Input type="number" min={0.1} step={0.1} value={timeMultiplier}
+                    onChange={(e) => setTimeMultiplier(Math.max(0.1, parseFloat(e.target.value) || 1))}
+                    className="h-7 text-xs tabular-nums text-center"/>
+                </div>
+              </div>
+              <div className="flex items-baseline justify-between border-t pt-1">
+                <span className="text-[9px] uppercase tracking-wide text-muted-foreground">Weekly</span>
+                <span className="text-[11px] tabular-nums">{Math.round(weekdayWeights.reduce((s, w) => s + w * dailyMinutes, 0))} m</span>
+              </div>
+              <div>
+                <Label className="text-[9px] uppercase tracking-wide text-muted-foreground block mb-1">Rate</Label>
+                <div className="space-y-0.5">
+                  {(["Mon","Tue","Wed","Thu","Fri","Sat","Sun"] as const).map((d, idxInUi) => {
+                    // 表示は月始まり、index は実際の曜日 (Sun=0..Sat=6)
+                    const i = (idxInUi + 1) % 7;
+                    const dayColor = i === 0 ? "text-red-500" : i === 6 ? "text-blue-500" : "text-muted-foreground";
+                    const mins = Math.round(weekdayWeights[i] * dailyMinutes);
+                    return (
+                      <div key={i} className="flex items-center gap-2">
+                        <div className={`text-[10px] font-medium w-7 text-center ${dayColor}`}>{d}</div>
+                        <Input type="number" min={0} step={0.1} value={weekdayWeights[i]}
+                          onChange={(e) => {
+                            const v = Math.max(0, parseFloat(e.target.value) || 0);
+                            setWeekdayWeights((prev) => prev.map((w, idx) => idx === i ? v : w));
+                          }}
+                          className="h-6 flex-1 px-1 text-center text-[10px] tabular-nums"/>
+                        <span className="text-[9px] tabular-nums text-muted-foreground w-10 text-right">{mins} m</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          }
           items={visibleAllocated}
-          layers={localLayers}
+          layers={localLayers.map((l) => {
+            const ms = localMilestones.filter((m) => m.layer_id === l.id);
+            const maxTarget = ms.reduce((acc, m) => Math.max(acc, m.target), 0);
+            return { ...l, progress: maxTarget > 0 ? { done: Math.min(doneCount, maxTarget), total: maxTarget } : null };
+          })}
           milestones={localMilestones}
           today={today}
           selectedId={selectedId}
@@ -403,16 +443,20 @@ export default function PlanDetailPage() {
             setLocalMilestones((prev) => prev.map((m) => (m.id === id ? { ...m, target: newTarget } : m)))}
           onMilestoneRemove={(id) =>
             setLocalMilestones((prev) => prev.filter((m) => m.id !== id))}
-          onMilestoneAddToLayer={(layerId) =>
-            setLocalMilestones((prev) => [...prev, { id: tmpId(), layer_id: layerId, target: memberCount, date: centerDate() }])}
+          onMilestoneAddToLayer={(layerId, atDate) =>
+            setLocalMilestones((prev) => [...prev, { id: tmpId(), layer_id: layerId, target: memberCount, date: atDate ?? centerDate() }])}
           onLayerNameChange={(id, newName) =>
             setLocalLayers((prev) => prev.map((l) => (l.id === id ? { ...l, name: newName } : l)))}
+          onLayerColorChange={(id, newColor) =>
+            setLocalLayers((prev) => prev.map((l) => (l.id === id ? { ...l, color: newColor } : l)))}
+          onLayerStyleChange={(id, patch) =>
+            setLocalLayers((prev) => prev.map((l) => (l.id === id ? { ...l, ...patch } : l)))}
           onLayerRemove={(id) => {
             setLocalLayers((prev) => prev.filter((l) => l.id !== id));
             setLocalMilestones((prev) => prev.filter((m) => m.layer_id !== id));
           }}
           onAddLayer={() =>
-            setLocalLayers((prev) => [...prev, { id: tmpId(), name: "" }])}
+            setLocalLayers((prev) => [...prev, { id: tmpId(), name: "", color: null, opacity_pct: null, line_style: null, line_width: null }])}
           onReorderLayers={(ids) => {
             setLocalLayers((prev) => {
               const map = new Map(prev.map((l) => [l.id, l]));
@@ -420,6 +464,7 @@ export default function PlanDetailPage() {
             });
           }}
         />
+        <LegendRow hideCompleted={hideCompleted} hideFuture={hideFuture}/>
       </div>
 
       <ResizableTableShell ref={tableRef}>
@@ -471,7 +516,7 @@ export default function PlanDetailPage() {
                   <TableCell style={{ width: 70 }}>
                     {delta != null && (
                       <span className={`text-xs tabular-nums font-medium ${delta < 0 ? "text-green-600" : delta > 0 ? "text-red-500" : "text-muted-foreground"}`}
-                        title={`milestone ${anchor!.target}問 by ${anchorMs!.date} に対して${delta < 0 ? "早期" : delta > 0 ? "遅延" : "ぴったり"}`}>
+                        title={`Milestone #${anchor!.target} by ${anchorMs!.date}: ${delta < 0 ? "early" : delta > 0 ? "late" : "on time"}`}>
                         {delta > 0 ? `+${delta}d` : delta < 0 ? `${delta}d` : "0"}
                       </span>
                     )}
@@ -484,6 +529,19 @@ export default function PlanDetailPage() {
       </ResizableTableShell>
 
       {renderDialogs()}
+    </div>
+  );
+}
+
+function LegendRow({ hideCompleted, hideFuture }: { hideCompleted: boolean; hideFuture: boolean }) {
+  const pill = "inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border text-muted-foreground";
+  const dot = (cls: string) => <span className={`size-2 rounded-sm ${cls}`}/>;
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {!hideCompleted && <span className={pill}>{dot("bg-green-500")}Done</span>}
+      {!hideFuture && <span className={pill}>{dot("bg-blue-500")}Planned</span>}
+      <span className={pill}>{dot("bg-yellow-500")}Over budget</span>
+      <span className={pill}>{dot("bg-red-500")}Overflow</span>
     </div>
   );
 }

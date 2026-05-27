@@ -15,6 +15,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { rpc } from "@/lib/rpc-client";
 import { useProject } from "@/hooks/use-project";
+import { useFilterPrefs, useSaveFilterPrefs } from "@/hooks/queries/use-filter-prefs";
 import { usePageTitle } from "@/lib/page-context";
 import { OpaqueTag } from "@/components/problem-card";
 import { useProblemDialogs } from "@/hooks/use-problem-dialogs";
@@ -642,6 +643,33 @@ export default function SchedulePage() {
   const [filterSubjects, setFilterSubjects] = useState<Set<string>>(new Set());
   const [filterLevels, setFilterLevels] = useState<Set<string>>(new Set());
   const [filterStatuses, setFilterStatuses] = useState<Set<string>>(new Set());
+  // DB 永続化
+  const filterPrefsQuery = useFilterPrefs(currentProject?.id);
+  const saveFilterPrefs = useSaveFilterPrefs(currentProject?.id);
+  const prefsLoadedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!currentProject || prefsLoadedRef.current === currentProject.id) return;
+    const data = filterPrefsQuery.data?.schedule;
+    if (data) {
+      setFilterSubjects(new Set(data.subjectIds ?? []));
+      setFilterLevels(new Set(data.levelIds ?? []));
+      setFilterStatuses(new Set(data.statuses ?? []));
+    }
+    prefsLoadedRef.current = currentProject.id;
+  }, [filterPrefsQuery.data, currentProject]);
+  // 変更時に save (debounce 不要、変化が低頻度)
+  useEffect(() => {
+    if (!currentProject || prefsLoadedRef.current !== currentProject.id) return;
+    saveFilterPrefs.mutate({
+      ...(filterPrefsQuery.data ?? {}),
+      schedule: {
+        subjectIds: [...filterSubjects],
+        levelIds: [...filterLevels],
+        statuses: [...filterStatuses],
+      },
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filterSubjects, filterLevels, filterStatuses]);
 
   const now = useMemo(() => new Date(), []);
   const todayStr = useMemo(() => toJSTDateString(now), [now]);
@@ -695,6 +723,7 @@ export default function SchedulePage() {
 
   const baseFilteredRows = useMemo(() => {
     return rows.filter((r) => {
+      if (r.reviewCount === 0) return false;  // 未回答問題はテーブル/チャート両方から除外
       if (filterSubjects.size > 0 && (!r.subjectId || !filterSubjects.has(r.subjectId))) return false;
       if (filterLevels.size > 0 && (!r.levelId || !filterLevels.has(r.levelId))) return false;
       if (filterStatuses.size > 0 && !filterStatuses.has(r.lastStatus)) return false;

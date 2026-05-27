@@ -36,12 +36,20 @@ export type PlanUpdateInput = z.infer<typeof planUpdateInputSchema>;
 export const layerCreateInputSchema = z.object({
   plan_id: z.string().uuid(),
   name: z.string().default(""),
+  color: z.string().nullish(),
+  opacity_pct: z.number().int().min(0).max(100).nullish(),
+  line_style: z.enum(["solid", "dashed", "dotted"]).nullish(),
+  line_width: z.number().int().min(1).max(10).nullish(),
   sort_order: z.number().int().nonnegative().default(0),
 });
 export type LayerCreateInput = z.infer<typeof layerCreateInputSchema>;
 
 export const layerUpdateInputSchema = z.object({
   name: z.string().optional(),
+  color: z.string().nullish(),
+  opacity_pct: z.number().int().min(0).max(100).nullish(),
+  line_style: z.enum(["solid", "dashed", "dotted"]).nullish(),
+  line_width: z.number().int().min(1).max(10).nullish(),
   sort_order: z.number().int().nonnegative().optional(),
 });
 export type LayerUpdateInput = z.infer<typeof layerUpdateInputSchema>;
@@ -62,6 +70,18 @@ export const milestoneCreateInputSchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "expected YYYY-MM-DD"),
 });
 export type MilestoneCreateInput = z.infer<typeof milestoneCreateInputSchema>;
+
+/* ── Plan View Pref (UI フィルタ、mutable) ───────────────────── */
+
+export const planViewPrefSchema = z.object({
+  hideCompleted: z.boolean().optional(),
+  hideFuture: z.boolean().optional(),
+  overflowOnly: z.boolean().optional(),
+  subjectIds: z.array(z.string()).optional(),
+  levelIds: z.array(z.string()).optional(),
+  topicIds: z.array(z.string()).optional(),
+});
+export type PlanViewPrefInput = z.infer<typeof planViewPrefSchema>;
 
 export const milestoneUpdateInputSchema = z.object({
   layer_id: z.string().uuid().optional(),

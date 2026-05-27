@@ -397,6 +397,10 @@ export const planLayer = pgTable("plan_layer", {
   revision: integer("revision").notNull(),
   planId: uuid("plan_id").notNull(),  // plan.id 論理参照 (FK 貼れないので index のみ)
   name: text("name").notNull().default(""),
+  color: text("color"),  // ピン・縦線・count に使う色 (null なら既定オレンジ)
+  opacityPct: integer("opacity_pct"),  // 0-100。null は既定 40
+  lineStyle: text("line_style"),  // "solid" | "dashed" | "dotted" (null なら既定 solid)
+  lineWidth: integer("line_width"),  // 縦線の太さ px (null は既定 1.5)
   sortOrder: integer("sort_order").notNull().default(0),
   isActive: boolean("is_active").notNull().default(true),
   validFrom: timestamp("valid_from", { withTimezone: true }).notNull().defaultNow(),
@@ -411,6 +415,16 @@ export const planLayer = pgTable("plan_layer", {
 // =============================================================================
 // 26. PlanMilestone (bitemporal append-only)
 // =============================================================================
+
+/**
+ * Plan の表示フィルタ (UI 状態、bitemporal なし、即時更新)。
+ * filter は { hideCompleted, hideFuture, overflowOnly, subjectIds[], levelIds[], topicIds[] } 等の任意 JSON。
+ */
+export const planViewPref = pgTable("plan_view_pref", {
+  planId: uuid("plan_id").primaryKey(),
+  filter: jsonb("filter").$type<Record<string, unknown>>().notNull().default({}),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
 
 export const planMilestone = pgTable("plan_milestone", {
   id: uuid("id").notNull(),

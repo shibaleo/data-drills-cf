@@ -14,6 +14,7 @@ import {
   milestoneUpdateInputSchema,
 } from "@/lib/schemas/plan";
 import { projectIdQuerySchema } from "@/lib/schemas/common";
+import { allocate, type MemberInput, type Milestone as AMilestone } from "@/lib/plan-allocate";
 
 /* ── helpers ──────────────────────────────────────────────────── */
 
@@ -97,6 +98,10 @@ function layerToApi(row: typeof planLayer.$inferSelect) {
     revision: row.revision,
     plan_id: row.planId,
     name: row.name,
+    color: row.color,
+    opacity_pct: row.opacityPct,
+    line_style: row.lineStyle,
+    line_width: row.lineWidth,
     sort_order: row.sortOrder,
     is_active: row.isActive,
     valid_from: (row.validFrom as Date | string).toString(),
@@ -142,6 +147,37 @@ const app = new Hono()
       filter: body.filter,
     }).returning();
     return c.json({ data: planToApi(row) }, 201);
+  })
+  /**
+   * GET /today-count — プロジェクト内の全 active plan を allocate して、今日 (= server の今日)
+   * に予定されている未解問題の合計件数を返す。サイドバー badge 用。
+   */
+  .get("/today-count", zValidator("query", projectIdQuerySchema), async (c) => {
+    const { project_id: projectId } = c.req.valid("query");
+    const today = new Date().toISOString().slice(0, 10);
+    const plans = await db.select().from(plan)
+      .where(and(eq(plan.projectId, projectId), isNull(plan.validTo), eq(plan.isActive, true)));
+    let total = 0;
+    for (const p of plans) {
+      const members = await fetchMembers(p.projectId, p.filter);
+      if (members.length === 0) continue;
+      const firstAnswers = await fetchFirstAnswers(members.map((m) => m.id));
+      const memberInputs: MemberInput[] = members.map((m) => ({
+        id: m.id, code: m.code, name: m.name,
+        standardTimeSec: m.standardTime, firstAnswerDate: firstAnswers.get(m.id) ?? null,
+      }));
+      const msList = await db.select().from(planMilestone)
+        .where(and(eq(planMilestone.planId, p.id), isNull(planMilestone.validTo), eq(planMilestone.isActive, true)));
+      const milestones: AMilestone[] = msList.map((m) => ({
+        target: m.target,
+        date: typeof m.date === "string" ? m.date : (m.date as Date).toISOString().slice(0, 10),
+        id: m.id,
+        layer_id: m.layerId,
+      }));
+      const allocated = allocate(memberInputs, milestones, p.dailyMinutes, today, p.timeMultiplierPct, p.weekdayWeights);
+      total += allocated.filter((a) => a.side === "future" && a.date === today).length;
+    }
+    return c.json({ data: { count: total } });
   })
   .get("/:id", async (c) => {
     const planId = c.req.param("id");
@@ -230,7 +266,12 @@ const app = new Hono()
     const body = c.req.valid("json");
     const id = randomUUID();
     const [row] = await db.insert(planLayer).values({
-      id, revision: 1, planId: body.plan_id, name: body.name, sortOrder: body.sort_order,
+      id, revision: 1, planId: body.plan_id, name: body.name,
+      color: body.color ?? null,
+      opacityPct: body.opacity_pct ?? null,
+      lineStyle: body.line_style ?? null,
+      lineWidth: body.line_width ?? null,
+      sortOrder: body.sort_order,
     }).returning();
     return c.json({ data: layerToApi(row) }, 201);
   })
@@ -245,6 +286,10 @@ const app = new Hono()
       const [row] = await tx.insert(planLayer).values({
         id, revision: current.revision + 1, planId: current.planId,
         name: body.name ?? current.name,
+        color: body.color !== undefined ? body.color : current.color,
+        opacityPct: body.opacity_pct !== undefined ? body.opacity_pct : current.opacityPct,
+        lineStyle: body.line_style !== undefined ? body.line_style : current.lineStyle,
+        lineWidth: body.line_width !== undefined ? body.line_width : current.lineWidth,
         sortOrder: body.sort_order ?? current.sortOrder,
         isActive: current.isActive,
       }).returning();
@@ -261,7 +306,9 @@ const app = new Hono()
         .where(and(eq(planLayer.id, id), eq(planLayer.revision, current.revision)));
       const [row] = await tx.insert(planLayer).values({
         id, revision: current.revision + 1, planId: current.planId,
-        name: current.name, sortOrder: current.sortOrder, isActive: false,
+        name: current.name, color: current.color,
+        opacityPct: current.opacityPct, lineStyle: current.lineStyle, lineWidth: current.lineWidth,
+        sortOrder: current.sortOrder, isActive: false,
       }).returning();
       return row;
     });
@@ -284,7 +331,9 @@ const app = new Hono()
           .where(and(eq(planLayer.id, lid), eq(planLayer.revision, cur.revision)));
         const [row] = await tx.insert(planLayer).values({
           id: lid, revision: cur.revision + 1, planId: cur.planId,
-          name: cur.name, sortOrder: i, isActive: cur.isActive,
+          name: cur.name, color: cur.color,
+          opacityPct: cur.opacityPct, lineStyle: cur.lineStyle, lineWidth: cur.lineWidth,
+          sortOrder: i, isActive: cur.isActive,
         }).returning();
         out.push(row);
       }

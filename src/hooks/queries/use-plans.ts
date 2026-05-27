@@ -22,6 +22,17 @@ export const plansKeys = {
   detail: (planId: string) => [...plansKeys.all, "detail", planId] as const,
 };
 
+export function usePlanTodayCount(projectId: string | undefined) {
+  return useQuery({
+    queryKey: projectId ? [...plansKeys.all, "today-count", projectId] : plansKeys.all,
+    queryFn: async () => {
+      const json = await unwrap(rpc.api.v1.plans["today-count"].$get({ query: { project_id: projectId! } }));
+      return json.data.count;
+    },
+    enabled: !!projectId,
+  });
+}
+
 export function usePlansList(projectId: string | undefined) {
   return useQuery({
     queryKey: projectId ? plansKeys.list(projectId) : plansKeys.all,

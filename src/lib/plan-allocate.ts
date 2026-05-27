@@ -112,7 +112,13 @@ export function allocate(
   }
 
   // milestones を date 昇順に
-  const milestones = [...milestonesIn].sort((a, b) => a.date.localeCompare(b.date));
+  // 同じ date に複数 milestone がある場合は max target だけを採用 (= layer 優先順位なし、最大値が勝つ)
+  const byDate = new Map<string, Milestone>();
+  for (const m of milestonesIn) {
+    const prev = byDate.get(m.date);
+    if (!prev || m.target > prev.target) byDate.set(m.date, m);
+  }
+  const milestones = [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date));
 
   let futureCursor = 0;  // future 配列のどこまで配分済か
   let segmentStart = today;  // 次セグメントの開始日 (= 前 milestone の翌日 or today)
@@ -123,7 +129,9 @@ export function allocate(
     const take = Math.min(future.length, needTotal) - futureCursor;
     if (take <= 0) {
       // 既に十分配分済 or 過去だけで達成済
-      segmentStart = addDays(maxDate(ms.date, segmentStart), 1);
+      // segmentStart は「ms 日付 +1」と現状の大きい方。過去 ms (ms.date < today) を skip しても
+      // segmentStart は today から動かない (前進累積バグ回避)
+      segmentStart = maxDate(addDays(ms.date, 1), segmentStart);
       continue;
     }
     const segment = future.slice(futureCursor, futureCursor + take);
@@ -140,23 +148,10 @@ export function allocate(
       continue;
     }
 
-    // セグメント期間の容量 = 各日の (daily × 曜日ウェイト) の合計
-    let capacitySec = 0;
-    {
-      let d = segmentStart;
-      while (d <= periodEnd) { capacitySec += dailySecOn(d); d = addDays(d, 1); }
-    }
-    const totalSec = segment.reduce((s, p) => s + (p.standardTimeSec ?? DEFAULT_SEC), 0);
-
-    if (totalSec > capacitySec) {
-      // 全部 milestone 日に pile-up (= 非現実的計画の可視化)
-      for (const p of segment) {
-        result.push(toAlloc(p, periodEnd, true));
-      }
-    } else {
-      // 余裕がある分は前から詰める greedy。末尾は空になり、milestone を動かしても密度は変わらない (= 前倒し前提)
-      greedyFill(segment, segmentStart, periodEnd, dailySecOn, result);
-    }
+    // greedyFill は periodEnd を超えた問題を milestone 日に自動 pile してくれるので、
+    // 容量超過の有無に関わらず常に greedyFill を呼ぶ。
+    // 結果: capacity に入る分は前から詰まり、入りきらなかった分だけ milestone 日に pile-up。
+    greedyFill(segment, segmentStart, periodEnd, dailySecOn, result);
     segmentStart = addDays(periodEnd, 1);
   }
 
