@@ -2,8 +2,30 @@
  * Plan 用 Tetris チャート。
  * milestone 縦線にドラッグハンドルを付けて、線そのものを動かして日付を変更できる。
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import { Hash, CalendarDays, Trash2 } from "lucide-react";
 import type { AllocatedProblem, Milestone } from "@/lib/plan-allocate";
+
+export type PlanChartHandle = {
+  /** スクロール領域の現在の中央に対応する日付 (YYYY-MM-DD) を返す。 */
+  getCenterDate(): string;
+};
+
+type PlanChartProps = {
+  items: AllocatedProblem[];
+  milestones: Milestone[];
+  today: string;
+  selectedId?: string | null;
+  onSelect?: (problemId: string) => void;
+  onOpen?: (problemId: string) => void;
+  onMilestoneDateChange?: (index: number, newDate: string) => void;
+  onMilestoneCountChange?: (index: number, newCount: number) => void;
+  onMilestoneNameChange?: (index: number, newName: string) => void;
+  onMilestoneAddToTrack?: (index: number) => void;
+  onMilestoneRemove?: (index: number) => void;
+  showMilestonePins?: boolean;
+  milestoneAnchors?: { count: number; problemId: string | null }[];
+};
 
 const CELL = 14;
 const GAP = 2;
@@ -14,13 +36,22 @@ const COLOR_FUTURE = "#3b82f6";
 const COLOR_OVERFLOW = "#ef4444";
 const MS_COLOR = "#f59e0b";
 
+/** 1〜50 を ①②… に変換。50 を超えたら "(N)" 表記。 */
+function circledNumber(n: number): string {
+  if (n <= 0) return "";
+  if (n <= 20) return String.fromCodePoint(0x2460 + (n - 1));  // ① = U+2460
+  if (n <= 35) return String.fromCodePoint(0x3251 + (n - 21)); // ㉑ = U+3251
+  if (n <= 50) return String.fromCodePoint(0x32B1 + (n - 36)); // ㊱ = U+32B1
+  return `(${n})`;
+}
+
 function addDays(dateStr: string, days: number): string {
   const d = new Date(`${dateStr}T00:00:00Z`);
   d.setUTCDate(d.getUTCDate() + days);
   return d.toISOString().slice(0, 10);
 }
 
-export function PlanChart({
+export const PlanChart = forwardRef<PlanChartHandle, PlanChartProps>(function PlanChartImpl({
   items,
   milestones,
   today,
@@ -30,40 +61,28 @@ export function PlanChart({
   onMilestoneDateChange,
   onMilestoneCountChange,
   onMilestoneNameChange,
-  onMilestoneAddChild,
+  onMilestoneAddToTrack,
   onMilestoneRemove,
   showMilestonePins,
   milestoneAnchors,
-}: {
-  items: AllocatedProblem[];
-  milestones: Milestone[];
-  today: string;
-  selectedId?: string | null;
-  onSelect?: (problemId: string) => void;
-  onOpen?: (problemId: string) => void;
-  /** milestone のドラッグハンドルを動かした時のコールバック。index は milestones 配列のインデックス。 */
-  onMilestoneDateChange?: (index: number, newDate: string) => void;
-  onMilestoneCountChange?: (index: number, newCount: number) => void;
-  onMilestoneNameChange?: (index: number, newName: string) => void;
-  onMilestoneAddChild?: (index: number) => void;
-  onMilestoneRemove?: (index: number) => void;
-  /** milestone ピン (count ラベル + 円ハンドル) を描画するか。false の時も縦線と横トラック線は出す。 */
-  showMilestonePins?: boolean;
-  /** 各 milestone の「実際に N 問目に相当する problem」をハイライトするためのアンカー */
-  milestoneAnchors?: { count: number; problemId: string | null }[];
-}) {
+}: PlanChartProps, ref) {
   const _showPins = showMilestonePins ?? true;
   const scrollRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const draggingRef = useRef<number | null>(null);
+  const dragMovedRef = useRef(false);
   // pin の右クリックメニュー
-  const [menu, setMenu] = useState<{ index: number; x: number; y: number; mode: "menu" | "date" | "count" } | null>(null);
+  const [menu, setMenu] = useState<{ index: number; x: number; y: number } | null>(null);
   useEffect(() => {
     if (!menu) return;
     const close = () => setMenu(null);
-    window.addEventListener("click", close);
-    window.addEventListener("scroll", close, true);
+    // メニューを開いた直後の click イベントが伝播して即閉じるのを防ぐため遅延登録
+    const t = setTimeout(() => {
+      window.addEventListener("click", close);
+      window.addEventListener("scroll", close, true);
+    }, 0);
     return () => {
+      clearTimeout(t);
       window.removeEventListener("click", close);
       window.removeEventListener("scroll", close, true);
     };
@@ -105,6 +124,16 @@ export function PlanChart({
     const todayX = todayIdx * STEP;
     scrollRef.current.scrollLeft = todayX - scrollRef.current.clientWidth / 3;
   }, [todayIdx]);
+
+  useImperativeHandle(ref, () => ({
+    getCenterDate() {
+      const container = scrollRef.current;
+      if (!container || dates.length === 0) return today;
+      const centerX = container.scrollLeft + container.clientWidth / 2;
+      const colIdx = Math.max(0, Math.min(dates.length - 1, Math.round(centerX / STEP)));
+      return dates[colIdx];
+    },
+  }), [dates, today]);
 
   const MIN_ROWS = 10;
   const maxCount = Math.max(0, ...dates.map((d) => (grouped.get(d) ?? []).length));
@@ -181,27 +210,36 @@ export function PlanChart({
     e.preventDefault();
     e.stopPropagation();
     draggingRef.current = i;
+    dragMovedRef.current = false;
     (e.target as Element).setPointerCapture(e.pointerId);
-    onMilestoneDateChange(i, clientXToDate(e.clientX));
+    // 即時 date 変更はしない (click とドラッグを区別するため)
   };
   const onPinMove = (i: number) => (e: React.PointerEvent<SVGCircleElement>) => {
     if (draggingRef.current !== i) return;
+    dragMovedRef.current = true;
     onMilestoneDateChange?.(i, clientXToDate(e.clientX));
-    // ドラッグ中、ピンがスクロール領域の端に近づいたら自動スクロール
+    // カーソルがスクロール領域を「はみ出した」時だけ追従させる
+    // (端の近くで止まれない問題を避けるため、領域内では発動しない)
     const container = scrollRef.current;
     if (!container) return;
     const rect = container.getBoundingClientRect();
-    const edge = 60;  // 端から 60px 以内で auto-scroll 発動
-    const speed = 16;
-    if (e.clientX < rect.left + edge) {
+    const speed = 24;
+    if (e.clientX < rect.left) {
       container.scrollLeft -= speed;
-    } else if (e.clientX > rect.right - edge) {
+    } else if (e.clientX > rect.right) {
       container.scrollLeft += speed;
     }
   };
   const onPinUp = (i: number) => (e: React.PointerEvent<SVGCircleElement>) => {
-    if (draggingRef.current === i) draggingRef.current = null;
+    const wasDragging = draggingRef.current === i;
+    if (wasDragging) draggingRef.current = null;
     try { (e.target as Element).releasePointerCapture(e.pointerId); } catch { /* ignore */ }
+    // 左クリック (ドラッグ移動なし) でメニューを開く
+    if (wasDragging && !dragMovedRef.current && e.button === 0) {
+      e.preventDefault();
+      e.stopPropagation();
+      setMenu({ index: i, x: e.clientX, y: e.clientY });
+    }
   };
 
   return (
@@ -212,6 +250,16 @@ export function PlanChart({
             y={chartHeight - BOTTOM_AXIS_H - n * STEP + CELL / 2}
             textAnchor="end" dominantBaseline="central"
             className="fill-muted-foreground" fontSize={9}>{n}</text>
+        ))}
+        {/* トラック番号 (①②…) を track 線の左に表示 */}
+        {_showPins && tracks.map((_t, trackIdx) => (
+          <text key={`tn-${trackIdx}`}
+            x={Y_AXIS_W - 2}
+            y={MS_TOP_PAD + trackIdx * ROW_H + ROW_H / 2}
+            textAnchor="end" dominantBaseline="central"
+            className="fill-muted-foreground" fontSize={11}>
+            {circledNumber(trackIdx + 1)}
+          </text>
         ))}
       </svg>
       <div ref={scrollRef} className="overflow-x-auto pb-2 flex-1 min-w-0">
@@ -314,13 +362,12 @@ export function PlanChart({
           {/* milestone 横トラック線 (track 単位、同じ parent_id を共有する pin が同じ y に並ぶ) */}
           {_showPins && tracks.map((t, trackIdx) => {
             const y = MS_TOP_PAD + trackIdx * ROW_H + ROW_H / 2;
-            const opacity = Math.max(0.2, 0.7 - t.depth * 0.15);
             return (
               <line key={`track-${trackIdx}`}
-                x1={t.depth * 8} y1={y} x2={chartWidth} y2={y}
+                x1={0} y1={y} x2={chartWidth} y2={y}
                 stroke="hsl(var(--border))"
-                strokeWidth={Math.max(1, 2 - t.depth * 0.5)}
-                opacity={opacity}
+                strokeWidth={2}
+                opacity={0.7}
                 strokeLinecap="round"/>
             );
           })}
@@ -330,13 +377,12 @@ export function PlanChart({
             const colIdx = idx >= 0 ? idx : Math.max(0, Math.round((new Date(`${ms.date}T00:00:00Z`).getTime() - new Date(`${dates[0]}T00:00:00Z`).getTime()) / 86400000));
             const cx = colIdx * STEP + CELL / 2;
             const trackIdx = trackIndexByOrigIndex.get(i) ?? 0;
-            const depth = tracks[trackIdx]?.depth ?? 0;
+            void trackIdx;
             const rowY = msYByIndex.get(i) ?? MS_TOP_PAD;
-            const pinR = Math.max(3.6, 8.1 - depth * 1.35);  // 10% small
-            const strokeW = Math.max(0.8, 1.5 - depth * 0.3);
-            // 縦線は depth に応じて細く / 透明度を下げる
-            const vLineOpacity = Math.max(0.2, 0.6 - depth * 0.1);
-            const vLineW = Math.max(0.8, 1.5 - depth * 0.3);
+            const pinR = 8.1;
+            const strokeW = 2;
+            const vLineOpacity = 0.6;
+            const vLineW = 1.5;
             return (
               <g key={`ms-${i}`}>
                 <line x1={cx} y1={rowY} x2={cx} y2={chartHeight - BOTTOM_AXIS_H}
@@ -351,15 +397,16 @@ export function PlanChart({
                     onPointerUp={onPinUp(i)}
                     onPointerCancel={onPinUp(i)}
                     onContextMenu={(e) => {
+                      // 右クリックでもメニューを開く (左クリックと同じ挙動)
                       e.preventDefault();
                       e.stopPropagation();
-                      setMenu({ index: i, x: e.clientX, y: e.clientY, mode: "menu" });
+                      setMenu({ index: i, x: e.clientX, y: e.clientY });
                     }}
                   />
                 )}
                 {/* count: 縦線の真下、ボトムブロックと相対日付軸の間に */}
                 <text x={cx} y={chartHeight - BOTTOM_AXIS_H + 12} textAnchor="middle"
-                  fontSize={10 - Math.min(2, depth)} fontWeight={700} fill={MS_COLOR}
+                  fontSize={10} fontWeight={700} fill={MS_COLOR}
                   opacity={vLineOpacity + 0.2}
                   className="pointer-events-none select-none">
                   {ms.count}
@@ -369,73 +416,61 @@ export function PlanChart({
           })}
         </svg>
       </div>
-      {/* 右クリックメニュー (削除・日付指定) */}
-      {menu && (
-        <div
-          className="fixed z-50 rounded-md border bg-popover text-popover-foreground shadow-md p-1 text-xs"
-          style={{ top: menu.y, left: menu.x }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          {menu.mode === "menu" && (
-            <div className="flex flex-col min-w-[140px]">
-              <button type="button"
-                className="text-left px-2 py-1 rounded hover:bg-accent"
-                onClick={() => setMenu({ ...menu, mode: "count" })}>
-                件数指定…
-              </button>
-              <button type="button"
-                className="text-left px-2 py-1 rounded hover:bg-accent"
-                onClick={() => setMenu({ ...menu, mode: "date" })}>
-                日付指定…
-              </button>
-              <button type="button"
-                className="text-left px-2 py-1 rounded hover:bg-destructive hover:text-destructive-foreground text-destructive"
-                onClick={() => {
-                  onMilestoneRemove?.(menu.index);
-                  setMenu(null);
-                }}>
-                削除
-              </button>
-            </div>
-          )}
-          {menu.mode === "count" && (
-            <div className="flex items-center gap-2 p-1">
+      {/* マイルストーン編集メニュー (左クリック / 右クリックで開く) */}
+      {menu && (() => {
+        const m = milestones[menu.index];
+        if (!m) return null;
+        return (
+          <div
+            className="fixed z-50 rounded-md border bg-popover text-popover-foreground shadow-md p-1.5 text-xs space-y-1"
+            style={{ top: menu.y, left: menu.x }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-2 px-1">
+              <Hash className="size-3.5 text-muted-foreground"/>
               <input
                 type="number"
                 min={0}
-                defaultValue={milestones[menu.index]?.count}
+                defaultValue={m.count}
+                key={`count-${m.id}-${m.count}`}
                 className="h-7 w-20 px-1 text-xs border rounded bg-background tabular-nums"
-                autoFocus
+                onBlur={(e) => {
+                  const n = parseInt(e.target.value, 10);
+                  if (Number.isFinite(n) && n >= 0 && n !== m.count) onMilestoneCountChange?.(menu.index, n);
+                }}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    const n = parseInt((e.target as HTMLInputElement).value, 10);
-                    if (!Number.isFinite(n) || n < 0) return;
-                    onMilestoneCountChange?.(menu.index, n);
-                    setMenu(null);
+                  if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                  if (e.key === "Escape") setMenu(null);
+                }}
+              />
+              <span className="text-[10px] text-muted-foreground">問</span>
+            </div>
+            <div className="flex items-center gap-2 px-1">
+              <CalendarDays className="size-3.5 text-muted-foreground"/>
+              <input
+                type="date"
+                defaultValue={m.date}
+                key={`date-${m.id}-${m.date}`}
+                className="h-7 px-1 text-xs border rounded bg-background"
+                onChange={(e) => {
+                  if (e.target.value && e.target.value !== m.date) {
+                    onMilestoneDateChange?.(menu.index, e.target.value);
                   }
                 }}
               />
-              <span className="text-[10px] text-muted-foreground">問 (Enter で確定)</span>
             </div>
-          )}
-          {menu.mode === "date" && (
-            <div className="flex items-center gap-2 p-1">
-              <input
-                type="date"
-                defaultValue={milestones[menu.index]?.date}
-                className="h-7 px-1 text-xs border rounded bg-background"
-                onChange={(e) => {
-                  const newDate = e.target.value;
-                  if (!newDate) return;
-                  onMilestoneDateChange?.(menu.index, newDate);
-                  setMenu(null);
-                }}
-                autoFocus
-              />
-            </div>
-          )}
-        </div>
-      )}
+            <button type="button"
+              className="w-full flex items-center gap-2 px-1 py-1 rounded text-destructive hover:bg-destructive hover:text-destructive-foreground"
+              onClick={() => {
+                onMilestoneRemove?.(menu.index);
+                setMenu(null);
+              }}>
+              <Trash2 className="size-3.5"/>
+              <span>削除</span>
+            </button>
+          </div>
+        );
+      })()}
       {/* 右側: track 名 + 同じトラックに milestone を追加するアイコン (ピン表示時のみ) */}
       {_showPins && tracks.length > 0 && (
         <div className="shrink-0 pl-2" style={{ width: 180 }}>
@@ -447,7 +482,17 @@ export function PlanChart({
             return (
               <div key={`track-name-${trackIdx}`}
                 className="flex items-center gap-1"
-                style={{ height: ROW_H, paddingLeft: t.depth * 10 }}>
+                style={{ height: ROW_H }}>
+                {onMilestoneAddToTrack && lead && (
+                  <button type="button"
+                    className="text-muted-foreground hover:text-foreground p-0.5"
+                    onClick={() => onMilestoneAddToTrack(lead.origIndex)}
+                    title="このトラックにマイルストーンを追加 (同じ親)">
+                    <svg viewBox="0 0 24 24" className="size-3" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M12 5v14M5 12h14"/>
+                    </svg>
+                  </button>
+                )}
                 <input
                   type="text"
                   value={lead?.m.name ?? ""}
@@ -456,16 +501,6 @@ export function PlanChart({
                   className="flex-1 min-w-0 h-5 px-1 text-[10px] bg-transparent border-0 border-b border-transparent hover:border-border focus:border-foreground focus:outline-none"
                   title={label}
                 />
-                {onMilestoneAddChild && lead && (
-                  <button type="button"
-                    className="text-muted-foreground hover:text-foreground p-0.5"
-                    onClick={() => onMilestoneAddChild(lead.origIndex)}
-                    title="このトラックにマイルストーンを追加 (同じ親)">
-                    <svg viewBox="0 0 24 24" className="size-3" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M12 5v14M5 12h14"/>
-                    </svg>
-                  </button>
-                )}
               </div>
             );
           })}
@@ -473,4 +508,4 @@ export function PlanChart({
       )}
     </div>
   );
-}
+});

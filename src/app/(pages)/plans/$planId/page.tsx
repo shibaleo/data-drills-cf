@@ -8,7 +8,7 @@ import { useProblemDialogs } from "@/hooks/use-problem-dialogs";
 import { useQueryClient } from "@tanstack/react-query";
 import { plansKeys } from "@/hooks/queries/use-plans";
 import { problemsKeys } from "@/hooks/queries/use-problems";
-import { PlanChart } from "@/components/plan-chart";
+import { PlanChart, type PlanChartHandle } from "@/components/plan-chart";
 import { allocate, type MemberInput } from "@/lib/plan-allocate";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -52,6 +52,7 @@ export default function PlanDetailPage() {
   const qc = useQueryClient();
   const allProblems = useProblemsList(currentProject?.id).data ?? [];
   const tableRef = useRef<HTMLDivElement>(null);
+  const chartRef = useRef<PlanChartHandle>(null);
   const handleDataChanged = useCallback(() => {
     if (currentProject) {
       qc.invalidateQueries({ queryKey: plansKeys.detail(planId) });
@@ -172,9 +173,12 @@ export default function PlanDetailPage() {
   function newId(): string {
     return (crypto as Crypto & { randomUUID(): string }).randomUUID();
   }
+  function centerDate(): string {
+    return chartRef.current?.getCenterDate() ?? today;
+  }
   function addRootMilestone() {
     // 空なら「開始 (count=0, today) + 最終 (count=memberCount, today+90日)」をシード。
-    // 既にある場合は単一 root を末尾に追加。
+    // 既にある場合は最も遅い root milestone の「子」として新トラックを生やす。
     if (milestones.length === 0) {
       const end = new Date(`${today}T00:00:00Z`);
       end.setUTCDate(end.getUTCDate() + 90);
@@ -185,18 +189,25 @@ export default function PlanDetailPage() {
       ]);
       return;
     }
-    setMilestones([...milestones, { id: newId(), parent_id: null, count: memberCount, date: today }]);
+    const roots = milestones.filter((m) => !m.parent_id);
+    const parent = (roots.length > 0 ? roots : milestones).reduce((a, b) => (a.date >= b.date ? a : b));
+    setMilestones([...milestones, {
+      id: newId(),
+      parent_id: parent.id,
+      count: Math.max(1, Math.floor(parent.count / 2)),
+      date: centerDate(),
+    }]);
   }
   function addChildMilestone(parentIdx: number) {
     const parent = milestones[parentIdx];
     if (!parent) return;
-    setMilestones([...milestones, { id: newId(), parent_id: parent.id, count: Math.max(1, Math.floor(parent.count / 2)), date: parent.date }]);
+    setMilestones([...milestones, { id: newId(), parent_id: parent.id, count: Math.max(1, Math.floor(parent.count / 2)), date: centerDate() }]);
   }
   /** sibling = 同じ parent を持つ milestone を追加 (= 同じトラック上の新エントリ)。 */
   function addSiblingMilestone(idx: number) {
     const ref = milestones[idx];
     if (!ref) return;
-    setMilestones([...milestones, { id: newId(), parent_id: ref.parent_id, count: ref.count, date: ref.date }]);
+    setMilestones([...milestones, { id: newId(), parent_id: ref.parent_id, count: ref.count, date: centerDate() }]);
   }
   function updateMilestone(i: number, patch: Partial<MilestoneInput>) {
     setMilestones(milestones.map((m, idx) => (idx === i ? { ...m, ...patch } : m)));
@@ -204,19 +215,12 @@ export default function PlanDetailPage() {
   function removeMilestone(i: number) {
     const target = milestones[i];
     if (!target) return;
-    // 子も再帰的に削除
-    const toRemove = new Set<string>([target.id]);
-    let changed = true;
-    while (changed) {
-      changed = false;
-      for (const m of milestones) {
-        if (m.parent_id && toRemove.has(m.parent_id) && !toRemove.has(m.id)) {
-          toRemove.add(m.id);
-          changed = true;
-        }
-      }
-    }
-    setMilestones(milestones.filter((m) => !toRemove.has(m.id)));
+    // 子は祖父 (削除対象の parent_id) に付け替える。再帰削除しない。
+    setMilestones(
+      milestones
+        .filter((m) => m.id !== target.id)
+        .map((m) => (m.parent_id === target.id ? { ...m, parent_id: target.parent_id } : m)),
+    );
   }
 
   return (
@@ -390,7 +394,7 @@ export default function PlanDetailPage() {
             )}
             {showMilestonePins && (
               <button type="button"
-                title={milestones.length === 0 ? "開始 + 最終マイルストーンを追加" : "ルートマイルストーンを追加"}
+                title={milestones.length === 0 ? "開始 + 最終マイルストーンを追加" : "新規トラックを追加 (既存目標の子)"}
                 className="inline-flex items-center justify-center size-[26px] rounded-md border text-muted-foreground hover:bg-muted transition-colors"
                 onClick={addRootMilestone}>
                 <Plus className="size-3"/>
@@ -406,6 +410,7 @@ export default function PlanDetailPage() {
           </div>
         </div>
         <PlanChart
+          ref={chartRef}
           items={visibleAllocated}
           milestones={milestones}
           today={today}
@@ -415,7 +420,7 @@ export default function PlanDetailPage() {
           onMilestoneDateChange={showMilestonePins ? (i, newDate) => updateMilestone(i, { date: newDate }) : undefined}
           onMilestoneCountChange={showMilestonePins ? (i, newCount) => updateMilestone(i, { count: newCount }) : undefined}
           onMilestoneNameChange={showMilestonePins ? (i, newName) => updateMilestone(i, { name: newName }) : undefined}
-          onMilestoneAddChild={showMilestonePins ? addSiblingMilestone : undefined}
+          onMilestoneAddToTrack={showMilestonePins ? addSiblingMilestone : undefined}
           onMilestoneRemove={showMilestonePins ? removeMilestone : undefined}
           showMilestonePins={showMilestonePins}
           milestoneAnchors={milestoneAnchors}

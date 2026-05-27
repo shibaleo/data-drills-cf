@@ -154,8 +154,8 @@ export function allocate(
         result.push(toAlloc(p, periodEnd, true));
       }
     } else {
-      // セグメント期間内に等間隔分散
-      evenFill(segment, segmentStart, periodEnd, dailySecOn, result);
+      // 余裕がある分は前から詰める greedy。末尾は空になり、milestone を動かしても密度は変わらない (= 前倒し前提)
+      greedyFill(segment, segmentStart, periodEnd, dailySecOn, result);
     }
     segmentStart = addDays(periodEnd, 1);
   }
@@ -180,47 +180,6 @@ function toAlloc(m: MemberInput, date: string, overflow: boolean, overBudget = f
     overflow,
     overBudget,
   };
-}
-
-/**
- * セグメント期間内に問題を等間隔分散する。
- * 各問題に target_day = startDate + round(i * (days-1) / max(1, N-1)) を割り当て。
- * 同じ日に積まれた問題の合計が daily 枠を超えそうな場合は翌日にずらす (溢れた末尾は periodEnd に pile-up)。
- */
-function evenFill(
-  segment: MemberInput[],
-  startDate: string,
-  periodEnd: string,
-  dailySecOn: (date: string) => number,
-  out: AllocatedProblem[],
-): void {
-  const N = segment.length;
-  if (N === 0) return;
-  const days = Math.max(1, diffDays(startDate, periodEnd) + 1);
-  const dayLoad = new Map<string, number>();
-
-  for (let i = 0; i < N; i++) {
-    const sec = segment[i].standardTimeSec ?? DEFAULT_SEC;
-    const targetOffset = N === 1 ? 0 : Math.round((i * (days - 1)) / (N - 1));
-    let day = addDays(startDate, targetOffset);
-    // その日の daily が 0 (= 休息日設定) なら自動で翌日へずらす。
-    // 既存 load > 0 で枠超えるならずらす。
-    while (
-      day <= periodEnd
-      && (dailySecOn(day) === 0
-          || ((dayLoad.get(day) ?? 0) > 0
-              && (dayLoad.get(day) ?? 0) + sec > dailySecOn(day)))
-    ) {
-      day = addDays(day, 1);
-    }
-    if (day > periodEnd) {
-      out.push(toAlloc(segment[i], periodEnd, true));
-      continue;
-    }
-    const overBudget = sec > dailySecOn(day) && dailySecOn(day) > 0;
-    dayLoad.set(day, (dayLoad.get(day) ?? 0) + sec);
-    out.push(toAlloc(segment[i], day, false, overBudget));
-  }
 }
 
 /**
