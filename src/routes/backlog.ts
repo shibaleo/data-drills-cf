@@ -1,8 +1,9 @@
 import { Hono } from "hono";
+import { z } from "zod";
 import { zValidator } from "@hono/zod-validator";
 import { db } from "@/lib/db";
 import { backlog, goalLayer, goalMilestone, problem, problemTag, type BacklogFilter } from "@/lib/db/schema";
-import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import {
   backlogCreateInputSchema,
@@ -179,20 +180,43 @@ const app = new Hono()
     }
     return c.json({ data: { count: total } });
   })
-  .get("/:id", async (c) => {
+  .get("/:id", zValidator("query", z.object({ as_of: z.string().optional() })), async (c) => {
     const backlogId = c.req.param("id");
-    const current = await fetchCurrentBacklog(backlogId);
+    const { as_of: asOfStr } = c.req.valid("query");
+    const asOf = asOfStr ? new Date(asOfStr) : null;
+
+    // backlog snapshot
+    let current: typeof backlog.$inferSelect | undefined;
+    if (asOf) {
+      const [row] = await db.select().from(backlog)
+        .where(and(
+          eq(backlog.id, backlogId),
+          lte(backlog.validFrom, asOf),
+          or(isNull(backlog.validTo), gt(backlog.validTo, asOf))!,
+          eq(backlog.isActive, true),
+        ))
+        .orderBy(desc(backlog.revision))
+        .limit(1);
+      current = row;
+    } else {
+      current = (await fetchCurrentBacklog(backlogId)) ?? undefined;
+    }
     if (!current) return c.json({ error: "Not found" }, 404);
 
     const members = await fetchMembers(current.projectId, current.filter);
     const firstAnswers = await fetchFirstAnswers(members.map((m) => m.id));
 
+    const layerCond = asOf
+      ? and(eq(goalLayer.backlogId, backlogId), lte(goalLayer.validFrom, asOf), or(isNull(goalLayer.validTo), gt(goalLayer.validTo, asOf))!, eq(goalLayer.isActive, true))
+      : and(eq(goalLayer.backlogId, backlogId), isNull(goalLayer.validTo), eq(goalLayer.isActive, true));
     const layers = await db.select().from(goalLayer)
-      .where(and(eq(goalLayer.backlogId, backlogId), isNull(goalLayer.validTo), eq(goalLayer.isActive, true)))
+      .where(layerCond)
       .orderBy(asc(goalLayer.sortOrder));
 
-    const milestones = await db.select().from(goalMilestone)
-      .where(and(eq(goalMilestone.backlogId, backlogId), isNull(goalMilestone.validTo), eq(goalMilestone.isActive, true)));
+    const msCond = asOf
+      ? and(eq(goalMilestone.backlogId, backlogId), lte(goalMilestone.validFrom, asOf), or(isNull(goalMilestone.validTo), gt(goalMilestone.validTo, asOf))!, eq(goalMilestone.isActive, true))
+      : and(eq(goalMilestone.backlogId, backlogId), isNull(goalMilestone.validTo), eq(goalMilestone.isActive, true));
+    const milestones = await db.select().from(goalMilestone).where(msCond);
 
     return c.json({
       data: {
@@ -209,6 +233,7 @@ const app = new Hono()
           topic_id: m.topicId,
           first_answer_date: firstAnswers.get(m.id) ?? null,
         })),
+        as_of: asOfStr ?? null,
       },
     });
   })

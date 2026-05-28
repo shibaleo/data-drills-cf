@@ -27,7 +27,7 @@ import { FilterSection } from "@/components/filter-section";
 import { useFilterPrefs, useSaveFilterPrefs } from "@/hooks/queries/use-filter-prefs";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Filter, SlidersHorizontal, ArrowLeft, Archive, Save, RotateCcw, Loader2, Download } from "lucide-react";
+import { Filter, SlidersHorizontal, ArrowLeft, Archive, Save, RotateCcw, Loader2, Download, History } from "lucide-react";
 import { useTopicsList } from "@/hooks/queries/use-topics";
 import { usePageTitle } from "@/lib/page-context";
 import { rpc } from "@/lib/rpc-client";
@@ -39,7 +39,9 @@ export default function BacklogDetailPage() {
   const subjectMap = useMemo(() => new Map(subjects.map((s) => [s.id, s])), [subjects]);
   const levelMap = useMemo(() => new Map(levels.map((l) => [l.id, l])), [levels]);
   const navigate = useNavigate();
-  const { data, isLoading } = useBacklog(backlogId);
+  const [asOf, setAsOf] = useState<string | null>(null);  // null = 現在モード
+  const readOnly = asOf != null;
+  const { data, isLoading } = useBacklog(backlogId, asOf);
   const update = useUpdateBacklog(currentProject?.id);
   const archive = useArchiveBacklog(currentProject?.id);
 
@@ -357,7 +359,7 @@ export default function BacklogDetailPage() {
           className="text-muted-foreground hover:text-foreground transition-colors" title="Back to list">
           <ArrowLeft className="size-4"/>
         </button>
-        <Input value={name} onChange={(e) => setName(e.target.value)}
+        <Input value={name} onChange={(e) => setName(e.target.value)} disabled={readOnly}
           className="h-7 text-xs max-w-xs"/>
         <span className="text-[10px] tabular-nums px-1.5 py-0.5 rounded border text-muted-foreground">rev {data.backlog.revision}</span>
         <div className="flex-1 max-w-xs h-1.5 bg-muted rounded-full overflow-hidden">
@@ -372,11 +374,41 @@ export default function BacklogDetailPage() {
             D{daysToDeadline >= 0 ? `-${daysToDeadline}` : `+${Math.abs(daysToDeadline)}`}
           </span>
         )}
-        <Button size="sm" variant="ghost" onClick={onArchive}
-          className="text-muted-foreground hover:text-destructive ml-auto" title="Archive">
+        <Popover>
+          <PopoverTrigger asChild>
+            <button type="button" title="Time travel"
+              aria-pressed={readOnly}
+              className={`ml-auto inline-flex items-center justify-center size-7 rounded-md border transition-colors ${readOnly ? "bg-accent text-accent-foreground border-accent-foreground/40" : "text-muted-foreground hover:bg-muted"}`}>
+              <History className="size-3.5"/>
+            </button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-3 space-y-2" align="end">
+            <div className="text-[10px] text-muted-foreground">Snapshot date</div>
+            <div className="flex items-center gap-2">
+              <Input type="date" value={asOf ?? ""} className="h-7 text-xs"
+                onChange={(e) => setAsOf(e.target.value || null)}/>
+              <Button size="sm" variant="ghost" className="h-7 text-[10px] px-2"
+                onClick={() => setAsOf(null)} disabled={!asOf}>Back to now</Button>
+            </div>
+          </PopoverContent>
+        </Popover>
+        <Button size="sm" variant="ghost" onClick={onArchive} disabled={readOnly}
+          className="text-muted-foreground hover:text-destructive" title="Archive">
           <Archive className="size-3.5"/>
         </Button>
       </div>
+
+      {readOnly && (
+        <div className="flex items-center justify-between gap-2 rounded-md border border-accent-foreground/40 bg-accent/30 px-3 py-1.5 text-xs">
+          <span className="text-foreground">
+            Viewing snapshot from <span className="font-semibold tabular-nums">{asOf}</span> — read only.
+          </span>
+          <button type="button" onClick={() => setAsOf(null)}
+            className="text-accent-foreground hover:text-foreground underline underline-offset-2">
+            Back to now
+          </button>
+        </div>
+      )}
 
       <div className="rounded-md border p-3 space-y-2">
         <div className="flex items-center justify-between">
@@ -442,7 +474,7 @@ export default function BacklogDetailPage() {
             <span className="text-xs text-muted-foreground tabular-nums">{visibleMembers.length} / {memberCount}</span>
           </div>
           <div className="flex items-center gap-2">
-            {dirty && (
+            {dirty && !readOnly && (
               <>
                 <button type="button"
                   onClick={() => {
@@ -477,13 +509,13 @@ export default function BacklogDetailPage() {
               <div className="grid grid-cols-2 gap-2">
                 <div className="space-y-0.5">
                   <Label className="text-[9px] uppercase tracking-wide text-muted-foreground">Max (min)</Label>
-                  <Input type="number" min={1} value={dailyMinutes}
+                  <Input type="number" min={1} value={dailyMinutes} disabled={readOnly}
                     onChange={(e) => setDailyMinutes(Math.max(1, parseInt(e.target.value) || 1))}
                     className="h-7 text-xs tabular-nums text-center"/>
                 </div>
                 <div className="space-y-0.5">
                   <Label className="text-[9px] uppercase tracking-wide text-muted-foreground">Mult ×</Label>
-                  <Input type="number" min={0.1} step={0.1} value={timeMultiplier}
+                  <Input type="number" min={0.1} step={0.1} value={timeMultiplier} disabled={readOnly}
                     onChange={(e) => setTimeMultiplier(Math.max(0.1, parseFloat(e.target.value) || 1))}
                     className="h-7 text-xs tabular-nums text-center"/>
                 </div>
@@ -503,7 +535,7 @@ export default function BacklogDetailPage() {
                     return (
                       <div key={i} className="flex items-center gap-2">
                         <div className={`text-[10px] font-medium w-7 text-center ${dayColor}`}>{d}</div>
-                        <Input type="number" min={0} step={0.1} value={weekdayWeights[i]}
+                        <Input type="number" min={0} step={0.1} value={weekdayWeights[i]} disabled={readOnly}
                           onChange={(e) => {
                             const v = Math.max(0, parseFloat(e.target.value) || 0);
                             setWeekdayWeights((prev) => prev.map((w, idx) => idx === i ? v : w));
@@ -532,34 +564,36 @@ export default function BacklogDetailPage() {
           milestoneAnchors={milestoneAnchors}
           hiddenLayerIds={hiddenLayerIds}
           onHiddenLayersChange={setHiddenLayerIds}
-          /* すべてローカル state を更新するだけ。API は「確定」で発火。 */
-          onMilestoneDateDraft={(id, newDate) =>
+          /* すべてローカル state を更新するだけ。API は「確定」で発火。
+             readOnly (= snapshot 表示中) は編集系コールバックを渡さない → chart 側で
+             cursor-grab・+ ボタン等の affordance も無効化される。 */
+          onMilestoneDateDraft={readOnly ? undefined : (id, newDate) =>
             setLocalMilestones((prev) => prev.map((m) => (m.id === id ? { ...m, date: newDate } : m)))}
-          onMilestoneDateChange={(id, newDate) =>
+          onMilestoneDateChange={readOnly ? undefined : (id, newDate) =>
             setLocalMilestones((prev) => prev.map((m) => (m.id === id ? { ...m, date: newDate } : m)))}
-          onMilestoneLayerDraft={(id, newLayerId) =>
+          onMilestoneLayerDraft={readOnly ? undefined : (id, newLayerId) =>
             setLocalMilestones((prev) => prev.map((m) => (m.id === id ? { ...m, layer_id: newLayerId } : m)))}
-          onMilestoneLayerChange={(id, newLayerId) =>
+          onMilestoneLayerChange={readOnly ? undefined : (id, newLayerId) =>
             setLocalMilestones((prev) => prev.map((m) => (m.id === id ? { ...m, layer_id: newLayerId } : m)))}
-          onMilestoneTargetChange={(id, newTarget) =>
+          onMilestoneTargetChange={readOnly ? undefined : (id, newTarget) =>
             setLocalMilestones((prev) => prev.map((m) => (m.id === id ? { ...m, target: newTarget } : m)))}
-          onMilestoneRemove={(id) =>
+          onMilestoneRemove={readOnly ? undefined : (id) =>
             setLocalMilestones((prev) => prev.filter((m) => m.id !== id))}
-          onMilestoneAddToLayer={(layerId, atDate) =>
+          onMilestoneAddToLayer={readOnly ? undefined : (layerId, atDate) =>
             setLocalMilestones((prev) => [...prev, { id: tmpId(), layer_id: layerId, target: memberCount, date: atDate ?? centerDate() }])}
-          onLayerNameChange={(id, newName) =>
+          onLayerNameChange={readOnly ? undefined : (id, newName) =>
             setLocalLayers((prev) => prev.map((l) => (l.id === id ? { ...l, name: newName } : l)))}
-          onLayerColorChange={(id, newColor) =>
+          onLayerColorChange={readOnly ? undefined : (id, newColor) =>
             setLocalLayers((prev) => prev.map((l) => (l.id === id ? { ...l, color: newColor } : l)))}
-          onLayerStyleChange={(id, patch) =>
+          onLayerStyleChange={readOnly ? undefined : (id, patch) =>
             setLocalLayers((prev) => prev.map((l) => (l.id === id ? { ...l, ...patch } : l)))}
-          onLayerRemove={(id) => {
+          onLayerRemove={readOnly ? undefined : (id) => {
             setLocalLayers((prev) => prev.filter((l) => l.id !== id));
             setLocalMilestones((prev) => prev.filter((m) => m.layer_id !== id));
           }}
-          onAddLayer={() =>
+          onAddLayer={readOnly ? undefined : () =>
             setLocalLayers((prev) => [...prev, { id: tmpId(), name: "", color: null, opacity_pct: null, line_style: null, line_width: null }])}
-          onReorderLayers={(ids) => {
+          onReorderLayers={readOnly ? undefined : (ids) => {
             setLocalLayers((prev) => {
               const map = new Map(prev.map((l) => [l.id, l]));
               return ids.map((id) => map.get(id)).filter((x): x is LocalLayer => !!x);

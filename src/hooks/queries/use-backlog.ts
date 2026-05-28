@@ -44,11 +44,14 @@ export function useBacklogList(projectId: string | undefined) {
   });
 }
 
-export function useBacklog(backlogId: string | undefined) {
+export function useBacklog(backlogId: string | undefined, asOf?: string | null) {
   return useQuery({
-    queryKey: backlogId ? backlogKeys.detail(backlogId) : backlogKeys.all,
+    queryKey: backlogId ? [...backlogKeys.detail(backlogId), { asOf: asOf ?? null }] : backlogKeys.all,
     queryFn: async () => {
-      const json = await unwrap(rpc.api.v1.backlog[":id"].$get({ param: { id: backlogId! } }));
+      const json = await unwrap(rpc.api.v1.backlog[":id"].$get({
+        param: { id: backlogId! },
+        query: asOf ? { as_of: asOf } : {},
+      }));
       return json.data;
     },
     enabled: !!backlogId,
