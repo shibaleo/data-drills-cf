@@ -48,6 +48,7 @@ export default function ThroughputPage() {
 
   const [filterSubjects, setFilterSubjects] = useState<Set<string>>(new Set());
   const [filterLevels, setFilterLevels] = useState<Set<string>>(new Set());
+  const [maxRowsCap, setMaxRowsCap] = useState<number | null>(10);  // null = auto
   const [exportSelected, setExportSelected] = useState<Set<string>>(new Set());
   const [exporting, setExporting] = useState(false);
   const [exportPhase, setExportPhase] = useState<"waking" | "generating" | "downloading" | null>(null);
@@ -76,14 +77,16 @@ export default function ThroughputPage() {
     const days = diffDays(start, end) + 1;
     let max = 0;
     cols.forEach((v) => { if (v.length > max) max = v.length; });
+    const autoMax = Math.max(MIN_ROWS, max + 2);
+    const capped = maxRowsCap != null ? Math.min(autoMax, maxRowsCap) : autoMax;
     return {
       startDate: start,
       totalDays: days,
       columns: cols,
-      maxStack: Math.max(MIN_ROWS, max + 2),
+      maxStack: capped,
       todayIdx: diffDays(start, today),
     };
-  }, [filtered, today]);
+  }, [filtered, today, maxRowsCap]);
 
   const chartWidth = totalDays * STEP;
   const chartHeight = maxStack * STEP + TOP_AXIS_H + BOTTOM_AXIS_H;
@@ -152,6 +155,7 @@ export default function ThroughputPage() {
   return (
     <div className="p-3 md:p-4 flex flex-col gap-2">
       <div className="rounded-md border p-3 space-y-2">
+        <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 flex-wrap">
           <Popover>
             <PopoverTrigger asChild>
@@ -197,6 +201,17 @@ export default function ThroughputPage() {
             </Button>
           )}
         </div>
+        <div className="inline-flex rounded-md border text-[10px] overflow-hidden">
+          {([10, 20, null] as const).map((v) => (
+            <button key={String(v)}
+              type="button"
+              className={`px-2 py-0.5 transition-colors ${maxRowsCap === v ? "bg-accent text-accent-foreground" : "text-muted-foreground hover:bg-muted"}`}
+              onClick={() => setMaxRowsCap(v)}>
+              {v ?? "Auto"}
+            </button>
+          ))}
+        </div>
+        </div>
 
         {isLoading ? (
           <div className="text-sm text-muted-foreground py-8 text-center">Loading...</div>
@@ -241,8 +256,8 @@ export default function ThroughputPage() {
                           width={CELL} height={CELL} rx={2}
                           fill="none" stroke="hsl(var(--border))" strokeWidth={0.5}/>
                       ))}
-                      {/* Filled blocks */}
-                      {dayItems.map((r, stackIdx) => {
+                      {/* Filled blocks (capped at maxStack) */}
+                      {dayItems.slice(0, maxStack).map((r, stackIdx) => {
                         const by = chartHeight - BOTTOM_AXIS_H - (stackIdx + 1) * STEP;
                         const color = blockColor({ side: "past", prevStatusColor: r.prevStatusColor });
                         return (
@@ -254,6 +269,15 @@ export default function ThroughputPage() {
                           </rect>
                         );
                       })}
+                      {/* Overflow indicator if column was capped */}
+                      {dayItems.length > maxStack && (
+                        <text x={x + CELL / 2}
+                          y={chartHeight - BOTTOM_AXIS_H - maxStack * STEP - 2}
+                          textAnchor="middle" fontSize={8}
+                          className="fill-muted-foreground" fontWeight={600}>
+                          ▲{dayItems.length - maxStack}
+                        </text>
+                      )}
                       {/* Top axis: absolute dates */}
                       {showAxis && (
                         <text x={x + CELL / 2} y={10} textAnchor="middle"
