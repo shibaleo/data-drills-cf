@@ -347,7 +347,9 @@ export const BacklogChart = forwardRef<BacklogChartHandle, BacklogChartProps>(fu
                   const warn = blockBorder(kind);
                   const isSelected = item.problemId === selectedId;
                   const anchor = visibleAnchors.find((a) => a.problemId === item.problemId);
-                  const anchorColor = anchor?.layer_id ? (layers.find((l) => l.id === anchor.layer_id)?.color || MS_COLOR) : MS_COLOR;
+                  const anchorLayer = anchor?.layer_id ? layers.find((l) => l.id === anchor.layer_id) : null;
+                  const anchorColor = anchorLayer?.color || MS_COLOR;
+                  const anchorOpacity = anchorLayer ? (anchorLayer.opacity_pct ?? 40) / 100 : 1;
                   const by = chartHeight - BOTTOM_AXIS_H - (stackIdx + 1) * STEP;
                   // anchor (milestone tie) > warn border > selection highlight, all stroked on the same rect.
                   const stroke = anchor ? anchorColor : warn?.stroke ?? "none";
@@ -362,6 +364,7 @@ export const BacklogChart = forwardRef<BacklogChartHandle, BacklogChartProps>(fu
                       <rect x={x} y={by} width={CELL} height={CELL} rx={2}
                         fill={color} opacity={isSelected ? 1 : 0.85}
                         stroke={stroke} strokeWidth={strokeWidth} strokeDasharray={strokeDasharray}
+                        strokeOpacity={anchor ? anchorOpacity : 1}
                         className="cursor-pointer"
                         onClick={() => (isSelected ? onOpen?.(item.problemId) : onSelect?.(item.problemId))}
                         onDoubleClick={() => onOpen?.(item.problemId)}>
