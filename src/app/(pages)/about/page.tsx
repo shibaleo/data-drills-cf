@@ -150,41 +150,118 @@ export default function AboutPage() {
 
         <hr className="border-border" />
 
-        {/* ── 機能一覧 ── */}
+        {/* ── 主要ビュー ── */}
         <section>
-          <h2 className="text-base font-semibold mb-2">機能一覧</h2>
+          <h2 className="text-base font-semibold mb-2">主要ビュー</h2>
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            学習の3つの軸 — <strong>復習・新規消化・実績振り返り</strong> — をそれぞれ独立した Tetris チャートで可視化する。
+          </p>
           <ul className="text-xs text-muted-foreground space-y-2 mt-2">
             <li>
-              <span className="text-foreground font-medium">Schedule</span> —
-              今日・7日以内の復習対象を一覧表示。Subject / Level / Statusでフィルタし、
-              ヘッダーチェックボックスで一括選択。選択した問題の目安時間をリアルタイム表示。
+              <span className="text-foreground font-medium">Review</span> —
+              FSRS スケジュールに基づく今日と未来の復習予定を Tetris で表示。
+              当日の問題数はサイドバーバッジに出る。
+              Subject / Level / Status でフィルタ、選択した問題を PDF 一括出力可能。
             </li>
             <li>
-              <span className="text-foreground font-medium">Problems</span> —
-              全問題の一覧。科目・レベル・標準時間をインライン編集可能。解答の登録・編集もここから行う。
+              <span className="text-foreground font-medium">Backlog</span> —
+              未着手の新規問題を milestone (目標達成日と問題数) に沿って未来の日付に配分する Tetris。
+              daily_minutes / 時間係数 / 曜日別ウェイトを編集して計画を組む。
+              レイヤごとに色・線種を分けて複数の目標群を可視化。bitemporal 履歴により編集記録が残る。
             </li>
             <li>
-              <span className="text-foreground font-medium">Stats</span> —
-              保持率トレンドチャートと問題別の詳細ビュー。FSRS準拠の記憶保持率を推定・可視化。
-            </li>
-            <li>
-              <span className="text-foreground font-medium">Notes</span> —
-              Markdown対応のノート機能。ピン留め・ドラッグ&ドロップ並び替え・リスト/グリッド切替に対応。
-              問題に関するメモや学習ポイントを自由に記録できる。
+              <span className="text-foreground font-medium">Throughput</span> —
+              過去の全解答実績を時系列の Tetris で振り返るビュー。
+              1 answer = 1 ブロック、色は <strong>その回答の直前 status</strong>。
+              初回回答は pink で表示。バーストや谷といった学習リズムが可視化される。
             </li>
             <li>
               <span className="text-foreground font-medium">Flashcards</span> —
-              問題ごとにフラッシュカードを作成。Markdownで表裏を記述し、保持率バー付きで復習状況を確認しながら暗記できる。
+              問題ごとにフラッシュカードを作成。Markdown で表裏を記述し、保持率バー付きで復習状況を確認しながら暗記できる。
             </li>
             <li>
-              <span className="text-foreground font-medium">PDF同期・エクスポート</span> —
-              Google DriveのPDFファイル名をパースし、問題コード・科目・レベルを自動認識（トレーニング・テーマ別演習・実力テストに対応）。
-              未登録の問題はスキャン結果からワンクリックで一括登録できる。
-              登録済みの問題はPDFページを抽出し、ラベル付きで一括エクスポート。
+              <span className="text-foreground font-medium">PDF エクスポート</span> —
+              Review / Backlog のテーブルから問題を選択し、Render 経由で PDF 結合・ダウンロード。
+              新規問題スキャン・自動登録は外部 Python ツール (taxtant) に分離済。
+            </li>
+          </ul>
+        </section>
+
+        <hr className="border-border" />
+
+        {/* ── ブロック着色 ── */}
+        <section>
+          <h2 className="text-base font-semibold mb-2">ブロック着色</h2>
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            3つのビューで共通の色ロジック (src/lib/block-color.ts)。塗りは <strong>ライフサイクル位置</strong>、枠線は <strong>警告</strong>。
+          </p>
+          <table className="text-xs mt-2 w-full">
+            <thead>
+              <tr className="border-b border-border">
+                <th className="pr-4 py-1 text-left font-medium">状態</th>
+                <th className="py-1 text-left font-medium">表現</th>
+              </tr>
+            </thead>
+            <tbody className="text-muted-foreground">
+              <tr className="border-b border-border/50"><td className="pr-4 py-1" style={{ color: "#8b5cf6" }}>Planned</td><td className="py-1">violet 塗り (Backlog 未着手)</td></tr>
+              <tr className="border-b border-border/50"><td className="pr-4 py-1" style={{ color: "#ec4899" }}>First attempt</td><td className="py-1">pink 塗り (初回回答)</td></tr>
+              <tr className="border-b border-border/50"><td className="pr-4 py-1" style={{ color: "#ef4444" }}>Repeat after Miss</td><td className="py-1">red 塗り</td></tr>
+              <tr className="border-b border-border/50"><td className="pr-4 py-1" style={{ color: "#f97316" }}>Repeat after Rough</td><td className="py-1">orange 塗り</td></tr>
+              <tr className="border-b border-border/50"><td className="pr-4 py-1" style={{ color: "#eab308" }}>Repeat after Fair</td><td className="py-1">yellow 塗り</td></tr>
+              <tr className="border-b border-border/50"><td className="pr-4 py-1" style={{ color: "#22c55e" }}>Repeat after Fluent</td><td className="py-1">green 塗り</td></tr>
+              <tr className="border-b border-border/50"><td className="pr-4 py-1" style={{ color: "#3b82f6" }}>Repeat after Done</td><td className="py-1">blue 塗り</td></tr>
+              <tr className="border-b border-border/50"><td className="pr-4 py-1 text-amber-500">Over budget</td><td className="py-1">violet 塗り + amber 破線枠 (1問が日次枠超過)</td></tr>
+              <tr><td className="pr-4 py-1 text-red-500">Overflow</td><td className="py-1">violet 塗り + red 破線枠 (milestone 締切超過 pile-up)</td></tr>
+            </tbody>
+          </table>
+        </section>
+
+        <hr className="border-border" />
+
+        {/* ── 復習トリアージ戦略 ── */}
+        <section>
+          <h2 className="text-base font-semibold mb-2">復習トリアージ戦略 (滞留時の運用)</h2>
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            復習が滞留して overdue が積み上がった時、<strong>古い順から消化しない</strong>。
+            FSRS 的に retention は時間経過で非線形に低下するため、<strong>遅延が浅いものほど救命価値が高い</strong>。
+          </p>
+          <ol className="text-xs text-muted-foreground list-decimal list-inside space-y-1 mt-3">
+            <li><strong>Today scheduled (▲0d)</strong> — 必ず全消化。target retention 90% で最適タイミング。</li>
+            <li><strong>▲1〜7d overdue</strong> — 救命対象。retention 50-80% で salvage 可能。1-2 問/日ペースで上から消化。</li>
+            <li><strong>▲8〜14d overdue</strong> — 余裕があれば。半数は再 learning 行き。</li>
+            <li><strong>▲30d 以上 overdue</strong> — 諦めて 1問/日ペースで巡回 (どのみち再学習扱い、急ぐ価値が低い)。</li>
+          </ol>
+          <p className="text-xs text-muted-foreground leading-relaxed mt-2">
+            根拠: retrievability は <Tex>{"R(t) = (1+F \\cdot t/S)^{C}"}</Tex> のべき乗減衰。
+            ▲1 と ▲30 では retention が ~80% vs ~20% と桁違い。回復確率が高い card に時間を使う方が学習 ROI が大きい。
+          </p>
+          <p className="text-xs text-muted-foreground leading-relaxed mt-2">
+            <strong>サイドバー バッジ</strong>は今日 scheduled (= ▲0d) のみカウント。overdue は別途 Review ページで確認。
+          </p>
+        </section>
+
+        <hr className="border-border" />
+
+        {/* ── 学習リズム ── */}
+        <section>
+          <h2 className="text-base font-semibold mb-2">学習リズム (バースト vs 分散)</h2>
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            認知科学の知見と data-drills の運用方針:
+          </p>
+          <ul className="text-xs text-muted-foreground space-y-2 mt-3">
+            <li>
+              <strong>Review は分散が定説</strong> — Spacing Effect (Ebbinghaus, Cepeda 2008)。
+              FSRS 自体が平準化前提で設計されている。バースト消化は短期記憶頼みで、次の review で Miss を量産する罠。
             </li>
             <li>
-              <span className="text-foreground font-medium">解答履歴スパークライン</span> —
-              各問題の解答履歴を日付間隔を反映したドットで表示。ステータスの色で学習傾向をひと目で把握。
+              <strong>新規 (Backlog) はハイブリッド</strong> — 初期習得には集中 (blocked) が有効だが、
+              本試験は混在出題のためインターリーブ練習が転移性を高める (Rohrer & Taylor 2007)。
+              実運用としては「FSRS の review schedule に従う = テーマが自動でインターリーブされる」+「新規 1-2 問/日」で十分。
+            </li>
+            <li>
+              <strong>1日のボリューム</strong> — 個人 baseline (Throughput の中央値) を基準に、
+              無理のないラインで Backlog の milestone を後ろにずらして計画と現実を一致させる。
+              ペース自体は milestone を動かして調整可能なので、burst → cooldown サイクルから抜け出すことを優先。
             </li>
           </ul>
         </section>
@@ -514,27 +591,6 @@ export default function AboutPage() {
 
         <hr className="border-border" />
 
-        {/* ── Sort ── */}
-        <section>
-          <h2 className="text-base font-semibold mb-2">
-            並び替え（Overdue順）
-          </h2>
-          <p className="text-sm text-muted-foreground leading-relaxed">
-            スコアダッシュボードのデフォルト並び替えは
-            <strong>Overdue降順</strong>
-            （期限超過日数が大きい順）です。復習優先度は以下の通りです。
-          </p>
-          <ol className="text-xs text-muted-foreground list-decimal list-inside space-y-1 mt-2">
-            <li>高評価で期限切れ（<Tex>{"S"}</Tex>日数超過）— 忘却直前、最優先</li>
-            <li>低評価で数日経過 — 忘却リスク高</li>
-            <li>最低評価で複数回着手済み — 定着しかけている</li>
-            <li>新規問題 — 時間が余った場合のみ</li>
-          </ol>
-          <p className="text-sm text-muted-foreground leading-relaxed mt-2">
-            1日の配分目安: 復習75%、新規25%。新規投入を抑制し「広く浅く」を防ぎます。
-          </p>
-        </section>
-        <hr className="border-border" />
 
         {/* ── 背景理論 ── */}
         <section>
