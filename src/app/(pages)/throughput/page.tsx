@@ -6,6 +6,7 @@ import { useProblemsList } from "@/hooks/queries/use-problems";
 import { useProblemDialogs } from "@/hooks/use-problem-dialogs";
 import { blockColor, COLOR_FIRST_ATTEMPT } from "@/lib/block-color";
 import { formatRelDay } from "@/lib/relative-day";
+import { usePageTitle } from "@/lib/page-context";
 import { Filter } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -33,6 +34,7 @@ function diffDays(from: string, to: string): number {
 }
 
 export default function ThroughputPage() {
+  usePageTitle("Throughput");
   const { currentProject, subjects, levels } = useProject();
   const subjectMap = useMemo(() => new Map(subjects.map((s) => [s.id, s])), [subjects]);
   const levelMap = useMemo(() => new Map(levels.map((l) => [l.id, l])), [levels]);
@@ -99,14 +101,7 @@ export default function ThroughputPage() {
   const activeFilterCount = filterSubjects.size + filterLevels.size;
 
   return (
-    <div className="p-4 md:p-6 space-y-4">
-      <div className="flex items-baseline gap-3">
-        <h1 className="text-2xl font-semibold">Throughput</h1>
-        <span className="text-xs text-muted-foreground tabular-nums">
-          {rows.length} answers · {filtered.length} shown
-        </span>
-      </div>
-
+    <div className="p-3 md:p-4 flex flex-col gap-2">
       <div className="rounded-md border p-3 space-y-2">
         <div className="flex items-center gap-2">
           <Popover>

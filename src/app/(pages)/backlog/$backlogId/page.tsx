@@ -26,6 +26,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Filter, SlidersHorizontal, ArrowLeft, Archive, Save, RotateCcw, Loader2, Download } from "lucide-react";
 import { useTopicsList } from "@/hooks/queries/use-topics";
+import { usePageTitle } from "@/lib/page-context";
 import { rpc } from "@/lib/rpc-client";
 import { toast } from "sonner";
 
@@ -111,6 +112,8 @@ export default function BacklogDetailPage() {
     }));
     return allocate(members, localMilestones, dailyMinutes, today, Math.round(timeMultiplier * 100), weekdayWeights);
   }, [data, localMilestones, dailyMinutes, timeMultiplier, weekdayWeights, today]);
+
+  usePageTitle("Backlog");
 
   if (isLoading) return <div className="p-6">Loading...</div>;
   if (!data) return <div className="p-6">Not found</div>;
@@ -306,39 +309,31 @@ export default function BacklogDetailPage() {
   }
 
   return (
-    <div className="p-4 md:p-6 space-y-4">
-      <div className="flex items-start gap-4">
+    <div className="p-3 md:p-4 flex flex-col gap-2">
+      <div className="flex items-center gap-2 flex-wrap">
         <button onClick={() => navigate({ to: "/backlog" as string })}
-          className="mt-1 text-muted-foreground hover:text-foreground transition-colors" title="Back to list">
-          <ArrowLeft className="size-5"/>
+          className="text-muted-foreground hover:text-foreground transition-colors" title="Back to list">
+          <ArrowLeft className="size-4"/>
         </button>
-        <div className="flex-1 min-w-0 space-y-1">
-          <div className="flex items-center gap-2">
-            <Input value={name} onChange={(e) => setName(e.target.value)}
-              className="text-xl font-semibold h-9 max-w-md"/>
-            <span className="text-[10px] tabular-nums px-1.5 py-0.5 rounded border text-muted-foreground">rev {data.backlog.revision}</span>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="flex-1 max-w-md h-1.5 bg-muted rounded-full overflow-hidden">
-              <div className="h-full bg-green-500 transition-all" style={{ width: `${progressPct}%` }}/>
-            </div>
-            <div className="text-xs text-muted-foreground tabular-nums whitespace-nowrap">
-              {doneCount} / {memberCount} ({progressPct} %)
-            </div>
-            {daysToDeadline != null && (
-              <span className={`text-[10px] tabular-nums px-1.5 py-0.5 rounded border whitespace-nowrap ${daysToDeadline < 30 ? "border-red-500/50 text-red-500" : "text-muted-foreground"}`}
-                title={`Deadline: ${lastMs?.date}`}>
-                D{daysToDeadline >= 0 ? `-${daysToDeadline}` : `+${Math.abs(daysToDeadline)}`}
-              </span>
-            )}
-          </div>
+        <Input value={name} onChange={(e) => setName(e.target.value)}
+          className="h-7 text-xs max-w-xs"/>
+        <span className="text-[10px] tabular-nums px-1.5 py-0.5 rounded border text-muted-foreground">rev {data.backlog.revision}</span>
+        <div className="flex-1 max-w-xs h-1.5 bg-muted rounded-full overflow-hidden">
+          <div className="h-full bg-green-500 transition-all" style={{ width: `${progressPct}%` }}/>
         </div>
-        <div className="flex items-center gap-2">
-          <Button size="sm" variant="ghost" onClick={onArchive}
-            className="text-muted-foreground hover:text-destructive" title="Archive">
-            <Archive className="size-3.5"/>
-          </Button>
+        <div className="text-xs text-muted-foreground tabular-nums whitespace-nowrap">
+          {doneCount} / {memberCount} ({progressPct} %)
         </div>
+        {daysToDeadline != null && (
+          <span className={`text-[10px] tabular-nums px-1.5 py-0.5 rounded border whitespace-nowrap ${daysToDeadline < 30 ? "border-red-500/50 text-red-500" : "text-muted-foreground"}`}
+            title={`Deadline: ${lastMs?.date}`}>
+            D{daysToDeadline >= 0 ? `-${daysToDeadline}` : `+${Math.abs(daysToDeadline)}`}
+          </span>
+        )}
+        <Button size="sm" variant="ghost" onClick={onArchive}
+          className="text-muted-foreground hover:text-destructive ml-auto" title="Archive">
+          <Archive className="size-3.5"/>
+        </Button>
       </div>
 
       <div className="rounded-md border p-3 space-y-2">

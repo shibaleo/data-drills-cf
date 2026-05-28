@@ -2,9 +2,11 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useProject } from "@/hooks/use-project";
 import { useBacklogList } from "@/hooks/queries/use-backlog";
+import { usePageTitle } from "@/lib/page-context";
 import { Button } from "@/components/ui/button";
 
 export default function BacklogPage() {
+  usePageTitle("Backlog");
   const { currentProject } = useProject();
   const navigate = useNavigate();
   const { data: backlogs = [], isLoading } = useBacklogList(currentProject?.id);
@@ -12,9 +14,8 @@ export default function BacklogPage() {
   if (!currentProject) return <div className="p-6 text-muted-foreground">Please select a project</div>;
 
   return (
-    <div className="p-4 md:p-6 space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Backlog</h1>
+    <div className="p-3 md:p-4 flex flex-col gap-2">
+      <div className="flex items-center justify-end">
         <Button onClick={() => navigate({ to: "/backlog/new" as string })}>+ New</Button>
       </div>
 
