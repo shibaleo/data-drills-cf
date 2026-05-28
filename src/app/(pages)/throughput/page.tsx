@@ -291,7 +291,7 @@ export default function ThroughputPage() {
                           y={chartHeight - BOTTOM_AXIS_H - renderCap * STEP - 2}
                           textAnchor="middle" fontSize={8}
                           className="fill-muted-foreground" fontWeight={600}>
-                          ▲{dayItems.length - renderCap}
+                          +{dayItems.length - renderCap}
                         </text>
                       )}
                       {/* Top axis: absolute dates */}
