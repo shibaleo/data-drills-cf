@@ -68,11 +68,11 @@ export function allocate(
     return weekdayWeights[dow] ?? 1;
   };
   // 過去側 (= 既に解いた問題) で消費された各日の秒数。
-  // 未来側 greedy fill の daily budget からこれを引く (= 当日中に既に消化済みの時間枠を尊重)。
+  // 未来側と同じ単位 (std × mult) で計上することで daily budget から正しく差し引ける。
   const pastUsedSec = new Map<string, number>();
   for (const m of members) {
     if (m.firstAnswerDate) {
-      const sec = m.standardTimeSec ?? DEFAULT_SEC;
+      const sec = Math.round((m.standardTimeSec ?? DEFAULT_SEC) * mult);
       pastUsedSec.set(m.firstAnswerDate, (pastUsedSec.get(m.firstAnswerDate) ?? 0) + sec);
     }
   }
