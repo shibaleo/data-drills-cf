@@ -383,11 +383,13 @@ export const BacklogChart = forwardRef<BacklogChartHandle, BacklogChartProps>(fu
                   const topY = chartHeight - BOTTOM_AXIS_H - dayItems.length * STEP - 4;
                   return anchorsHere.map(({ it }) => {
                     const a = visibleAnchors.find((x) => x.problemId === it.problemId)!;
-                    const col = a.layer_id ? (layers.find((l) => l.id === a.layer_id)?.color || MS_COLOR) : MS_COLOR;
+                    const aLayer = a.layer_id ? layers.find((l) => l.id === a.layer_id) : null;
+                    const col = aLayer?.color || MS_COLOR;
+                    const op = aLayer ? (aLayer.opacity_pct ?? 40) / 100 : 1;
                     return (
                       <text key={`anchor-${it.problemId}`}
                         x={x + CELL / 2} y={topY} textAnchor="middle"
-                        fontSize={10} fontWeight={700} fill={col}
+                        fontSize={10} fontWeight={700} fill={col} opacity={op}
                         className="pointer-events-none select-none">{a.target}</text>
                     );
                   });
@@ -480,7 +482,7 @@ export const BacklogChart = forwardRef<BacklogChartHandle, BacklogChartProps>(fu
                   />
                 )}
                 <text x={cx} y={chartHeight - BOTTOM_AXIS_H + 12} textAnchor="middle"
-                  fontSize={10} fontWeight={700} fill={layerColor}
+                  fontSize={10} fontWeight={700} fill={layerColor} opacity={layerOpacity}
                   className="pointer-events-none select-none">{ms.target}</text>
               </g>
             );
