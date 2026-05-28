@@ -987,7 +987,7 @@ export default function SchedulePage() {
               <TableHeader>
                 {table.getHeaderGroups().map((hg) => (
                   <TableRow key={hg.id}>
-                    <TableHead className="sticky top-0 z-10 bg-background w-10 px-3">
+                    <TableHead className="sticky top-0 z-10 bg-muted/80 backdrop-blur w-10 px-3">
                       <div className="flex items-center justify-center">
                         <input
                           type="checkbox"
@@ -1004,7 +1004,7 @@ export default function SchedulePage() {
                     {hg.headers.map((header) => (
                       <TableHead
                         key={header.id}
-                        className="sticky top-0 z-10 bg-background"
+                        className="sticky top-0 z-10 bg-muted/80 backdrop-blur"
                         style={{ width: header.getSize() !== 150 ? header.getSize() : undefined }}
                       >
                         {header.isPlaceholder

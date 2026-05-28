@@ -222,13 +222,13 @@ export default function ThroughputPage() {
         <Table className="table-fixed">
           <TableHeader>
             <TableRow>
-              <TableHead className="sticky top-0 z-10 bg-background" style={{ width: 100 }}>Date</TableHead>
-              <TableHead className="sticky top-0 z-10 bg-background" style={{ width: 70 }}>Subject</TableHead>
-              <TableHead className="sticky top-0 z-10 bg-background" style={{ width: 70 }}>Level</TableHead>
-              <TableHead className="sticky top-0 z-10 bg-background" style={{ width: 64 }}>Code</TableHead>
-              <TableHead className="sticky top-0 z-10 bg-background" style={{ width: 240 }}>Name</TableHead>
-              <TableHead className="sticky top-0 z-10 bg-background" style={{ width: 70 }}>Duration</TableHead>
-              <TableHead className="sticky top-0 z-10 bg-background" style={{ width: 90 }}>Status</TableHead>
+              <TableHead className="sticky top-0 z-10 bg-muted/80 backdrop-blur" style={{ width: 100 }}>Date</TableHead>
+              <TableHead className="sticky top-0 z-10 bg-muted/80 backdrop-blur" style={{ width: 70 }}>Subject</TableHead>
+              <TableHead className="sticky top-0 z-10 bg-muted/80 backdrop-blur" style={{ width: 70 }}>Level</TableHead>
+              <TableHead className="sticky top-0 z-10 bg-muted/80 backdrop-blur" style={{ width: 64 }}>Code</TableHead>
+              <TableHead className="sticky top-0 z-10 bg-muted/80 backdrop-blur" style={{ width: 240 }}>Name</TableHead>
+              <TableHead className="sticky top-0 z-10 bg-muted/80 backdrop-blur" style={{ width: 70 }}>Duration</TableHead>
+              <TableHead className="sticky top-0 z-10 bg-muted/80 backdrop-blur" style={{ width: 90 }}>Status</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>

@@ -519,7 +519,7 @@ export default function BacklogDetailPage() {
         <Table className="table-fixed">
           <TableHeader>
             <TableRow>
-              <TableHead className="sticky top-0 z-10 bg-background w-10 px-3">
+              <TableHead className="sticky top-0 z-10 bg-muted/80 backdrop-blur w-10 px-3">
                 <div className="flex items-center justify-center">
                   <input
                     type="checkbox"
@@ -533,14 +533,14 @@ export default function BacklogDetailPage() {
                   />
                 </div>
               </TableHead>
-              <TableHead className="sticky top-0 z-10 bg-background" style={{ width: 70 }}>Subject</TableHead>
-              <TableHead className="sticky top-0 z-10 bg-background" style={{ width: 70 }}>Level</TableHead>
-              <TableHead className="sticky top-0 z-10 bg-background" style={{ width: 64 }}>Code</TableHead>
-              <TableHead className="sticky top-0 z-10 bg-background" style={{ width: 240 }}>Name</TableHead>
-              <TableHead className="sticky top-0 z-10 bg-background" style={{ width: 64 }}>Std</TableHead>
-              <TableHead className="sticky top-0 z-10 bg-background" style={{ width: 100 }}>First</TableHead>
-              <TableHead className="sticky top-0 z-10 bg-background" style={{ width: 100 }}>Plan</TableHead>
-              <TableHead className="sticky top-0 z-10 bg-background" style={{ width: 70 }}>Δ</TableHead>
+              <TableHead className="sticky top-0 z-10 bg-muted/80 backdrop-blur" style={{ width: 70 }}>Subject</TableHead>
+              <TableHead className="sticky top-0 z-10 bg-muted/80 backdrop-blur" style={{ width: 70 }}>Level</TableHead>
+              <TableHead className="sticky top-0 z-10 bg-muted/80 backdrop-blur" style={{ width: 64 }}>Code</TableHead>
+              <TableHead className="sticky top-0 z-10 bg-muted/80 backdrop-blur" style={{ width: 240 }}>Name</TableHead>
+              <TableHead className="sticky top-0 z-10 bg-muted/80 backdrop-blur" style={{ width: 64 }}>Std</TableHead>
+              <TableHead className="sticky top-0 z-10 bg-muted/80 backdrop-blur" style={{ width: 100 }}>First</TableHead>
+              <TableHead className="sticky top-0 z-10 bg-muted/80 backdrop-blur" style={{ width: 100 }}>Plan</TableHead>
+              <TableHead className="sticky top-0 z-10 bg-muted/80 backdrop-blur" style={{ width: 70 }}>Δ</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
