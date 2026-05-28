@@ -528,6 +528,10 @@ export default function BacklogDetailPage() {
             setLocalMilestones((prev) => prev.map((m) => (m.id === id ? { ...m, date: newDate } : m)))}
           onMilestoneDateChange={(id, newDate) =>
             setLocalMilestones((prev) => prev.map((m) => (m.id === id ? { ...m, date: newDate } : m)))}
+          onMilestoneLayerDraft={(id, newLayerId) =>
+            setLocalMilestones((prev) => prev.map((m) => (m.id === id ? { ...m, layer_id: newLayerId } : m)))}
+          onMilestoneLayerChange={(id, newLayerId) =>
+            setLocalMilestones((prev) => prev.map((m) => (m.id === id ? { ...m, layer_id: newLayerId } : m)))}
           onMilestoneTargetChange={(id, newTarget) =>
             setLocalMilestones((prev) => prev.map((m) => (m.id === id ? { ...m, target: newTarget } : m)))}
           onMilestoneRemove={(id) =>

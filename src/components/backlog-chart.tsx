@@ -50,6 +50,10 @@ type BacklogChartProps = {
   onMilestoneDateDraft?: (id: string, newDate: string) => void;
   /** ピンドラッグ完了 / メニューでの日付変更 (= 確定)。API mutation はこっち。 */
   onMilestoneDateChange?: (id: string, newDate: string) => void;
+  /** ピンを別レイヤ行にドラッグ中 (= live preview)。 */
+  onMilestoneLayerDraft?: (id: string, newLayerId: string) => void;
+  /** ピンを別レイヤ行にドラッグ完了 (= 確定)。 */
+  onMilestoneLayerChange?: (id: string, newLayerId: string) => void;
   onMilestoneTargetChange?: (id: string, newTarget: number) => void;
   onMilestoneRemove?: (id: string) => void;
   /** 各 layer に milestone 追加 (date 省略時はセンター日付) */
@@ -92,6 +96,8 @@ export const BacklogChart = forwardRef<BacklogChartHandle, BacklogChartProps>(fu
   onOpen,
   onMilestoneDateDraft,
   onMilestoneDateChange,
+  onMilestoneLayerDraft,
+  onMilestoneLayerChange,
   onMilestoneTargetChange,
   onMilestoneRemove,
   onMilestoneAddToLayer,
@@ -214,16 +220,34 @@ export const BacklogChart = forwardRef<BacklogChartHandle, BacklogChartProps>(fu
     return addDays(dates[0], colIdx);
   }
 
-  /** ドラッグ中の最終 date を ref に保持 (pointerUp で commit) */
+  /** ドラッグ中の最終 date / layer を ref に保持 (pointerUp で commit) */
   const dragLatestDateRef = useRef<string | null>(null);
+  const dragLatestLayerRef = useRef<string | null>(null);
+  const dragOriginLayerRef = useRef<string | null>(null);
 
-  const onPinDown = (id: string) => (e: React.PointerEvent<SVGCircleElement>) => {
+  function clientYToLayerId(clientY: number): string | null {
+    const rect = svgRef.current?.getBoundingClientRect();
+    if (!rect) return null;
+    const relY = clientY - rect.top;
+    let best: { id: string; dist: number } | null = null;
+    for (const [lid, y] of layerYById) {
+      const d = Math.abs(relY - y);
+      if (!best || d < best.dist) best = { id: lid, dist: d };
+    }
+    // 行スパン (ROW_H) 内に入っていれば吸着
+    if (best && best.dist <= ROW_H) return best.id;
+    return null;
+  }
+
+  const onPinDown = (id: string, originLayerId: string) => (e: React.PointerEvent<SVGCircleElement>) => {
     if (!onMilestoneDateChange) return;
     e.preventDefault();
     e.stopPropagation();
     draggingRef.current = id;
     dragMovedRef.current = false;
     dragLatestDateRef.current = null;
+    dragLatestLayerRef.current = null;
+    dragOriginLayerRef.current = originLayerId;
     (e.target as Element).setPointerCapture(e.pointerId);
   };
   const onPinMove = (id: string) => (e: React.PointerEvent<SVGCircleElement>) => {
@@ -232,6 +256,11 @@ export const BacklogChart = forwardRef<BacklogChartHandle, BacklogChartProps>(fu
     const newDate = clientXToDate(e.clientX);
     dragLatestDateRef.current = newDate;
     onMilestoneDateDraft?.(id, newDate);  // live preview のみ (API は叩かない)
+    const newLayer = clientYToLayerId(e.clientY);
+    if (newLayer && newLayer !== dragOriginLayerRef.current && newLayer !== dragLatestLayerRef.current) {
+      dragLatestLayerRef.current = newLayer;
+      onMilestoneLayerDraft?.(id, newLayer);
+    }
     const container = scrollRef.current;
     if (!container) return;
     const rect = container.getBoundingClientRect();
@@ -242,11 +271,15 @@ export const BacklogChart = forwardRef<BacklogChartHandle, BacklogChartProps>(fu
     const wasDragging = draggingRef.current === id;
     if (wasDragging) draggingRef.current = null;
     try { (e.target as Element).releasePointerCapture(e.pointerId); } catch { /* ignore */ }
-    if (wasDragging && dragMovedRef.current && dragLatestDateRef.current) {
-      // ドラッグ離した瞬間に 1 回だけ commit
-      onMilestoneDateChange?.(id, dragLatestDateRef.current);
+    if (wasDragging && dragMovedRef.current) {
+      if (dragLatestDateRef.current) onMilestoneDateChange?.(id, dragLatestDateRef.current);
+      if (dragLatestLayerRef.current && dragLatestLayerRef.current !== dragOriginLayerRef.current) {
+        onMilestoneLayerChange?.(id, dragLatestLayerRef.current);
+      }
     }
     dragLatestDateRef.current = null;
+    dragLatestLayerRef.current = null;
+    dragOriginLayerRef.current = null;
     if (wasDragging && !dragMovedRef.current && e.button === 0) {
       e.preventDefault();
       e.stopPropagation();
@@ -435,7 +468,7 @@ export const BacklogChart = forwardRef<BacklogChartHandle, BacklogChartProps>(fu
                     stroke="hsl(var(--background))" strokeWidth={2}
                     className={onMilestoneDateChange ? "cursor-grab active:cursor-grabbing" : ""}
                     onClick={(e) => e.stopPropagation()}
-                    onPointerDown={onPinDown(ms.id)}
+                    onPointerDown={onPinDown(ms.id, ms.layer_id)}
                     onPointerMove={onPinMove(ms.id)}
                     onPointerUp={onPinUp(ms.id)}
                     onPointerCancel={onPinUp(ms.id)}
