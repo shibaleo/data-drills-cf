@@ -374,14 +374,8 @@ export const goalLayer = pgTable("goal_layer", {
 ]);
 
 // =============================================================================
-// 26. GoalMilestone (bitemporal append-only) + BacklogViewPref
+// 26. GoalMilestone (bitemporal append-only)
 // =============================================================================
-
-export const backlogViewPref = pgTable("backlog_view_pref", {
-  backlogId: uuid("backlog_id").primaryKey(),
-  filter: jsonb("filter").$type<Record<string, unknown>>().notNull().default({}),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
 
 export const goalMilestone = pgTable("goal_milestone", {
   id: uuid("id").notNull(),
