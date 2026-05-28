@@ -9,7 +9,6 @@ import { useAnswerForm, useEditAnswerForm } from "@/hooks/use-answer-form";
 import { ProblemDetailDialog } from "@/components/problem-detail-dialog";
 import { ProblemEditDialog } from "@/components/problem-edit-dialog";
 import { AnswerDialog } from "@/components/answer-dialog";
-import { Fab } from "@/components/shared/fab";
 import type { ProblemWithAnswers, AnswerWithReviews } from "@/components/problem-card";
 import type { Problem } from "@/lib/types";
 
@@ -144,7 +143,6 @@ export function useProblemDialogs({
           onSave={editForm.save}
         />
 
-        <Fab onClick={openCreate} />
       </>
     );
   // eslint-disable-next-line react-hooks/exhaustive-deps

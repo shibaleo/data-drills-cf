@@ -122,6 +122,8 @@ export default function UsersPage() {
       )}
 
       {/* Create User Dialog */}
+      <Fab onClick={() => { setNewEmail(""); setNewName(""); setCreateOpen(true); }} />
+
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
@@ -147,7 +149,6 @@ export default function UsersPage() {
         </DialogContent>
       </Dialog>
 
-      <Fab onClick={() => { setNewEmail(""); setNewName(""); setCreateOpen(true); }} />
     </div>
   );
 }

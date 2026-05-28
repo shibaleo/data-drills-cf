@@ -4,8 +4,8 @@ import { useState } from "react";
 import { Copy, Check } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { usePageTitle } from "@/lib/page-context";
 import { Fab } from "@/components/shared/fab";
+import { usePageTitle } from "@/lib/page-context";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
@@ -96,6 +96,8 @@ export default function ApiKeysPage() {
         </div>
       )}
 
+      <Fab onClick={() => { setNewKeyName(""); setCreatedKey(null); setCreateOpen(true); }} />
+
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
@@ -139,7 +141,6 @@ export default function ApiKeysPage() {
         </DialogContent>
       </Dialog>
 
-      <Fab onClick={() => { setNewKeyName(""); setCreatedKey(null); setCreateOpen(true); }} />
     </div>
   );
 }
