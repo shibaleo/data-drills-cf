@@ -18,6 +18,7 @@ import {
 import { projectIdQuerySchema } from "@/lib/schemas/common";
 import { allocate, type MemberInput, type Milestone as AMilestone } from "@/lib/backlog-allocate";
 import { ownsProject } from "@/lib/ownership";
+import { todayJST } from "@/lib/date-utils";
 import type { AuthResult } from "@/lib/auth";
 
 type Env = { Variables: { authResult: AuthResult } };
@@ -190,7 +191,7 @@ const app = new Hono<Env>()
     if (cached && Date.now() < cached.expiresAt) {
       return c.json({ data: { count: cached.count } });
     }
-    const today = new Date().toISOString().slice(0, 10);
+    const today = todayJST();
     const backlogs = await db.select().from(backlog)
       .where(and(eq(backlog.projectId, projectId), isNull(backlog.validTo), eq(backlog.isActive, true)));
     let total = 0;
