@@ -18,7 +18,7 @@ export const ResizableTableShell = forwardRef<HTMLDivElement, ResizableTableShel
     return (
       <div
         ref={ref}
-        className={`rounded-md border overflow-auto resize-y ${className}`}
+        className={`rounded-md border overflow-hidden resize-y flex flex-col ${className}`}
         style={{ height: "calc(10 * 2.25rem)", minHeight: "6rem", maxHeight: "80vh" }}
       >
         {children}

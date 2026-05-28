@@ -5,11 +5,14 @@ import * as React from "react"
 import { cn } from "@/lib/utils"
 
 function Table({ className, ...props }: React.ComponentProps<"table">) {
-  // overflow is intentionally NOT set on the wrapper: sticky <th> needs the
-  // nearest scrolling ancestor to be the page-level shell (e.g. ResizableTableShell),
-  // not this inner container.
+  // The wrapper is the actual scroll container so that sticky <th> attaches
+  // to it. ResizableTableShell sits outside and only manages the box height
+  // (resize-y), with overflow:hidden so the resize handle remains intact.
   return (
-    <div data-slot="table-container" className="relative w-full">
+    <div
+      data-slot="table-container"
+      className="relative w-full h-full overflow-auto"
+    >
       <table
         data-slot="table"
         className={cn("w-full caption-bottom text-sm", className)}
