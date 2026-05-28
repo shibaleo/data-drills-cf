@@ -67,7 +67,19 @@ export function allocate(
     const dow = new Date(`${dateStr}T00:00:00Z`).getUTCDay();
     return weekdayWeights[dow] ?? 1;
   };
-  const dailySecOn = (dateStr: string): number => Math.max(0, Math.round(baseDailySec * weightOf(dateStr)));
+  // 過去側 (= 既に解いた問題) で消費された各日の秒数。
+  // 未来側 greedy fill の daily budget からこれを引く (= 当日中に既に消化済みの時間枠を尊重)。
+  const pastUsedSec = new Map<string, number>();
+  for (const m of members) {
+    if (m.firstAnswerDate) {
+      const sec = m.standardTimeSec ?? DEFAULT_SEC;
+      pastUsedSec.set(m.firstAnswerDate, (pastUsedSec.get(m.firstAnswerDate) ?? 0) + sec);
+    }
+  }
+  const dailySecOn = (dateStr: string): number => {
+    const base = Math.round(baseDailySec * weightOf(dateStr));
+    return Math.max(0, base - (pastUsedSec.get(dateStr) ?? 0));
+  };
   // 未来側の問題時間に係数を掛けるため、members を複製して書き換える。
   // 過去側は実時間 (= 解答済) なので係数は掛けない。
   const adjustedMembers: MemberInput[] = members.map((m) => {
