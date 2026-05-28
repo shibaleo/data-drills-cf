@@ -20,6 +20,7 @@ import { FilterSection } from "@/components/filter-section";
 import { useFilterPrefs, useSaveFilterPrefs } from "@/hooks/queries/use-filter-prefs";
 
 import { CELL, STEP, Y_AXIS_W, MIN_ROWS } from "@/lib/chart-constants";
+import { todayJST } from "@/lib/date-utils";
 
 const TOP_AXIS_H = 16;
 const BOTTOM_AXIS_H = 20;
@@ -105,7 +106,7 @@ export default function ThroughputPage() {
     });
   }, []);
 
-  const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const today = useMemo(() => todayJST(), []);
 
   const { startDate, totalDays, columns, maxStack, renderCap, todayIdx } = useMemo(() => {
     const cols = new Map<string, ThroughputRow[]>();

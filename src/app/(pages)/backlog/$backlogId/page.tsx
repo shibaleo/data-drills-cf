@@ -17,6 +17,7 @@ import { problemsKeys } from "@/hooks/queries/use-problems";
 import { BacklogChart, type BacklogChartHandle } from "@/components/backlog-chart";
 import { allocate, type MemberInput } from "@/lib/backlog-allocate";
 import { formatRelDay } from "@/lib/relative-day";
+import { todayJST } from "@/lib/date-utils";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -137,7 +138,7 @@ export default function BacklogDetailPage() {
     setLocalMilestones(data.milestones.map((m) => ({ id: m.id, layer_id: m.layer_id, target: m.target, date: m.date })));
   }, [data]);
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayJST();
 
   const allocated = useMemo(() => {
     if (!data) return [];

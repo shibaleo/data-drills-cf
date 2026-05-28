@@ -40,7 +40,7 @@ const app = new Hono<Env>()
       SELECT
         a.id,
         a.problem_id,
-        a.date::text AS date,
+        to_char(a.date AT TIME ZONE 'Asia/Tokyo', 'YYYY-MM-DD') AS date,
         a.created_at::text AS created_at,
         a.duration,
         a.answer_status_id,
