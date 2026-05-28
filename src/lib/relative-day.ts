@@ -7,7 +7,7 @@
  *  - 負 → "▲ N d"  (overdue / 過去側を視覚的に強調するため記号 ▲ を使う)
  */
 export function formatRelDay(diff: number): string {
-  if (diff === 0) return "today";
+  if (diff === 0) return "Today";
   if (diff > 0) return `+${diff} d`;
   return `▲ ${Math.abs(diff)} d`;
 }
