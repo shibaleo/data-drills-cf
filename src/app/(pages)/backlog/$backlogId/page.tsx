@@ -24,8 +24,10 @@ import { ResizableTableShell } from "@/components/resizable-table-shell";
 import { OpaqueTag } from "@/components/problem-card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Filter, SlidersHorizontal, ArrowLeft, Archive, Save, RotateCcw, Loader2 } from "lucide-react";
+import { Filter, SlidersHorizontal, ArrowLeft, Archive, Save, RotateCcw, Loader2, Download } from "lucide-react";
 import { useTopicsList } from "@/hooks/queries/use-topics";
+import { rpc } from "@/lib/rpc-client";
+import { toast } from "sonner";
 
 export default function BacklogDetailPage() {
   const { backlogId } = useParams({ strict: false }) as { backlogId: string };
@@ -61,6 +63,9 @@ export default function BacklogDetailPage() {
   const [filterSubjects, setFilterSubjects] = useState<Set<string>>(new Set());
   const [filterLevels, setFilterLevels] = useState<Set<string>>(new Set());
   const [filterTopics, setFilterTopics] = useState<Set<string>>(new Set());
+  const [exportSelected, setExportSelected] = useState<Set<string>>(new Set());
+  const [exporting, setExporting] = useState(false);
+  const [exportPhase, setExportPhase] = useState<"waking" | "generating" | "downloading" | null>(null);
   const { data: topics = [] } = useTopicsList(currentProject?.id);
 
   const qc = useQueryClient();
@@ -174,6 +179,41 @@ export default function BacklogDetailPage() {
     return `tmp-${(crypto as Crypto & { randomUUID(): string }).randomUUID()}`;
   }
   const isTmp = (id: string) => id.startsWith("tmp-");
+
+  const handleExport = useCallback(async () => {
+    if (exportSelected.size === 0) return;
+    setExporting(true);
+    setExportPhase("waking");
+    try {
+      const healthRes = await rpc.api.v1["pdf-export"].health.$get();
+      if (!healthRes.ok) {
+        const body = (await healthRes.json().catch(() => ({ error: healthRes.statusText }))) as { error?: string };
+        throw new Error(body.error || "PDF service unhealthy");
+      }
+      setExportPhase("generating");
+      const res = await rpc.api.v1["pdf-export"].$post({
+        json: { problem_ids: Array.from(exportSelected) },
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({ error: res.statusText }))) as { error?: string };
+        throw new Error(body.error || "Export failed");
+      }
+      setExportPhase("downloading");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `backlog-${today}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success("PDFエクスポート完了");
+    } catch (err) {
+      toast.error(`エクスポート失敗: ${err instanceof Error ? err.message : err}`);
+    } finally {
+      setExporting(false);
+      setExportPhase(null);
+    }
+  }, [exportSelected, today]);
 
   async function onConfirm() {
     if (!data) return;
@@ -343,6 +383,19 @@ export default function BacklogDetailPage() {
                 )}
               </PopoverContent>
             </Popover>
+            {exportSelected.size > 0 && (
+              <Button
+                size="sm" variant="outline" className="h-7 text-xs"
+                onClick={handleExport} disabled={exporting}>
+                {exporting ? <Loader2 className="size-3 mr-1 animate-spin"/> : <Download className="size-3 mr-1"/>}
+                {exporting
+                  ? exportPhase === "waking" ? "Render 起床中..."
+                    : exportPhase === "generating" ? "PDF 処理中..."
+                      : exportPhase === "downloading" ? "ダウンロード中..."
+                        : "エクスポート中..."
+                  : `PDF (${exportSelected.size})`}
+              </Button>
+            )}
             <span className="text-xs text-muted-foreground tabular-nums">{visibleMembers.length} / {memberCount}</span>
           </div>
           <div className="flex items-center gap-2">
@@ -471,6 +524,20 @@ export default function BacklogDetailPage() {
         <Table className="table-fixed">
           <TableHeader>
             <TableRow>
+              <TableHead className="sticky top-0 z-10 bg-background w-10 px-3">
+                <div className="flex items-center justify-center">
+                  <input
+                    type="checkbox"
+                    className="size-3.5 accent-primary cursor-pointer"
+                    checked={exportSelected.size > 0 && exportSelected.size === visibleMembers.length}
+                    ref={(el) => { if (el) el.indeterminate = exportSelected.size > 0 && exportSelected.size < visibleMembers.length; }}
+                    onChange={() => {
+                      if (exportSelected.size > 0) setExportSelected(new Set());
+                      else setExportSelected(new Set(visibleMembers.map((m) => m.id)));
+                    }}
+                  />
+                </div>
+              </TableHead>
               <TableHead className="sticky top-0 z-10 bg-background" style={{ width: 70 }}>Subject</TableHead>
               <TableHead className="sticky top-0 z-10 bg-background" style={{ width: 70 }}>Level</TableHead>
               <TableHead className="sticky top-0 z-10 bg-background" style={{ width: 64 }}>Code</TableHead>
@@ -496,6 +563,22 @@ export default function BacklogDetailPage() {
                   className={`cursor-pointer ${sel ? "bg-accent" : ""}`}
                   onClick={() => sel ? openDetail(m.id) : handleSelect(m.id)}
                   onDoubleClick={() => openDetail(m.id)}>
+                  <TableCell className="w-10 px-3" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex items-center justify-center">
+                      <input
+                        type="checkbox"
+                        className="size-3.5 accent-primary cursor-pointer"
+                        checked={exportSelected.has(m.id)}
+                        onChange={() => {
+                          setExportSelected((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(m.id)) next.delete(m.id); else next.add(m.id);
+                            return next;
+                          });
+                        }}
+                      />
+                    </div>
+                  </TableCell>
                   <TableCell style={{ width: 70 }}>{subj ? <OpaqueTag name={subj.name} color={subj.color}/> : null}</TableCell>
                   <TableCell style={{ width: 70 }}>{lv ? <OpaqueTag name={lv.name} color={lv.color}/> : null}</TableCell>
                   <TableCell style={{ width: 64 }}><span className="font-mono text-xs">{m.code}</span></TableCell>

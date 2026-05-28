@@ -813,45 +813,10 @@ export default function SchedulePage() {
         <div className="text-center py-12 text-muted-foreground">No data</div>
       ) : (
         <>
-          {/* Export controls (only when items selected) */}
-          {exportSelected.size > 0 && (
-            <div className="flex items-center justify-between gap-2">
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-7 text-xs"
-                onClick={handleExport}
-                disabled={exporting}
-              >
-                {exporting ? (
-                  <Loader2 className="size-3 mr-1 animate-spin" />
-                ) : (
-                  <Download className="size-3 mr-1" />
-                )}
-                {exporting
-                  ? exportPhase === "waking"
-                    ? "Render 起床中..."
-                    : exportPhase === "generating"
-                      ? "PDF 処理中..."
-                      : exportPhase === "downloading"
-                        ? "ダウンロード中..."
-                        : "エクスポート中..."
-                  : `PDF (${exportSelected.size})`}
-              </Button>
-              {selectedMinutes > 0 && (
-                <div className="shrink-0 rounded-md border px-3 py-1 text-center">
-                  <div className="text-lg font-semibold tabular-nums">
-                    {selectedMinutes >= 60 && <>{Math.floor(selectedMinutes / 60)}<span className="text-xs font-normal text-muted-foreground ml-0.5 mr-1">H</span></>}
-                    {selectedMinutes % 60 > 0 && <>{selectedMinutes % 60}<span className="text-xs font-normal text-muted-foreground ml-0.5">min</span></>}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
           {/* Schedule chart */}
           <div className="shrink-0 rounded-md border p-3">
             <div className="flex justify-between items-center gap-2 mb-1">
+              <div className="flex items-center gap-2">
               <Popover>
                 <PopoverTrigger asChild>
                   <Button size="sm" variant="outline" className="h-6 text-[10px] px-2 relative">
@@ -900,6 +865,39 @@ export default function SchedulePage() {
                   )}
                 </PopoverContent>
               </Popover>
+              {exportSelected.size > 0 && (
+                <>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-6 text-[10px] px-2"
+                    onClick={handleExport}
+                    disabled={exporting}
+                  >
+                    {exporting ? (
+                      <Loader2 className="size-3 mr-1 animate-spin" />
+                    ) : (
+                      <Download className="size-3 mr-1" />
+                    )}
+                    {exporting
+                      ? exportPhase === "waking"
+                        ? "Render 起床中..."
+                        : exportPhase === "generating"
+                          ? "PDF 処理中..."
+                          : exportPhase === "downloading"
+                            ? "ダウンロード中..."
+                            : "エクスポート中..."
+                      : `PDF (${exportSelected.size})`}
+                  </Button>
+                  {selectedMinutes > 0 && (
+                    <div className="shrink-0 rounded-md border px-2 py-0.5 text-[10px] tabular-nums text-muted-foreground">
+                      {selectedMinutes >= 60 && <>{Math.floor(selectedMinutes / 60)} H </>}
+                      {selectedMinutes % 60 > 0 && <>{selectedMinutes % 60} min</>}
+                    </div>
+                  )}
+                </>
+              )}
+              </div>
               <div className="flex items-center gap-2">
               {showSlider && stabilityOverrides.size > 0 && (
                 <>
