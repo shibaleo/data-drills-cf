@@ -19,13 +19,10 @@ import { BlockLegend, type LegendEntry } from "@/components/block-legend";
 import { FilterSection } from "@/components/filter-section";
 import { useFilterPrefs, useSaveFilterPrefs } from "@/hooks/queries/use-filter-prefs";
 
-const CELL = 14;
-const GAP = 2;
-const STEP = CELL + GAP;
+import { CELL, STEP, Y_AXIS_W, MIN_ROWS } from "@/lib/chart-constants";
+
 const TOP_AXIS_H = 16;
 const BOTTOM_AXIS_H = 20;
-const Y_AXIS_W = 28;
-const MIN_ROWS = 10;
 const PAD_DAYS = 7;
 
 function addDays(dateStr: string, n: number): string {

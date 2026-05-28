@@ -25,6 +25,7 @@ import { useUpdateStatus } from "@/hooks/queries/use-statuses";
 import { SortHeader } from "@/components/sort-header";
 import { BlockLegend, type LegendEntry } from "@/components/block-legend";
 import { FilterSection } from "@/components/filter-section";
+import { CELL, STEP, Y_AXIS_W, MIN_ROWS } from "@/lib/chart-constants";
 import { toJSTDateString } from "@/lib/date-utils";
 import { StatusTag } from "@/components/color-tags";
 import { Button } from "@/components/ui/button";
@@ -54,10 +55,6 @@ interface ScheduleRow extends Omit<ReviewApiRow, "answerCount"> {
 }
 
 /* ── Schedule Chart (SVG) ── */
-
-const CELL = 14;
-const GAP = 2;
-const STEP = CELL + GAP;
 
 function addDays(dateStr: string, days: number): string {
   const d = new Date(dateStr + "T12:00:00");
@@ -130,14 +127,12 @@ function ScheduleChart({
     scrollRef.current.scrollLeft = todayX - containerW / 3;
   }, [todayIdx]);
 
-  const MIN_ROWS = 10;
   const maxCount = Math.max(0, ...dates.map((d) => (grouped.get(d) ?? []).length));
   const maxStack = Math.max(MIN_ROWS, maxCount + 2);
   const TOP_AXIS_H = 16;
   const BOTTOM_AXIS_H = 20;
   const chartWidth = dates.length * STEP;
   const chartHeight = maxStack * STEP + TOP_AXIS_H + BOTTOM_AXIS_H;
-  const Y_AXIS_W = 28;
 
   const yTicks = useMemo(() => {
     const ticks: number[] = [];

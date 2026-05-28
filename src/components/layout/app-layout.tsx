@@ -19,7 +19,8 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
     <div className="min-h-dvh flex flex-col md:h-dvh md:flex-row md:overflow-hidden">
       {/* Mobile header */}
       <header
-        className={`sticky top-0 z-30 flex md:hidden h-14 shrink-0 items-center border-b border-sidebar-border bg-sidebar px-3 gap-3 transition-transform duration-200 ${
+        style={{ height: "var(--header-height-mobile)" }}
+        className={`sticky top-0 z-30 flex md:hidden shrink-0 items-center border-b border-sidebar-border bg-sidebar px-3 gap-3 transition-transform duration-200 ${
           scrollingDown ? "-translate-y-full" : "translate-y-0"
         }`}
       >
@@ -31,7 +32,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
               </button>
             </SheetTrigger>
             <SheetContent>
-              <div className="flex h-14 items-center border-b border-sidebar-border px-3">
+              <div className="flex items-center border-b border-sidebar-border px-3" style={{ height: "var(--header-height-mobile)" }}>
                 <span className="text-lg font-semibold text-primary">
                   {SITE_NAME}
                 </span>
@@ -59,9 +60,11 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
       <Sidebar />
 
       <main className="flex-1 overflow-y-auto flex flex-col">
-        <div className={`hidden md:flex items-center gap-2 px-4 min-h-12 transition-all duration-200 overflow-hidden ${
-          scrollingDown ? "max-h-0 min-h-0 opacity-0" : "max-h-16 opacity-100"
-        }`}>
+        <div
+          style={{ minHeight: scrollingDown ? 0 : "var(--header-height-desktop)" }}
+          className={`hidden md:flex items-center gap-2 px-4 transition-all duration-200 overflow-hidden ${
+            scrollingDown ? "max-h-0 opacity-0" : "max-h-16 opacity-100"
+          }`}>
           {title && !headerSlot && (
             <h1 className="text-lg font-semibold truncate">{title}</h1>
           )}

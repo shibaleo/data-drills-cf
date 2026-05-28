@@ -41,6 +41,9 @@
   /* Sidebar widths: override these to retheme (e.g. wider for long project names). */
   --sidebar-width-expanded: 224px;
   --sidebar-width-collapsed: 56px;
+  /* Mobile top bar + desktop top title bar heights. */
+  --header-height-mobile: 3.5rem;   /* 56px */
+  --header-height-desktop: 3rem;    /* 48px */
 
   --radius: 0.5rem;
 

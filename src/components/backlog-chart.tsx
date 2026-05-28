@@ -15,6 +15,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import type { AllocatedProblem, Milestone } from "@/lib/backlog-allocate";
 import { blockColor, blockBorder } from "@/lib/block-color";
 import { formatRelDay } from "@/lib/relative-day";
+import { CELL, STEP, Y_AXIS_W, MIN_ROWS } from "@/lib/chart-constants";
 
 export type BacklogChartHandle = {
   getCenterDate(): string;
@@ -72,9 +73,6 @@ type BacklogChartProps = {
   milestoneAnchors?: { target: number; problemId: string | null; layer_id?: string }[];
 };
 
-const CELL = 14;
-const GAP = 2;
-const STEP = CELL + GAP;
 
 const MS_COLOR = "#f59e0b";
 
@@ -189,7 +187,6 @@ export const BacklogChart = forwardRef<BacklogChartHandle, BacklogChartProps>(fu
     },
   }), [dates, today]);
 
-  const MIN_ROWS = 10;
   const maxCount = Math.max(0, ...dates.map((d) => (grouped.get(d) ?? []).length));
   const maxStack = Math.max(MIN_ROWS, maxCount + 2);
 
@@ -202,7 +199,6 @@ export const BacklogChart = forwardRef<BacklogChartHandle, BacklogChartProps>(fu
   const BOTTOM_AXIS_H = 34;
   const chartWidth = dates.length * STEP;
   const chartHeight = maxStack * STEP + TOP_AXIS_H + BOTTOM_AXIS_H;
-  const Y_AXIS_W = 28;
 
   /** layer id → row y 中心 */
   const layerYById = new Map<string, number>();

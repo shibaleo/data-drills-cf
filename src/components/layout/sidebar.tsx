@@ -165,7 +165,7 @@ export function Sidebar() {
       className="hidden md:flex h-screen flex-col border-r border-sidebar-border bg-sidebar overflow-hidden transition-all duration-300"
       style={{ width: sidebarWidth }}
     >
-      <div className="flex h-14 items-center border-b border-sidebar-border px-3 gap-2">
+      <div className="flex items-center border-b border-sidebar-border px-3 gap-2" style={{ height: "var(--header-height-mobile)" }}>
         <button
           onClick={() => setCollapsed((v) => !v)}
           className="flex shrink-0 size-8 items-center justify-center rounded-md text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground"
