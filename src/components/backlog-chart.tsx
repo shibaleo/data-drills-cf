@@ -83,7 +83,7 @@ type BacklogChartProps = {
 
 const MS_COLOR = "#f59e0b";
 const PAST_OPACITY = 0.3;
-const PAST_GRAY_MIX = 0.5;  // 過去 milestone は 50% グレイ混ぜる
+const PAST_GRAY_MIX = 0.3;  // 過去 milestone はグレイ 30% + 元色 70%
 
 function mixGray(hex: string, t = PAST_GRAY_MIX): string {
   if (!hex.startsWith("#") || hex.length !== 7) return hex;
