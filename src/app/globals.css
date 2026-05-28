@@ -38,6 +38,9 @@
   --sidebar-foreground: 0 0% 98%;
   --sidebar-border: 240 4% 21%;
   --sidebar-accent: 240 4% 21%;
+  /* Sidebar widths: override these to retheme (e.g. wider for long project names). */
+  --sidebar-width-expanded: 224px;
+  --sidebar-width-collapsed: 56px;
 
   --radius: 0.5rem;
 

@@ -24,8 +24,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { reviewKeys } from "@/hooks/queries/use-review";
 import { UserMenu } from "./user-menu";
 
-const EXPANDED_WIDTH = 224;
-const COLLAPSED_WIDTH = 56;
+// Widths are sourced from CSS vars (see src/app/globals.css :root).
+// Override --sidebar-width-expanded / --sidebar-width-collapsed to retheme.
 
 interface NavItem {
   href: string;
@@ -158,7 +158,7 @@ export function SidebarNav({
 
 export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
-  const sidebarWidth = collapsed ? COLLAPSED_WIDTH : EXPANDED_WIDTH;
+  const sidebarWidth = collapsed ? "var(--sidebar-width-collapsed)" : "var(--sidebar-width-expanded)";
 
   return (
     <aside
