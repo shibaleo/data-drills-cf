@@ -1,27 +1,39 @@
 /**
  * Tetris ブロック (= 1 問 / 1 answer) の色決定ロジック。
  *
- * 着色軸:
- *  - 過去側 (= 完了): 初回は紫、2回目以降はその回答の「直前 answer」の status color
- *  - 未来側 (= 配分): 通常は青、daily 枠の予算オーバー単問は黄、milestone pile-up は赤
+ * ライフサイクル (= 塗り色のグラデーション):
+ *   Planned → First → Miss → Rough → Fair → Fluent → Done
+ *   violet  → pink  → red  → orange→ yellow→ green → blue
  *
- * Throughput / Backlog 両 chart で共通利用するためモジュール化。
+ *  - Past 過去側: 初回は pink、2回目以降は直前 answer の status color
+ *  - Future 未来側: 配分済は violet (Planned)
+ *
+ * 例外 (overflow / over-budget) は塗りではなく **枠線** で示す:
+ *  - Overflow (milestone 締切超過 pile-up) → 赤 dashed border
+ *  - Over budget (1問が daily 枠超過)      → amber solid border
  */
 
-export const COLOR_FIRST_ATTEMPT = "#ec4899";  // pink = Miss(red) の手前 = 未評価
-export const COLOR_FUTURE_PLANNED = "#3b82f6"; // 青
-export const COLOR_OVER_BUDGET = "#eab308";    // 黄
-export const COLOR_OVERFLOW = "#ef4444";       // 赤
+export const COLOR_PLANNED = "#8b5cf6";        // violet
+export const COLOR_FIRST_ATTEMPT = "#ec4899";  // pink
+
+const BORDER_OVERFLOW = "#ef4444";   // red
+const BORDER_OVER_BUDGET = "#f59e0b"; // amber
 
 export type BlockKind =
   | { side: "past"; prevStatusColor: string | null }
   | { side: "future"; overflow: boolean; overBudget: boolean };
 
 export function blockColor(kind: BlockKind): string {
-  if (kind.side === "past") {
-    return kind.prevStatusColor ?? COLOR_FIRST_ATTEMPT;
+  if (kind.side === "past") return kind.prevStatusColor ?? COLOR_FIRST_ATTEMPT;
+  return COLOR_PLANNED;
+}
+
+export type BlockBorder = { stroke: string; dashed: boolean; width: number } | null;
+
+export function blockBorder(kind: BlockKind): BlockBorder {
+  if (kind.side === "future") {
+    if (kind.overflow) return { stroke: BORDER_OVERFLOW, dashed: true, width: 1.5 };
+    if (kind.overBudget) return { stroke: BORDER_OVER_BUDGET, dashed: false, width: 1.5 };
   }
-  if (kind.overflow) return COLOR_OVERFLOW;
-  if (kind.overBudget) return COLOR_OVER_BUDGET;
-  return COLOR_FUTURE_PLANNED;
+  return null;
 }

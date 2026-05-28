@@ -507,7 +507,7 @@ export default function BacklogDetailPage() {
                   </TableCell>
                   <TableCell style={{ width: 100 }}>
                     {alloc ? (
-                      <span className={`text-xs tabular-nums font-medium ${alloc.overflow ? "text-red-500" : alloc.side === "past" ? "text-pink-500" : "text-blue-500"}`}>
+                      <span className={`text-xs tabular-nums font-medium ${alloc.overflow ? "text-red-500" : alloc.side === "past" ? "text-pink-500" : "text-violet-500"}`}>
                         {alloc.date}{alloc.overflow ? " ⚠" : ""}
                       </span>
                     ) : null}
@@ -535,12 +535,15 @@ export default function BacklogDetailPage() {
 function LegendRow({ hideCompleted, hideFuture }: { hideCompleted: boolean; hideFuture: boolean }) {
   const pill = "inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border text-muted-foreground";
   const dot = (cls: string) => <span className={`size-2 rounded-sm ${cls}`}/>;
+  const ring = (cls: string, dashed?: boolean) => (
+    <span className={`size-2 rounded-sm border-[1.5px] ${cls}`} style={dashed ? { borderStyle: "dashed" } : undefined}/>
+  );
   return (
     <div className="flex flex-wrap gap-1.5">
       {!hideCompleted && <span className={pill}>{dot("bg-pink-500")}Done</span>}
-      {!hideFuture && <span className={pill}>{dot("bg-blue-500")}Planned</span>}
-      <span className={pill}>{dot("bg-yellow-500")}Over budget</span>
-      <span className={pill}>{dot("bg-red-500")}Overflow</span>
+      {!hideFuture && <span className={pill}>{dot("bg-violet-500")}Planned</span>}
+      <span className={pill}>{ring("border-amber-500")}Over budget</span>
+      <span className={pill}>{ring("border-red-500", true)}Overflow</span>
     </div>
   );
 }
