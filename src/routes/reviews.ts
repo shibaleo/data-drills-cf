@@ -8,10 +8,11 @@ import {
   reviewUpdateInputSchema,
   reviewTagCreateInputSchema,
 } from "@/lib/schemas/review";
+import { z } from "zod";
 
 const app = new Hono()
-  .get("/", async (c) => {
-    const answerId = c.req.query("answer_id");
+  .get("/", zValidator("query", z.object({ answer_id: z.string().uuid().optional() })), async (c) => {
+    const { answer_id: answerId } = c.req.valid("query");
     const rows = answerId
       ? await db.select().from(review).where(eq(review.answerId, answerId)).orderBy(review.createdAt)
       : await db.select().from(review).orderBy(review.createdAt);

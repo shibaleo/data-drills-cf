@@ -1,11 +1,13 @@
 import { Hono } from "hono";
+import { zValidator } from "@hono/zod-validator";
+import { z } from "zod";
 import { db } from "@/lib/db";
 import { flashcardReview } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 
 const app = new Hono()
-  .get("/", async (c) => {
-    const flashcardId = c.req.query("flashcard_id");
+  .get("/", zValidator("query", z.object({ flashcard_id: z.string().uuid().optional() })), async (c) => {
+    const { flashcard_id: flashcardId } = c.req.valid("query");
     const rows = flashcardId
       ? await db.select().from(flashcardReview).where(eq(flashcardReview.flashcardId, flashcardId)).orderBy(flashcardReview.reviewedAt)
       : await db.select().from(flashcardReview).orderBy(flashcardReview.reviewedAt);

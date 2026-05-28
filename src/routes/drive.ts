@@ -10,15 +10,19 @@ import { driveLinkInputSchema } from "@/lib/schemas/drive";
 const DRIVE_API = "https://www.googleapis.com/drive/v3";
 
 const app = new Hono()
+  // /api/drive は v1 の外にマウントされているため、v1 ミドルウェアが効かない。
+  // ルート単位で認証を一括する。
+  .use("*", async (c, next) => {
+    const result = await authenticate(c.req.raw);
+    if (!result) return c.json({ error: "Unauthorized" }, 401);
+    await next();
+  })
   /**
    * GET /file?id={gdrive_file_id} — Proxy PDF content from Google Drive
    */
   .get("/file", async (c) => {
     const fileId = c.req.query("id");
     if (!fileId) return c.json({ error: "Missing id" }, 400);
-
-    const authResult = await authenticate(c.req.raw);
-    if (!authResult) return c.json({ error: "Unauthorized" }, 401);
 
     const [tokens] = await db
       .select()
@@ -71,9 +75,6 @@ const app = new Hono()
    * POST /link — Link a Google Drive file to a problem
    */
   .post("/link", zValidator("json", driveLinkInputSchema), async (c) => {
-    const authResult = await authenticate(c.req.raw);
-    if (!authResult) return c.json({ error: "Unauthorized" }, 401);
-
     const { problemId, gdriveFileId, fileName, problemPages } = c.req.valid("json");
 
     const existing = await db

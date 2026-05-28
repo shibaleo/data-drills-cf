@@ -10,10 +10,11 @@ import {
   problemTagCreateInputSchema,
   problemFileCreateInputSchema,
 } from "@/lib/schemas/problem";
+import { z } from "zod";
 
 const app = new Hono()
-  .get("/", async (c) => {
-    const projectId = c.req.query("project_id");
+  .get("/", zValidator("query", z.object({ project_id: z.string().uuid().optional() })), async (c) => {
+    const { project_id: projectId } = c.req.valid("query");
     const rows = projectId
       ? await db.select().from(problem).where(eq(problem.projectId, projectId)).orderBy(problem.createdAt)
       : await db.select().from(problem).orderBy(problem.createdAt);

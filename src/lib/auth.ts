@@ -56,7 +56,14 @@ async function verifyApiKeyToken(token: string): Promise<AuthResult | null> {
     .where(eq(apiKey.keyPrefix, prefix))
     .catch(() => { /* best-effort */ });
 
-  const result: AuthResult = { authenticated: true, userId: "", name: "API", email: "" };
+  // API key は user に紐付かないので userId は空のまま。name は key の名前で
+  // 「誰が叩いたか」を最低限ログ・debug に出せるようにする。
+  const result: AuthResult = {
+    authenticated: true,
+    userId: "",
+    name: `apikey:${row.name}`,
+    email: "",
+  };
   apiKeyAuthCache.set(token, { result, expiresAt: Date.now() + API_KEY_CACHE_TTL });
   return result;
 }

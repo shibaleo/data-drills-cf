@@ -8,6 +8,7 @@ import {
   answerCreateInputSchema,
   answerUpdateInputSchema,
 } from "@/lib/schemas/answer";
+import { z } from "zod";
 
 const toRow = (r: typeof answer.$inferSelect) => ({
   ...r,
@@ -16,8 +17,8 @@ const toRow = (r: typeof answer.$inferSelect) => ({
 });
 
 const app = new Hono()
-  .get("/", async (c) => {
-    const problemId = c.req.query("problem_id");
+  .get("/", zValidator("query", z.object({ problem_id: z.string().uuid().optional() })), async (c) => {
+    const { problem_id: problemId } = c.req.valid("query");
     const rows = problemId
       ? await db.select().from(answer).where(eq(answer.problemId, problemId)).orderBy(answer.date, answer.createdAt)
       : await db.select().from(answer).orderBy(answer.date, answer.createdAt);

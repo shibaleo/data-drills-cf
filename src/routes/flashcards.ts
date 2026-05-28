@@ -11,10 +11,11 @@ import {
   flashcardProblemCreateInputSchema,
   flashcardReviewCreateInputSchema,
 } from "@/lib/schemas/flashcard";
+import { z } from "zod";
 
 const app = new Hono()
-  .get("/", async (c) => {
-    const projectId = c.req.query("project_id");
+  .get("/", zValidator("query", z.object({ project_id: z.string().uuid().optional() })), async (c) => {
+    const { project_id: projectId } = c.req.valid("query");
     const rows = projectId
       ? await db.select().from(flashcard).where(eq(flashcard.projectId, projectId)).orderBy(flashcard.createdAt)
       : await db.select().from(flashcard).orderBy(flashcard.createdAt);
