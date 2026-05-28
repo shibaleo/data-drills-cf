@@ -17,7 +17,6 @@ import tags from "@/routes/tags";
 import reviewTags from "@/routes/review-tags";
 import problemFiles from "@/routes/problem-files";
 import problemsList from "@/routes/problems-list";
-import answersList from "@/routes/answers-list";
 import review from "@/routes/review";
 import throughput from "@/routes/throughput";
 import pdfExport from "@/routes/pdf-export";
@@ -65,7 +64,6 @@ const v1 = new Hono<Env>()
   .route("/review-tags", reviewTags)
   .route("/problem-files", problemFiles)
   .route("/problems-list", problemsList)
-  .route("/answers-list", answersList)
   .route("/review", review)
   .route("/throughput", throughput)
   .route("/pdf-export", pdfExport)

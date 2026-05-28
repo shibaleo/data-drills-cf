@@ -77,14 +77,3 @@ export const goalMilestoneUpdateInputSchema = z.object({
 });
 export type GoalMilestoneUpdateInput = z.infer<typeof goalMilestoneUpdateInputSchema>;
 
-/* ── Backlog View Pref (UI filter, mutable) ──────────────────── */
-
-export const backlogViewPrefSchema = z.object({
-  hideCompleted: z.boolean().optional(),
-  hideFuture: z.boolean().optional(),
-  overflowOnly: z.boolean().optional(),
-  subjectIds: z.array(z.string()).optional(),
-  levelIds: z.array(z.string()).optional(),
-  topicIds: z.array(z.string()).optional(),
-});
-export type BacklogViewPrefInput = z.infer<typeof backlogViewPrefSchema>;

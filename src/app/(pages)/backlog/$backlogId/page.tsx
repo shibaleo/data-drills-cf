@@ -220,7 +220,7 @@ export default function BacklogDetailPage() {
 
   async function onConfirm() {
     if (!data) return;
-    // plan-level
+    // backlog-level
     if (planDirty) {
       await update.mutateAsync({
         id: backlogId,

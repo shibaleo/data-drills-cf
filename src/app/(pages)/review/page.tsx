@@ -529,7 +529,7 @@ export default function SchedulePage() {
 
   const qc = useQueryClient();
 
-  // Fast path: /schedule API (driven by TanStack Query)
+  // Fast path: /api/v1/review (driven by TanStack Query)
   const scheduleQuery = useReviewList(currentProject?.id);
   const serverRows = useMemo<ScheduleRow[]>(() => {
     return (scheduleQuery.data ?? []).map((r) => ({
