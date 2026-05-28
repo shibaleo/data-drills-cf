@@ -62,7 +62,7 @@ export default function ThroughputPage() {
 
   const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
 
-  const { startDate, totalDays, columns, maxStack, todayIdx } = useMemo(() => {
+  const { startDate, totalDays, columns, maxStack, renderCap, todayIdx } = useMemo(() => {
     const cols = new Map<string, ThroughputRow[]>();
     for (const r of filtered) {
       const arr = cols.get(r.date) ?? [];
@@ -77,13 +77,15 @@ export default function ThroughputPage() {
     const days = diffDays(start, end) + 1;
     let max = 0;
     cols.forEach((v) => { if (v.length > max) max = v.length; });
-    const autoMax = Math.max(MIN_ROWS, max + 2);
-    const capped = maxRowsCap != null ? Math.min(autoMax, maxRowsCap) : autoMax;
+    // Render cap = how many data blocks may stack per column.
+    // Chart height always adds 2 rows of breathing space on top.
+    const cap = maxRowsCap != null ? Math.min(max, maxRowsCap) : max;
     return {
       startDate: start,
       totalDays: days,
       columns: cols,
-      maxStack: capped,
+      renderCap: cap,
+      maxStack: Math.max(MIN_ROWS, cap + 2),
       todayIdx: diffDays(start, today),
     };
   }, [filtered, today, maxRowsCap]);
@@ -270,8 +272,8 @@ export default function ThroughputPage() {
                           width={CELL} height={CELL} rx={2}
                           fill="none" stroke="hsl(var(--border))" strokeWidth={0.5}/>
                       ))}
-                      {/* Filled blocks (capped at maxStack) */}
-                      {dayItems.slice(0, maxStack).map((r, stackIdx) => {
+                      {/* Filled blocks (capped at renderCap; chart leaves +2 rows of padding above) */}
+                      {dayItems.slice(0, renderCap).map((r, stackIdx) => {
                         const by = chartHeight - BOTTOM_AXIS_H - (stackIdx + 1) * STEP;
                         const color = blockColor({ side: "past", prevStatusColor: r.prevStatusColor });
                         return (
@@ -284,12 +286,12 @@ export default function ThroughputPage() {
                         );
                       })}
                       {/* Overflow indicator if column was capped */}
-                      {dayItems.length > maxStack && (
+                      {dayItems.length > renderCap && (
                         <text x={x + CELL / 2}
-                          y={chartHeight - BOTTOM_AXIS_H - maxStack * STEP - 2}
+                          y={chartHeight - BOTTOM_AXIS_H - renderCap * STEP - 2}
                           textAnchor="middle" fontSize={8}
                           className="fill-muted-foreground" fontWeight={600}>
-                          ▲{dayItems.length - maxStack}
+                          ▲{dayItems.length - renderCap}
                         </text>
                       )}
                       {/* Top axis: absolute dates */}
