@@ -332,6 +332,10 @@ export default function BacklogDetailPage() {
         await updateMilestone.mutateAsync({ id: m.id, payload });
       }
     }
+    // backlog.revision が変わらなくても (layer/milestone のみの編集) ローカルを
+    // 次の data fetch で再同期させるため、sync ガードを外しておく。
+    lastSyncRevRef.current = null;
+    toast.success("Saved");
   }
   async function onArchive() {
     if (!confirm("Archive this backlog? (History will be preserved)")) return;
