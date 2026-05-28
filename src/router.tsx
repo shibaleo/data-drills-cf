@@ -14,6 +14,7 @@ import { AuthenticateWithRedirectCallback } from "@clerk/react";
 /* ── Lazy page imports ── */
 
 const ReviewPage = lazy(() => import("./app/(pages)/review/page"));
+const ThroughputPage = lazy(() => import("./app/(pages)/throughput/page"));
 const FlashcardsPage = lazy(() => import("./app/(pages)/flashcards/page"));
 const TagsPage = lazy(() => import("./app/(pages)/tags/page"));
 const SubjectsPage = lazy(() => import("./app/(pages)/subjects/page"));
@@ -63,6 +64,7 @@ function lazyRoute(
 }
 
 const reviewRoute = lazyRoute("/review", ReviewPage);
+const throughputRoute = lazyRoute("/throughput", ThroughputPage);
 const flashcardsRoute = lazyRoute("/flashcards", FlashcardsPage);
 const tagsRoute = lazyRoute("/tags", TagsPage);
 const subjectsRoute = lazyRoute("/subjects", SubjectsPage);
@@ -117,6 +119,7 @@ const routeTree = rootRoute.addChildren([
     backlogRoute,
     backlogNewRoute,
     backlogDetailRoute,
+    throughputRoute,
   ]),
   indexRoute,
   ssoCallbackRoute,

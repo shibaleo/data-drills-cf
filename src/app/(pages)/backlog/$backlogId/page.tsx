@@ -507,7 +507,7 @@ export default function BacklogDetailPage() {
                   </TableCell>
                   <TableCell style={{ width: 100 }}>
                     {alloc ? (
-                      <span className={`text-xs tabular-nums font-medium ${alloc.overflow ? "text-red-500" : alloc.side === "past" ? "text-green-600" : "text-blue-500"}`}>
+                      <span className={`text-xs tabular-nums font-medium ${alloc.overflow ? "text-red-500" : alloc.side === "past" ? "text-purple-500" : "text-blue-500"}`}>
                         {alloc.date}{alloc.overflow ? " ⚠" : ""}
                       </span>
                     ) : null}
@@ -537,7 +537,7 @@ function LegendRow({ hideCompleted, hideFuture }: { hideCompleted: boolean; hide
   const dot = (cls: string) => <span className={`size-2 rounded-sm ${cls}`}/>;
   return (
     <div className="flex flex-wrap gap-1.5">
-      {!hideCompleted && <span className={pill}>{dot("bg-green-500")}Done</span>}
+      {!hideCompleted && <span className={pill}>{dot("bg-purple-500")}Done</span>}
       {!hideFuture && <span className={pill}>{dot("bg-blue-500")}Planned</span>}
       <span className={pill}>{dot("bg-yellow-500")}Over budget</span>
       <span className={pill}>{dot("bg-red-500")}Overflow</span>
