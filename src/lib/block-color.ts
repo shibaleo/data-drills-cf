@@ -8,7 +8,7 @@
  * Throughput / Backlog 両 chart で共通利用するためモジュール化。
  */
 
-export const COLOR_FIRST_ATTEMPT = "#6366f1";  // indigo = Miss/.../Done グラデーションの先 (= 初回、freshest)
+export const COLOR_FIRST_ATTEMPT = "#ec4899";  // pink = Miss(red) の手前 = 未評価
 export const COLOR_FUTURE_PLANNED = "#3b82f6"; // 青
 export const COLOR_OVER_BUDGET = "#eab308";    // 黄
 export const COLOR_OVERFLOW = "#ef4444";       // 赤
