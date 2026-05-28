@@ -268,7 +268,7 @@ function ScheduleChart({
               {(() => {
                 const diff = todayIdx >= 0 ? colIdx - todayIdx : 0;
                 if (diff % 7 !== 0) return null;
-                const label = diff === 0 ? "今日" : diff > 0 ? `+${diff}` : `▲ ${Math.abs(diff)}`;
+                const label = diff === 0 ? "today" : diff > 0 ? `+${diff} d` : `-${Math.abs(diff)} d`;
                 return (
                   <text
                     x={x + CELL / 2}
@@ -520,7 +520,7 @@ const columns: ColumnDef<ScheduleRow>[] = [
                 : "text-muted-foreground"
           }`}
         >
-          {d < 0 ? `▲ ${Math.abs(d)} d` : d === 0 ? "今日" : `${d} d`}
+          {d < 0 ? `-${Math.abs(d)} d` : d === 0 ? "today" : `+${d} d`}
         </span>
       );
     },
@@ -550,7 +550,7 @@ const columns: ColumnDef<ScheduleRow>[] = [
 /* ── Page ── */
 
 export default function SchedulePage() {
-  usePageTitle("Schedule");
+  usePageTitle("Review");
   const { currentProject, subjects, levels, statuses } = useProject();
 
   // Build status name → sortOrder map from DB statuses
@@ -864,7 +864,7 @@ export default function SchedulePage() {
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2 flex-wrap">
               <SummaryCard
-                label="今日"
+                label="Today"
                 count={summaryCounts.today}
 
                 active={summaryFilter === "today"}
@@ -872,7 +872,7 @@ export default function SchedulePage() {
                 variant="default"
               />
               <SummaryCard
-                label="7日以内"
+                label="Within 7 d"
                 count={summaryCounts.week}
 
                 active={summaryFilter === "week"}

@@ -33,7 +33,7 @@ export type BlockBorder = { stroke: string; dashed: boolean; width: number } | n
 export function blockBorder(kind: BlockKind): BlockBorder {
   if (kind.side === "future") {
     if (kind.overflow) return { stroke: BORDER_OVERFLOW, dashed: true, width: 1.5 };
-    if (kind.overBudget) return { stroke: BORDER_OVER_BUDGET, dashed: false, width: 1.5 };
+    if (kind.overBudget) return { stroke: BORDER_OVER_BUDGET, dashed: true, width: 1.5 };
   }
   return null;
 }

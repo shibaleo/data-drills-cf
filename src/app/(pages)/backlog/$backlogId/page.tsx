@@ -542,7 +542,7 @@ function LegendRow({ hideCompleted, hideFuture }: { hideCompleted: boolean; hide
     <div className="flex flex-wrap gap-1.5">
       {!hideCompleted && <span className={pill}>{dot("bg-pink-500")}Done</span>}
       {!hideFuture && <span className={pill}>{dot("bg-violet-500")}Planned</span>}
-      <span className={pill}>{ring("border-amber-500")}Over budget</span>
+      <span className={pill}>{ring("border-amber-500", true)}Over budget</span>
       <span className={pill}>{ring("border-red-500", true)}Overflow</span>
     </div>
   );

@@ -208,7 +208,7 @@ export default function ThroughputPage() {
                         <text x={x + CELL / 2} y={chartHeight - 4} textAnchor="middle"
                           className="fill-muted-foreground" fontSize={9}
                           fontWeight={isToday ? 700 : 400}>
-                          {diff === 0 ? "今日" : diff > 0 ? `+${diff}` : `▲ ${Math.abs(diff)}`}
+                          {diff === 0 ? "today" : diff > 0 ? `+${diff} d` : `-${Math.abs(diff)} d`}
                         </text>
                       )}
                     </g>
