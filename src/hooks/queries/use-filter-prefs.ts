@@ -11,8 +11,24 @@ export type ReviewPrefs = {
   levelIds?: string[];
   statuses?: string[];
 };
+export type BacklogPrefs = {
+  subjectIds?: string[];
+  levelIds?: string[];
+  topicIds?: string[];
+  hideCompleted?: boolean;
+  hideFuture?: boolean;
+  overflowOnly?: boolean;
+};
+export type ThroughputPrefs = {
+  subjectIds?: string[];
+  levelIds?: string[];
+  prevStatuses?: string[];  // 凡例ショートカット用 ("First" + 各 status name)
+  maxRowsCap?: number | null;
+};
 export type FilterPrefsBag = {
   review?: ReviewPrefs;
+  backlog?: BacklogPrefs;
+  throughput?: ThroughputPrefs;
 };
 
 export function useFilterPrefs(projectId: string | undefined) {

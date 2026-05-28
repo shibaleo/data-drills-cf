@@ -23,6 +23,8 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@
 import { ResizableTableShell } from "@/components/resizable-table-shell";
 import { OpaqueTag } from "@/components/problem-card";
 import { BlockLegend } from "@/components/block-legend";
+import { FilterSection } from "@/components/filter-section";
+import { useFilterPrefs, useSaveFilterPrefs } from "@/hooks/queries/use-filter-prefs";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Filter, SlidersHorizontal, ArrowLeft, Archive, Save, RotateCcw, Loader2, Download } from "lucide-react";
@@ -69,6 +71,38 @@ export default function BacklogDetailPage() {
   const [exporting, setExporting] = useState(false);
   const [exportPhase, setExportPhase] = useState<"waking" | "generating" | "downloading" | null>(null);
   const { data: topics = [] } = useTopicsList(currentProject?.id);
+
+  // Filter prefs persistence
+  const filterPrefsQuery = useFilterPrefs(currentProject?.id);
+  const saveFilterPrefs = useSaveFilterPrefs(currentProject?.id);
+  const prefsLoadedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!currentProject || prefsLoadedRef.current === currentProject.id) return;
+    if (filterPrefsQuery.data === undefined) return;
+    const p = filterPrefsQuery.data?.backlog;
+    if (p) {
+      setFilterSubjects(new Set(p.subjectIds ?? []));
+      setFilterLevels(new Set(p.levelIds ?? []));
+      setFilterTopics(new Set(p.topicIds ?? []));
+      setHideCompleted(!!p.hideCompleted);
+      setHideFuture(!!p.hideFuture);
+      setOverflowOnly(!!p.overflowOnly);
+    }
+    prefsLoadedRef.current = currentProject.id;
+  }, [currentProject, filterPrefsQuery.data]);
+  useEffect(() => {
+    if (!currentProject || prefsLoadedRef.current !== currentProject.id) return;
+    saveFilterPrefs.mutate({
+      ...(filterPrefsQuery.data ?? {}),
+      backlog: {
+        subjectIds: [...filterSubjects],
+        levelIds: [...filterLevels],
+        topicIds: [...filterTopics],
+        hideCompleted, hideFuture, overflowOnly,
+      },
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filterSubjects, filterLevels, filterTopics, hideCompleted, hideFuture, overflowOnly]);
 
   const qc = useQueryClient();
   const allProblems = useProblemsList(currentProject?.id).data ?? [];
@@ -521,6 +555,9 @@ export default function BacklogDetailPage() {
         />
       </div>
 
+      {visibleMembers.length === 0 ? (
+        <div className="text-sm text-muted-foreground py-8 text-center rounded-md border">No data</div>
+      ) : (
       <ResizableTableShell ref={tableRef}>
         <Table className="table-fixed">
           <TableHeader>
@@ -611,6 +648,7 @@ export default function BacklogDetailPage() {
           </TableBody>
         </Table>
       </ResizableTableShell>
+      )}
 
       {renderDialogs()}
     </div>
@@ -631,29 +669,6 @@ function SummaryCard({ label, value, unit, tone, sub }: {
         <span className="text-xs text-muted-foreground">{unit}</span>
       </div>
       {sub && <div className="text-[10px] text-muted-foreground tabular-nums">{sub}</div>}
-    </div>
-  );
-}
-
-function FilterSection({ label, items, selected, onChange }: {
-  label: string; items: { value: string; label: string }[];
-  selected: Set<string>; onChange: (next: Set<string>) => void;
-}) {
-  const toggle = (value: string, checked: boolean | "indeterminate") => {
-    const next = new Set(selected);
-    if (checked === true) next.add(value); else next.delete(value);
-    onChange(next);
-  };
-  return (
-    <div>
-      <div className="text-[10px] font-medium text-muted-foreground mb-1">{label}</div>
-      {items.map((item) => (
-        <label key={item.value} className="flex items-center gap-2 px-1 py-1 text-xs rounded-sm hover:bg-accent cursor-pointer">
-          <Checkbox className="size-3.5" checked={selected.has(item.value)}
-            onCheckedChange={(checked) => toggle(item.value, checked)}/>
-          {item.label}
-        </label>
-      ))}
     </div>
   );
 }

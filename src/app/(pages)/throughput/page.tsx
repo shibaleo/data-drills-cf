@@ -11,12 +11,13 @@ import { rpc } from "@/lib/rpc-client";
 import { toast } from "sonner";
 import { Filter, Download, Loader2, SlidersHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { ResizableTableShell } from "@/components/resizable-table-shell";
 import { OpaqueTag } from "@/components/problem-card";
 import { BlockLegend, type LegendEntry } from "@/components/block-legend";
+import { FilterSection } from "@/components/filter-section";
+import { useFilterPrefs, useSaveFilterPrefs } from "@/hooks/queries/use-filter-prefs";
 
 const CELL = 14;
 const GAP = 2;
@@ -48,17 +49,64 @@ export default function ThroughputPage() {
 
   const [filterSubjects, setFilterSubjects] = useState<Set<string>>(new Set());
   const [filterLevels, setFilterLevels] = useState<Set<string>>(new Set());
+  const [filterPrevStatuses, setFilterPrevStatuses] = useState<Set<string>>(new Set());
   const [maxRowsCap, setMaxRowsCap] = useState<number | null>(10);  // null = auto
   const [exportSelected, setExportSelected] = useState<Set<string>>(new Set());
   const [exporting, setExporting] = useState(false);
   const [exportPhase, setExportPhase] = useState<"waking" | "generating" | "downloading" | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Filter prefs persistence
+  const filterPrefsQuery = useFilterPrefs(currentProject?.id);
+  const saveFilterPrefs = useSaveFilterPrefs(currentProject?.id);
+  const prefsLoadedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!currentProject || prefsLoadedRef.current === currentProject.id) return;
+    if (filterPrefsQuery.data === undefined) return;
+    const p = filterPrefsQuery.data?.throughput;
+    if (p) {
+      setFilterSubjects(new Set(p.subjectIds ?? []));
+      setFilterLevels(new Set(p.levelIds ?? []));
+      setFilterPrevStatuses(new Set(p.prevStatuses ?? []));
+      if (p.maxRowsCap !== undefined) setMaxRowsCap(p.maxRowsCap);
+    }
+    prefsLoadedRef.current = currentProject.id;
+  }, [currentProject, filterPrefsQuery.data]);
+  useEffect(() => {
+    if (!currentProject || prefsLoadedRef.current !== currentProject.id) return;
+    saveFilterPrefs.mutate({
+      ...(filterPrefsQuery.data ?? {}),
+      throughput: {
+        subjectIds: [...filterSubjects],
+        levelIds: [...filterLevels],
+        prevStatuses: [...filterPrevStatuses],
+        maxRowsCap,
+      },
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filterSubjects, filterLevels, filterPrevStatuses, maxRowsCap]);
 
   const filtered = useMemo<ThroughputRow[]>(() => rows.filter((r) => {
     if (filterSubjects.size > 0 && (!r.subjectId || !filterSubjects.has(r.subjectId))) return false;
     if (filterLevels.size > 0 && (!r.levelId || !filterLevels.has(r.levelId))) return false;
+    if (filterPrevStatuses.size > 0) {
+      const key = r.prevStatusName ?? "First";
+      if (!filterPrevStatuses.has(key)) return false;
+    }
     return true;
-  }), [rows, filterSubjects, filterLevels]);
+  }), [rows, filterSubjects, filterLevels, filterPrevStatuses]);
+
+  const handleSelect = useCallback((problemId: string) => {
+    setSelectedId((prev) => (prev === problemId ? null : problemId));
+  }, []);
+  const togglePrevStatus = useCallback((key: string) => {
+    setFilterPrevStatuses((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  }, []);
 
   const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
 
@@ -145,14 +193,22 @@ export default function ThroughputPage() {
 
   const uniqueFilteredProblemIds = useMemo(() => Array.from(new Set(filtered.map((r) => r.problemId))), [filtered]);
   const legendEntries: LegendEntry[] = useMemo(() => {
-    const entries: LegendEntry[] = [{ kind: "fill", label: "First", color: COLOR_FIRST_ATTEMPT }];
-    for (const s of statuses) entries.push({ kind: "fill", label: s.name, color: s.color ?? "#888" });
+    const entries: LegendEntry[] = [{
+      kind: "fill", label: "First", color: COLOR_FIRST_ATTEMPT,
+      active: filterPrevStatuses.has("First"),
+      onClick: () => togglePrevStatus("First"),
+    }];
+    for (const s of statuses) entries.push({
+      kind: "fill", label: s.name, color: s.color ?? "#888",
+      active: filterPrevStatuses.has(s.name),
+      onClick: () => togglePrevStatus(s.name),
+    });
     return entries;
-  }, [statuses]);
+  }, [statuses, filterPrevStatuses, togglePrevStatus]);
 
   if (!currentProject) return <div className="p-6 text-muted-foreground">Please select a project</div>;
 
-  const activeFilterCount = filterSubjects.size + filterLevels.size;
+  const activeFilterCount = filterSubjects.size + filterLevels.size + filterPrevStatuses.size;
 
   return (
     <div className="p-3 md:p-4 flex flex-col gap-2">
@@ -182,7 +238,7 @@ export default function ThroughputPage() {
               {activeFilterCount > 0 && (
                 <button type="button"
                   className="text-[10px] text-muted-foreground hover:text-foreground w-full text-center pt-1"
-                  onClick={() => { setFilterSubjects(new Set()); setFilterLevels(new Set()); }}>
+                  onClick={() => { setFilterSubjects(new Set()); setFilterLevels(new Set()); setFilterPrevStatuses(new Set()); }}>
                   Clear all
                 </button>
               )}
@@ -231,6 +287,8 @@ export default function ThroughputPage() {
 
         {isLoading ? (
           <div className="text-sm text-muted-foreground py-8 text-center">Loading...</div>
+        ) : filtered.length === 0 ? (
+          <div className="text-sm text-muted-foreground py-8 text-center">No data</div>
         ) : (
           <div className="flex">
             <svg width={Y_AXIS_W} height={chartHeight} className="block shrink-0">
@@ -354,9 +412,12 @@ export default function ThroughputPage() {
               const mins = r.duration != null ? Math.round(r.duration / 60) : null;
               const prevName = r.prevStatusColor == null ? "First" : (r.prevStatusName ?? "Repeat");
               const prevColor = r.prevStatusColor ?? COLOR_FIRST_ATTEMPT;
+              const sel = selectedId === r.problemId;
               return (
-                <TableRow key={r.id} className="cursor-pointer"
-                  onClick={() => openDetail(r.problemId)}>
+                <TableRow key={r.id} data-problem-id={r.problemId}
+                  className={`cursor-pointer ${sel ? "bg-accent" : ""}`}
+                  onClick={() => sel ? openDetail(r.problemId) : handleSelect(r.problemId)}
+                  onDoubleClick={() => openDetail(r.problemId)}>
                   <TableCell className="w-10 px-3" onClick={(e) => e.stopPropagation()}>
                     <div className="flex items-center justify-center">
                       <input
@@ -398,25 +459,3 @@ export default function ThroughputPage() {
   );
 }
 
-function FilterSection({ label, items, selected, onChange }: {
-  label: string; items: { value: string; label: string }[];
-  selected: Set<string>; onChange: (next: Set<string>) => void;
-}) {
-  const toggle = (value: string, checked: boolean | "indeterminate") => {
-    const next = new Set(selected);
-    if (checked === true) next.add(value); else next.delete(value);
-    onChange(next);
-  };
-  return (
-    <div>
-      <div className="text-[10px] font-medium text-muted-foreground mb-1">{label}</div>
-      {items.map((item) => (
-        <label key={item.value} className="flex items-center gap-2 px-1 py-1 text-xs rounded-sm hover:bg-accent cursor-pointer">
-          <Checkbox className="size-3.5" checked={selected.has(item.value)}
-            onCheckedChange={(checked) => toggle(item.value, checked)}/>
-          {item.label}
-        </label>
-      ))}
-    </div>
-  );
-}

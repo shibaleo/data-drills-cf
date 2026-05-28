@@ -23,7 +23,8 @@ import { useReviewList, reviewKeys } from "@/hooks/queries/use-review";
 import { useProblemsList, problemsKeys } from "@/hooks/queries/use-problems";
 import { useUpdateStatus } from "@/hooks/queries/use-statuses";
 import { SortHeader } from "@/components/sort-header";
-import { BlockLegend } from "@/components/block-legend";
+import { BlockLegend, type LegendEntry } from "@/components/block-legend";
+import { FilterSection } from "@/components/filter-section";
 import { toJSTDateString } from "@/lib/date-utils";
 import { StatusTag } from "@/components/color-tags";
 import { Button } from "@/components/ui/button";
@@ -390,43 +391,6 @@ function StabilitySlider({
   );
 }
 
-function FilterSection({
-  label,
-  items,
-  selected,
-  onChange,
-}: {
-  label: string;
-  items: { value: string; label: string }[];
-  selected: Set<string>;
-  onChange: (next: Set<string>) => void;
-}) {
-  const toggle = (value: string, checked: boolean | "indeterminate") => {
-    const next = new Set(selected);
-    if (checked === true) next.add(value);
-    else next.delete(value);
-    onChange(next);
-  };
-  return (
-    <div>
-      <div className="text-[10px] font-medium text-muted-foreground mb-1">{label}</div>
-      {items.map((item) => (
-        <label
-          key={item.value}
-          className="flex items-center gap-2 px-1 py-1 text-xs rounded-sm hover:bg-accent cursor-pointer"
-        >
-          <Checkbox
-            className="size-3.5"
-            checked={selected.has(item.value)}
-            onCheckedChange={(checked) => toggle(item.value, checked)}
-          />
-          {item.label}
-        </label>
-      ))}
-    </div>
-  );
-}
-
 /* ── Column defs ── */
 
 const columns: ColumnDef<ScheduleRow>[] = [
@@ -758,7 +722,7 @@ export default function SchedulePage() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `exported-${todayStr}.pdf`;
+      a.download = `review-${todayStr}.pdf`;
       a.click();
       URL.revokeObjectURL(url);
       toast.success("PDFエクスポート完了");
@@ -864,7 +828,15 @@ export default function SchedulePage() {
                   )}
                 </PopoverContent>
               </Popover>
-              <BlockLegend entries={statuses.map((s) => ({ kind: "fill" as const, label: s.name, color: s.color ?? "#888" }))}/>
+              <BlockLegend entries={statuses.map<LegendEntry>((s) => ({
+                kind: "fill", label: s.name, color: s.color ?? "#888",
+                active: filterStatuses.has(s.name),
+                onClick: () => setFilterStatuses((prev) => {
+                  const next = new Set(prev);
+                  if (next.has(s.name)) next.delete(s.name); else next.add(s.name);
+                  return next;
+                }),
+              }))}/>
               {exportSelected.size > 0 && (
                 <>
                   <Button
