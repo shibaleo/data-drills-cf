@@ -82,6 +82,18 @@ type BacklogChartProps = {
 
 
 const MS_COLOR = "#f59e0b";
+const PAST_OPACITY = 0.3;
+const PAST_GRAY_MIX = 0.5;  // 過去 milestone は 50% グレイ混ぜる
+
+function mixGray(hex: string, t = PAST_GRAY_MIX): string {
+  if (!hex.startsWith("#") || hex.length !== 7) return hex;
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  const gr = 0x88;
+  const to2 = (n: number) => Math.round(n).toString(16).padStart(2, "0");
+  return `#${to2(r * (1 - t) + gr * t)}${to2(g * (1 - t) + gr * t)}${to2(b * (1 - t) + gr * t)}`;
+}
 
 function addDays(dateStr: string, days: number): string {
   const d = new Date(`${dateStr}T00:00:00Z`);
@@ -432,8 +444,11 @@ export const BacklogChart = forwardRef<BacklogChartHandle, BacklogChartProps>(fu
             if (!layer) return null;
             const hidden = isLayerHidden(layer.id);
             if (hidden) return null;
-            const layerColor = layer.color || MS_COLOR;
-            const layerOpacity = (layer.opacity_pct ?? 40) / 100;
+            const isPast = ms.date < today;
+            const rawColor = layer.color || MS_COLOR;
+            const layerColor = isPast ? mixGray(rawColor) : rawColor;
+            const baseOpacity = (layer.opacity_pct ?? 40) / 100;
+            const layerOpacity = isPast ? PAST_OPACITY : baseOpacity;
             const layerLineWidth = layer.line_width ?? 1.5;
             const layerLineDash = layer.line_style === "dashed" ? "4 3" : layer.line_style === "dotted" ? "1 3" : undefined;
             const idx = dates.indexOf(ms.date);
