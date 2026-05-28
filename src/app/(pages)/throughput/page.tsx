@@ -9,7 +9,7 @@ import { formatRelDay } from "@/lib/relative-day";
 import { usePageTitle } from "@/lib/page-context";
 import { rpc } from "@/lib/rpc-client";
 import { toast } from "sonner";
-import { Filter, Download, Loader2 } from "lucide-react";
+import { Filter, Download, Loader2, SlidersHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -201,16 +201,30 @@ export default function ThroughputPage() {
             </Button>
           )}
         </div>
-        <div className="inline-flex rounded-md border text-[10px] overflow-hidden">
-          {([10, 20, null] as const).map((v) => (
-            <button key={String(v)}
-              type="button"
-              className={`px-2 py-0.5 transition-colors ${maxRowsCap === v ? "bg-accent text-accent-foreground" : "text-muted-foreground hover:bg-muted"}`}
-              onClick={() => setMaxRowsCap(v)}>
-              {v ?? "Auto"}
+        <Popover>
+          <PopoverTrigger asChild>
+            <button type="button"
+              title="Row cap"
+              className="inline-flex items-center justify-center size-[26px] rounded-md border text-muted-foreground hover:bg-muted transition-colors">
+              <SlidersHorizontal className="size-3"/>
             </button>
-          ))}
-        </div>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-2" align="end">
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] text-muted-foreground">Max rows</span>
+              <div className="inline-flex rounded-md border text-[10px] overflow-hidden">
+                {([10, 20, null] as const).map((v) => (
+                  <button key={String(v)}
+                    type="button"
+                    className={`px-2 py-0.5 transition-colors ${maxRowsCap === v ? "bg-accent text-accent-foreground" : "text-muted-foreground hover:bg-muted"}`}
+                    onClick={() => setMaxRowsCap(v)}>
+                    {v ?? "Auto"}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </PopoverContent>
+        </Popover>
         </div>
 
         {isLoading ? (

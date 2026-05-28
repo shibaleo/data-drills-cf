@@ -600,7 +600,6 @@ export default function SchedulePage() {
     { id: "daysUntil", desc: false },
   ]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [chartColorMode, setChartColorMode] = useState<ChartColorMode>("status");
   const tableRef = useRef<HTMLDivElement>(null);
   const [exportSelected, setExportSelected] = useState<Set<string>>(new Set());
   const [exporting, setExporting] = useState(false);
@@ -865,9 +864,7 @@ export default function SchedulePage() {
                   )}
                 </PopoverContent>
               </Popover>
-              {chartColorMode === "status" && (
-                <BlockLegend entries={statuses.map((s) => ({ kind: "fill" as const, label: s.name, color: s.color ?? "#888" }))}/>
-              )}
+              <BlockLegend entries={statuses.map((s) => ({ kind: "fill" as const, label: s.name, color: s.color ?? "#888" }))}/>
               {exportSelected.size > 0 && (
                 <>
                   <Button
@@ -929,22 +926,6 @@ export default function SchedulePage() {
                   </Button>
                 </>
               )}
-              <div className="inline-flex rounded-md border text-[10px]">
-                <button
-                  type="button"
-                  className={`px-2 py-0.5 rounded-l-md transition-colors ${chartColorMode === "problem" ? "bg-accent text-accent-foreground" : "text-muted-foreground hover:bg-muted"}`}
-                  onClick={() => setChartColorMode("problem")}
-                >
-                  Problem
-                </button>
-                <button
-                  type="button"
-                  className={`px-2 py-0.5 rounded-r-md transition-colors ${chartColorMode === "status" ? "bg-accent text-accent-foreground" : "text-muted-foreground hover:bg-muted"}`}
-                  onClick={() => setChartColorMode("status")}
-                >
-                  Status
-                </button>
-              </div>
               {sliderStatuses.length > 0 && (
                 <button
                   type="button"
@@ -981,7 +962,7 @@ export default function SchedulePage() {
                 />
               </div>
             )}
-            <ScheduleChart items={chartRows} today={todayStr} onSelect={handleSelect} onOpen={openDetail} selectedId={selectedId} colorMode={chartColorMode} statusOrderMap={statusOrderMap} />
+            <ScheduleChart items={chartRows} today={todayStr} onSelect={handleSelect} onOpen={openDetail} selectedId={selectedId} colorMode="status" statusOrderMap={statusOrderMap} />
           </div>
 
           {/* Table */}
