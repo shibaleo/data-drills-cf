@@ -115,6 +115,41 @@ export default function BacklogDetailPage() {
 
   usePageTitle("Backlog");
 
+  const handleExport = useCallback(async () => {
+    if (exportSelected.size === 0) return;
+    setExporting(true);
+    setExportPhase("waking");
+    try {
+      const healthRes = await rpc.api.v1["pdf-export"].health.$get();
+      if (!healthRes.ok) {
+        const body = (await healthRes.json().catch(() => ({ error: healthRes.statusText }))) as { error?: string };
+        throw new Error(body.error || "PDF service unhealthy");
+      }
+      setExportPhase("generating");
+      const res = await rpc.api.v1["pdf-export"].$post({
+        json: { problem_ids: Array.from(exportSelected) },
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({ error: res.statusText }))) as { error?: string };
+        throw new Error(body.error || "Export failed");
+      }
+      setExportPhase("downloading");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `backlog-${today}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success("PDFエクスポート完了");
+    } catch (err) {
+      toast.error(`エクスポート失敗: ${err instanceof Error ? err.message : err}`);
+    } finally {
+      setExporting(false);
+      setExportPhase(null);
+    }
+  }, [exportSelected, today]);
+
   if (isLoading) return <div className="p-6">Loading...</div>;
   if (!data) return <div className="p-6">Not found</div>;
 
@@ -182,41 +217,6 @@ export default function BacklogDetailPage() {
     return `tmp-${(crypto as Crypto & { randomUUID(): string }).randomUUID()}`;
   }
   const isTmp = (id: string) => id.startsWith("tmp-");
-
-  const handleExport = useCallback(async () => {
-    if (exportSelected.size === 0) return;
-    setExporting(true);
-    setExportPhase("waking");
-    try {
-      const healthRes = await rpc.api.v1["pdf-export"].health.$get();
-      if (!healthRes.ok) {
-        const body = (await healthRes.json().catch(() => ({ error: healthRes.statusText }))) as { error?: string };
-        throw new Error(body.error || "PDF service unhealthy");
-      }
-      setExportPhase("generating");
-      const res = await rpc.api.v1["pdf-export"].$post({
-        json: { problem_ids: Array.from(exportSelected) },
-      });
-      if (!res.ok) {
-        const body = (await res.json().catch(() => ({ error: res.statusText }))) as { error?: string };
-        throw new Error(body.error || "Export failed");
-      }
-      setExportPhase("downloading");
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `backlog-${today}.pdf`;
-      a.click();
-      URL.revokeObjectURL(url);
-      toast.success("PDFエクスポート完了");
-    } catch (err) {
-      toast.error(`エクスポート失敗: ${err instanceof Error ? err.message : err}`);
-    } finally {
-      setExporting(false);
-      setExportPhase(null);
-    }
-  }, [exportSelected, today]);
 
   async function onConfirm() {
     if (!data) return;
