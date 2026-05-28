@@ -3,7 +3,11 @@
  *
  * Splits members into past side (first-answered problems placed at answer.date)
  * and future side (unanswered problems greedy-allocated under milestone targets).
+ *
+ * 標準時間→実効時間の変換は src/lib/effective-time.ts に切り出し済。
  */
+
+import { effectiveTimeSec } from "./effective-time";
 
 export type MemberInput = {
   id: string;
@@ -61,18 +65,18 @@ export function allocate(
 ): AllocatedProblem[] {
   const result: AllocatedProblem[] = [];
   const baseDailySec = Math.max(1, dailyMinutes) * 60;
-  const mult = Math.max(1, timeMultiplierPct) / 100;
+  const timeCfg = { timeMultiplierPct };
   // 各日の実効 daily 秒。曜日ウェイトを反映 (= その曜日に確保する枠)。
   const weightOf = (dateStr: string): number => {
     const dow = new Date(`${dateStr}T00:00:00Z`).getUTCDay();
     return weekdayWeights[dow] ?? 1;
   };
   // 過去側 (= 既に解いた問題) で消費された各日の秒数。
-  // 未来側と同じ単位 (std × mult) で計上することで daily budget から正しく差し引ける。
+  // future と同じ実効時間単位で計上することで daily budget から正しく差し引ける。
   const pastUsedSec = new Map<string, number>();
   for (const m of members) {
     if (m.firstAnswerDate) {
-      const sec = Math.round((m.standardTimeSec ?? DEFAULT_SEC) * mult);
+      const sec = effectiveTimeSec(m.standardTimeSec, timeCfg);
       pastUsedSec.set(m.firstAnswerDate, (pastUsedSec.get(m.firstAnswerDate) ?? 0) + sec);
     }
   }
@@ -80,14 +84,10 @@ export function allocate(
     const base = Math.round(baseDailySec * weightOf(dateStr));
     return Math.max(0, base - (pastUsedSec.get(dateStr) ?? 0));
   };
-  // 未来側の問題時間に係数を掛けるため、members を複製して書き換える。
-  // 過去側は実時間 (= 解答済) なので係数は掛けない。
-  const adjustedMembers: MemberInput[] = members.map((m) => {
-    if (m.firstAnswerDate) return m;
-    const base = m.standardTimeSec ?? DEFAULT_SEC;
-    return { ...m, standardTimeSec: Math.round(base * mult) };
-  });
-  members = adjustedMembers;
+  // 未来側の問題時間を実効時間に変換。past 側は表示は実時間のまま残す。
+  members = members.map((m) =>
+    m.firstAnswerDate ? m : { ...m, standardTimeSec: effectiveTimeSec(m.standardTimeSec, timeCfg) },
+  );
 
   // ── 1. 過去側 = 初回 answer 済みを answer.date に配置 ──
   for (const m of members) {
