@@ -380,7 +380,7 @@ export default function BacklogDetailPage() {
               </PopoverContent>
             </Popover>
             <BlockLegend entries={[
-              ...(hideCompleted ? [] : [{ kind: "fill" as const, label: "Done", color: "#ec4899" }]),
+              ...(hideCompleted ? [] : [{ kind: "fill" as const, label: "First", color: "#ec4899" }]),
               ...(hideFuture ? [] : [{ kind: "fill" as const, label: "Planned", color: "#8b5cf6" }]),
               { kind: "ring" as const, label: "Over budget", color: "#f59e0b" },
               { kind: "ring" as const, label: "Overflow", color: "#ef4444" },
