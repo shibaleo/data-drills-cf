@@ -22,6 +22,7 @@ import { Label } from "@/components/ui/label";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { ResizableTableShell } from "@/components/resizable-table-shell";
 import { OpaqueTag } from "@/components/problem-card";
+import { BlockLegend } from "@/components/block-legend";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Filter, SlidersHorizontal, ArrowLeft, Archive, Save, RotateCcw, Loader2, Download } from "lucide-react";
@@ -341,8 +342,8 @@ export default function BacklogDetailPage() {
           <div className="flex items-center gap-2">
             <Popover>
               <PopoverTrigger asChild>
-                <Button size="sm" variant="outline" className="h-7 text-xs relative">
-                  <Filter className="size-3 mr-1"/>Filter
+                <Button size="sm" variant="outline" className="h-6 px-2 relative" title="Filter">
+                  <Filter className="size-3"/>
                   {activeFilterCount > 0 && (
                     <span className="absolute -top-1.5 -right-1.5 size-4 rounded-full bg-primary text-primary-foreground text-[9px] flex items-center justify-center">
                       {activeFilterCount}
@@ -378,9 +379,15 @@ export default function BacklogDetailPage() {
                 )}
               </PopoverContent>
             </Popover>
+            <BlockLegend entries={[
+              ...(hideCompleted ? [] : [{ kind: "fill" as const, label: "Done", color: "#ec4899" }]),
+              ...(hideFuture ? [] : [{ kind: "fill" as const, label: "Planned", color: "#8b5cf6" }]),
+              { kind: "ring" as const, label: "Over budget", color: "#f59e0b" },
+              { kind: "ring" as const, label: "Overflow", color: "#ef4444" },
+            ]}/>
             {exportSelected.size > 0 && (
               <Button
-                size="sm" variant="outline" className="h-7 text-xs"
+                size="sm" variant="outline" className="h-6 text-[10px] px-2"
                 onClick={handleExport} disabled={exporting}>
                 {exporting ? <Loader2 className="size-3 mr-1 animate-spin"/> : <Download className="size-3 mr-1"/>}
                 {exporting
@@ -512,7 +519,6 @@ export default function BacklogDetailPage() {
             });
           }}
         />
-        <LegendRow hideCompleted={hideCompleted} hideFuture={hideFuture}/>
       </div>
 
       <ResizableTableShell ref={tableRef}>
@@ -607,22 +613,6 @@ export default function BacklogDetailPage() {
       </ResizableTableShell>
 
       {renderDialogs()}
-    </div>
-  );
-}
-
-function LegendRow({ hideCompleted, hideFuture }: { hideCompleted: boolean; hideFuture: boolean }) {
-  const pill = "inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border text-muted-foreground";
-  const dot = (cls: string) => <span className={`size-2 rounded-sm ${cls}`}/>;
-  const ring = (cls: string, dashed?: boolean) => (
-    <span className={`size-2 rounded-sm border-[1.5px] ${cls}`} style={dashed ? { borderStyle: "dashed" } : undefined}/>
-  );
-  return (
-    <div className="flex flex-wrap gap-1.5">
-      {!hideCompleted && <span className={pill}>{dot("bg-pink-500")}Done</span>}
-      {!hideFuture && <span className={pill}>{dot("bg-violet-500")}Planned</span>}
-      <span className={pill}>{ring("border-amber-500", true)}Over budget</span>
-      <span className={pill}>{ring("border-red-500", true)}Overflow</span>
     </div>
   );
 }

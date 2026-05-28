@@ -23,6 +23,7 @@ import { useReviewList, reviewKeys } from "@/hooks/queries/use-review";
 import { useProblemsList, problemsKeys } from "@/hooks/queries/use-problems";
 import { useUpdateStatus } from "@/hooks/queries/use-statuses";
 import { SortHeader } from "@/components/sort-header";
+import { BlockLegend } from "@/components/block-legend";
 import { toJSTDateString } from "@/lib/date-utils";
 import { StatusTag } from "@/components/color-tags";
 import { Button } from "@/components/ui/button";
@@ -819,9 +820,8 @@ export default function SchedulePage() {
               <div className="flex items-center gap-2">
               <Popover>
                 <PopoverTrigger asChild>
-                  <Button size="sm" variant="outline" className="h-6 text-[10px] px-2 relative">
-                    <Filter className="size-3 mr-1" />
-                    Filter
+                  <Button size="sm" variant="outline" className="h-6 px-2 relative" title="Filter">
+                    <Filter className="size-3" />
                     {activeFilterCount > 0 && (
                       <span className="absolute -top-1.5 -right-1.5 size-4 rounded-full bg-primary text-primary-foreground text-[9px] flex items-center justify-center">
                         {activeFilterCount}
@@ -865,6 +865,9 @@ export default function SchedulePage() {
                   )}
                 </PopoverContent>
               </Popover>
+              {chartColorMode === "status" && (
+                <BlockLegend entries={statuses.map((s) => ({ kind: "fill" as const, label: s.name, color: s.color ?? "#888" }))}/>
+              )}
               {exportSelected.size > 0 && (
                 <>
                   <Button

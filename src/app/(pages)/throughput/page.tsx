@@ -1,5 +1,5 @@
 "use client";
-import { useMemo, useRef, useEffect, useState } from "react";
+import { useMemo, useRef, useEffect, useState, useCallback } from "react";
 import { useProject } from "@/hooks/use-project";
 import { useThroughputList, type ThroughputRow } from "@/hooks/queries/use-throughput";
 import { useProblemsList } from "@/hooks/queries/use-problems";
@@ -7,13 +7,16 @@ import { useProblemDialogs } from "@/hooks/use-problem-dialogs";
 import { blockColor, COLOR_FIRST_ATTEMPT } from "@/lib/block-color";
 import { formatRelDay } from "@/lib/relative-day";
 import { usePageTitle } from "@/lib/page-context";
-import { Filter } from "lucide-react";
+import { rpc } from "@/lib/rpc-client";
+import { toast } from "sonner";
+import { Filter, Download, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { ResizableTableShell } from "@/components/resizable-table-shell";
 import { OpaqueTag } from "@/components/problem-card";
+import { BlockLegend, type LegendEntry } from "@/components/block-legend";
 
 const CELL = 14;
 const GAP = 2;
@@ -35,7 +38,7 @@ function diffDays(from: string, to: string): number {
 
 export default function ThroughputPage() {
   usePageTitle("Throughput");
-  const { currentProject, subjects, levels } = useProject();
+  const { currentProject, subjects, levels, statuses } = useProject();
   const subjectMap = useMemo(() => new Map(subjects.map((s) => [s.id, s])), [subjects]);
   const levelMap = useMemo(() => new Map(levels.map((l) => [l.id, l])), [levels]);
   const { data: rows = [], isLoading } = useThroughputList(currentProject?.id);
@@ -45,6 +48,9 @@ export default function ThroughputPage() {
 
   const [filterSubjects, setFilterSubjects] = useState<Set<string>>(new Set());
   const [filterLevels, setFilterLevels] = useState<Set<string>>(new Set());
+  const [exportSelected, setExportSelected] = useState<Set<string>>(new Set());
+  const [exporting, setExporting] = useState(false);
+  const [exportPhase, setExportPhase] = useState<"waking" | "generating" | "downloading" | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const filtered = useMemo<ThroughputRow[]>(() => rows.filter((r) => {
@@ -96,6 +102,49 @@ export default function ThroughputPage() {
     scrollRef.current.scrollLeft = Math.max(0, todayX - containerW / 3);
   }, [todayIdx]);
 
+  const todayStr = today;
+  const handleExport = useCallback(async () => {
+    if (exportSelected.size === 0) return;
+    setExporting(true);
+    setExportPhase("waking");
+    try {
+      const healthRes = await rpc.api.v1["pdf-export"].health.$get();
+      if (!healthRes.ok) {
+        const body = (await healthRes.json().catch(() => ({ error: healthRes.statusText }))) as { error?: string };
+        throw new Error(body.error || "PDF service unhealthy");
+      }
+      setExportPhase("generating");
+      const res = await rpc.api.v1["pdf-export"].$post({
+        json: { problem_ids: Array.from(exportSelected) },
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({ error: res.statusText }))) as { error?: string };
+        throw new Error(body.error || "Export failed");
+      }
+      setExportPhase("downloading");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `throughput-${todayStr}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success("PDFエクスポート完了");
+    } catch (err) {
+      toast.error(`エクスポート失敗: ${err instanceof Error ? err.message : err}`);
+    } finally {
+      setExporting(false);
+      setExportPhase(null);
+    }
+  }, [exportSelected, todayStr]);
+
+  const uniqueFilteredProblemIds = useMemo(() => Array.from(new Set(filtered.map((r) => r.problemId))), [filtered]);
+  const legendEntries: LegendEntry[] = useMemo(() => {
+    const entries: LegendEntry[] = [{ kind: "fill", label: "First", color: COLOR_FIRST_ATTEMPT }];
+    for (const s of statuses) entries.push({ kind: "fill", label: s.name, color: s.color ?? "#888" });
+    return entries;
+  }, [statuses]);
+
   if (!currentProject) return <div className="p-6 text-muted-foreground">Please select a project</div>;
 
   const activeFilterCount = filterSubjects.size + filterLevels.size;
@@ -103,11 +152,11 @@ export default function ThroughputPage() {
   return (
     <div className="p-3 md:p-4 flex flex-col gap-2">
       <div className="rounded-md border p-3 space-y-2">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <Popover>
             <PopoverTrigger asChild>
-              <Button size="sm" variant="outline" className="h-7 text-xs relative">
-                <Filter className="size-3 mr-1"/>Filter
+              <Button size="sm" variant="outline" className="h-6 px-2 relative" title="Filter">
+                <Filter className="size-3"/>
                 {activeFilterCount > 0 && (
                   <span className="absolute -top-1.5 -right-1.5 size-4 rounded-full bg-primary text-primary-foreground text-[9px] flex items-center justify-center">
                     {activeFilterCount}
@@ -133,6 +182,20 @@ export default function ThroughputPage() {
               )}
             </PopoverContent>
           </Popover>
+          <BlockLegend entries={legendEntries}/>
+          {exportSelected.size > 0 && (
+            <Button
+              size="sm" variant="outline" className="h-6 text-[10px] px-2"
+              onClick={handleExport} disabled={exporting}>
+              {exporting ? <Loader2 className="size-3 mr-1 animate-spin"/> : <Download className="size-3 mr-1"/>}
+              {exporting
+                ? exportPhase === "waking" ? "Render 起床中..."
+                  : exportPhase === "generating" ? "PDF 処理中..."
+                    : exportPhase === "downloading" ? "ダウンロード中..."
+                      : "エクスポート中..."
+                : `PDF (${exportSelected.size})`}
+            </Button>
+          )}
         </div>
 
         {isLoading ? (
@@ -215,31 +278,61 @@ export default function ThroughputPage() {
           </div>
         )}
 
-        <Legend/>
       </div>
 
       <ResizableTableShell ref={tableRef}>
         <Table className="table-fixed">
           <TableHeader>
             <TableRow>
+              <TableHead className="sticky top-0 z-10 bg-muted/80 backdrop-blur w-10 px-3">
+                <div className="flex items-center justify-center">
+                  <input
+                    type="checkbox"
+                    className="size-3.5 accent-primary cursor-pointer"
+                    checked={exportSelected.size > 0 && exportSelected.size === uniqueFilteredProblemIds.length}
+                    ref={(el) => { if (el) el.indeterminate = exportSelected.size > 0 && exportSelected.size < uniqueFilteredProblemIds.length; }}
+                    onChange={() => {
+                      if (exportSelected.size > 0) setExportSelected(new Set());
+                      else setExportSelected(new Set(uniqueFilteredProblemIds));
+                    }}
+                  />
+                </div>
+              </TableHead>
               <TableHead className="sticky top-0 z-10 bg-muted/80 backdrop-blur" style={{ width: 100 }}>Date</TableHead>
               <TableHead className="sticky top-0 z-10 bg-muted/80 backdrop-blur" style={{ width: 70 }}>Subject</TableHead>
               <TableHead className="sticky top-0 z-10 bg-muted/80 backdrop-blur" style={{ width: 70 }}>Level</TableHead>
               <TableHead className="sticky top-0 z-10 bg-muted/80 backdrop-blur" style={{ width: 64 }}>Code</TableHead>
               <TableHead className="sticky top-0 z-10 bg-muted/80 backdrop-blur" style={{ width: 240 }}>Name</TableHead>
               <TableHead className="sticky top-0 z-10 bg-muted/80 backdrop-blur" style={{ width: 70 }}>Duration</TableHead>
-              <TableHead className="sticky top-0 z-10 bg-muted/80 backdrop-blur" style={{ width: 90 }}>Status</TableHead>
+              <TableHead className="sticky top-0 z-10 bg-muted/80 backdrop-blur" style={{ width: 90 }}>Prev</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {[...filtered].reverse().map((r) => {
               const subj = r.subjectId ? subjectMap.get(r.subjectId) : null;
               const lv = r.levelId ? levelMap.get(r.levelId) : null;
-              const dotColor = blockColor({ side: "past", prevStatusColor: r.prevStatusColor });
               const mins = r.duration != null ? Math.round(r.duration / 60) : null;
+              const prevName = r.prevStatusColor == null ? "First" : (r.prevStatusName ?? "Repeat");
+              const prevColor = r.prevStatusColor ?? COLOR_FIRST_ATTEMPT;
               return (
                 <TableRow key={r.id} className="cursor-pointer"
                   onClick={() => openDetail(r.problemId)}>
+                  <TableCell className="w-10 px-3" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex items-center justify-center">
+                      <input
+                        type="checkbox"
+                        className="size-3.5 accent-primary cursor-pointer"
+                        checked={exportSelected.has(r.problemId)}
+                        onChange={() => {
+                          setExportSelected((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(r.problemId)) next.delete(r.problemId); else next.add(r.problemId);
+                            return next;
+                          });
+                        }}
+                      />
+                    </div>
+                  </TableCell>
                   <TableCell style={{ width: 100 }}>
                     <span className="text-xs tabular-nums text-muted-foreground">{r.date}</span>
                   </TableCell>
@@ -251,10 +344,7 @@ export default function ThroughputPage() {
                     <span className="text-xs tabular-nums text-muted-foreground">{mins != null ? `${mins} 分` : ""}</span>
                   </TableCell>
                   <TableCell style={{ width: 90 }}>
-                    <span className="inline-flex items-center gap-1 text-xs">
-                      <span className="size-2 rounded-sm" style={{ background: dotColor }}/>
-                      {r.prevStatusColor == null ? "First" : "Repeat"}
-                    </span>
+                    <OpaqueTag name={prevName} color={prevColor}/>
                   </TableCell>
                 </TableRow>
               );
@@ -264,20 +354,6 @@ export default function ThroughputPage() {
       </ResizableTableShell>
 
       {renderDialogs()}
-    </div>
-  );
-}
-
-function Legend() {
-  const pill = "inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border text-muted-foreground";
-  const dot = (color: string) => <span className="size-2 rounded-sm" style={{ background: color }}/>;
-  return (
-    <div className="flex flex-wrap gap-1.5">
-      <span className={pill}>{dot(COLOR_FIRST_ATTEMPT)}First attempt</span>
-      <span className={pill}>
-        <span className="size-2 rounded-sm" style={{ background: "linear-gradient(45deg,#888,#aaa)" }}/>
-        Repeat (= previous status color)
-      </span>
     </div>
   );
 }

@@ -12,7 +12,9 @@ type Row = {
   duration: number | null;
   answer_status_id: string | null;
   status_color: string | null;
+  status_name: string | null;
   prev_status_color: string | null;
+  prev_status_name: string | null;
   code: string;
   name: string | null;
   standard_time: number | null;
@@ -37,7 +39,9 @@ const app = new Hono()
         a.duration,
         a.answer_status_id,
         s.color AS status_color,
+        s.name AS status_name,
         LAG(s.color) OVER (PARTITION BY a.problem_id ORDER BY a.date, a.created_at) AS prev_status_color,
+        LAG(s.name) OVER (PARTITION BY a.problem_id ORDER BY a.date, a.created_at) AS prev_status_name,
         p.code,
         p.name,
         p.standard_time,
@@ -59,7 +63,9 @@ const app = new Hono()
         duration: r.duration,
         answerStatusId: r.answer_status_id,
         statusColor: r.status_color,
+        statusName: r.status_name,
         prevStatusColor: r.prev_status_color,
+        prevStatusName: r.prev_status_name,
         code: r.code,
         name: r.name,
         standardTime: r.standard_time,
