@@ -237,6 +237,56 @@ const app = new Hono()
       },
     });
   })
+  .get("/:id/revisions", async (c) => {
+    const backlogId = c.req.param("id");
+    type Entry = {
+      kind: "backlog" | "layer" | "milestone";
+      entity_id: string;
+      revision: number;
+      valid_from: string;
+      valid_to: string | null;
+      is_active: boolean;
+      summary: string;
+    };
+    const out: Entry[] = [];
+    const bRows = await db.select().from(backlog)
+      .where(eq(backlog.id, backlogId)).orderBy(desc(backlog.validFrom));
+    for (const r of bRows) {
+      out.push({
+        kind: "backlog", entity_id: r.id, revision: r.revision,
+        valid_from: (r.validFrom as Date).toISOString(),
+        valid_to: r.validTo ? (r.validTo as Date).toISOString() : null,
+        is_active: r.isActive,
+        summary: `backlog "${r.name}" · ${r.dailyMinutes} min/day${r.isActive ? "" : " (archived)"}`,
+      });
+    }
+    const lRows = await db.select().from(goalLayer)
+      .where(eq(goalLayer.backlogId, backlogId)).orderBy(desc(goalLayer.validFrom));
+    for (const r of lRows) {
+      out.push({
+        kind: "layer", entity_id: r.id, revision: r.revision,
+        valid_from: (r.validFrom as Date).toISOString(),
+        valid_to: r.validTo ? (r.validTo as Date).toISOString() : null,
+        is_active: r.isActive,
+        summary: `layer "${r.name || "(unnamed)"}"${r.isActive ? "" : " (removed)"}`,
+      });
+    }
+    const mRows = await db.select().from(goalMilestone)
+      .where(eq(goalMilestone.backlogId, backlogId)).orderBy(desc(goalMilestone.validFrom));
+    for (const r of mRows) {
+      const dateStr = typeof r.date === "string" ? r.date : (r.date as Date).toISOString().slice(0, 10);
+      out.push({
+        kind: "milestone", entity_id: r.id, revision: r.revision,
+        valid_from: (r.validFrom as Date).toISOString(),
+        valid_to: r.validTo ? (r.validTo as Date).toISOString() : null,
+        is_active: r.isActive,
+        summary: `milestone target=${r.target} by ${dateStr}${r.isActive ? "" : " (removed)"}`,
+      });
+    }
+    out.sort((a, b) => b.valid_from.localeCompare(a.valid_from));
+    return c.json({ data: out });
+  })
+
   .put("/:id", zValidator("json", backlogUpdateInputSchema), async (c) => {
     const id = c.req.param("id");
     const body = c.req.valid("json");

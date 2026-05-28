@@ -44,6 +44,19 @@ export function useBacklogList(projectId: string | undefined) {
   });
 }
 
+export type BacklogRevisionEntry = RpcData<typeof rpc.api.v1.backlog[":id"]["revisions"]["$get"]>["data"][number];
+
+export function useBacklogRevisions(backlogId: string | undefined) {
+  return useQuery({
+    queryKey: backlogId ? [...backlogKeys.detail(backlogId), "revisions"] : backlogKeys.all,
+    queryFn: async () => {
+      const json = await unwrap(rpc.api.v1.backlog[":id"].revisions.$get({ param: { id: backlogId! } }));
+      return json.data;
+    },
+    enabled: !!backlogId,
+  });
+}
+
 export function useBacklog(backlogId: string | undefined, asOf?: string | null) {
   return useQuery({
     queryKey: backlogId ? [...backlogKeys.detail(backlogId), { asOf: asOf ?? null }] : backlogKeys.all,

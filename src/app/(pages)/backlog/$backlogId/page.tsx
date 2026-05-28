@@ -5,6 +5,7 @@ import {
   useBacklog, useUpdateBacklog, useArchiveBacklog,
   useCreateGoalLayer, useUpdateGoalLayer, useDeleteGoalLayer,
   useCreateGoalMilestone, useUpdateGoalMilestone, useDeleteGoalMilestone,
+  useBacklogRevisions,
   type BacklogMember,
 } from "@/hooks/queries/use-backlog";
 import { useProject } from "@/hooks/use-project";
@@ -42,6 +43,7 @@ export default function BacklogDetailPage() {
   const [asOf, setAsOf] = useState<string | null>(null);  // null = 現在モード
   const readOnly = asOf != null;
   const { data, isLoading } = useBacklog(backlogId, asOf);
+  const revisionsQuery = useBacklogRevisions(backlogId);
   const update = useUpdateBacklog(currentProject?.id);
   const archive = useArchiveBacklog(currentProject?.id);
 
@@ -382,13 +384,41 @@ export default function BacklogDetailPage() {
               <History className="size-3.5"/>
             </button>
           </PopoverTrigger>
-          <PopoverContent className="w-auto p-3 space-y-2" align="end">
-            <div className="text-[10px] text-muted-foreground">Snapshot date</div>
-            <div className="flex items-center gap-2">
-              <Input type="date" value={asOf ?? ""} className="h-7 text-xs"
-                onChange={(e) => setAsOf(e.target.value || null)}/>
-              <Button size="sm" variant="ghost" className="h-7 text-[10px] px-2"
-                onClick={() => setAsOf(null)} disabled={!asOf}>Back to now</Button>
+          <PopoverContent className="w-80 p-3 space-y-3" align="end">
+            <div>
+              <div className="text-[10px] text-muted-foreground mb-1">Snapshot date</div>
+              <div className="flex items-center gap-2">
+                <Input type="date" value={asOf ?? ""} className="h-7 text-xs"
+                  onChange={(e) => setAsOf(e.target.value || null)}/>
+                <Button size="sm" variant="ghost" className="h-7 text-[10px] px-2"
+                  onClick={() => setAsOf(null)} disabled={!asOf}>Back to now</Button>
+              </div>
+            </div>
+            <div>
+              <div className="text-[10px] text-muted-foreground mb-1">Changelog (newest first)</div>
+              <div className="max-h-72 overflow-y-auto -mr-2 pr-2 space-y-0.5">
+                {(revisionsQuery.data ?? []).length === 0 && (
+                  <div className="text-[10px] text-muted-foreground italic py-2 text-center">No revisions yet</div>
+                )}
+                {(revisionsQuery.data ?? []).map((r) => {
+                  const ts = new Date(r.valid_from);
+                  const tsLabel = `${ts.getMonth() + 1}/${ts.getDate()} ${String(ts.getHours()).padStart(2, "0")}:${String(ts.getMinutes()).padStart(2, "0")}`;
+                  const isoDay = ts.toISOString().slice(0, 10);
+                  const isActiveAsOf = asOf === isoDay;
+                  const kindCls = r.kind === "backlog" ? "text-foreground/80" : r.kind === "layer" ? "text-violet-500" : "text-pink-500";
+                  return (
+                    <button key={`${r.kind}-${r.entity_id}-${r.revision}`}
+                      type="button"
+                      onClick={() => setAsOf(isoDay)}
+                      className={`w-full text-left flex items-baseline gap-2 px-2 py-1 rounded-sm transition-colors hover:bg-accent ${isActiveAsOf ? "bg-accent" : ""}`}>
+                      <span className="text-[10px] tabular-nums text-muted-foreground w-16 shrink-0">{tsLabel}</span>
+                      <span className={`text-[9px] uppercase font-semibold w-12 shrink-0 ${kindCls}`}>{r.kind}</span>
+                      <span className="text-[10px] flex-1 truncate">{r.summary}</span>
+                      <span className="text-[9px] text-muted-foreground">rev {r.revision}</span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </PopoverContent>
         </Popover>
