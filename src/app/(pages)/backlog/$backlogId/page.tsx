@@ -67,6 +67,7 @@ export default function BacklogDetailPage() {
   const [filterSubjects, setFilterSubjects] = useState<Set<string>>(new Set());
   const [filterLevels, setFilterLevels] = useState<Set<string>>(new Set());
   const [filterTopics, setFilterTopics] = useState<Set<string>>(new Set());
+  const [hiddenLayerIds, setHiddenLayerIds] = useState<Set<string>>(new Set());
   const [exportSelected, setExportSelected] = useState<Set<string>>(new Set());
   const [exporting, setExporting] = useState(false);
   const [exportPhase, setExportPhase] = useState<"waking" | "generating" | "downloading" | null>(null);
@@ -87,6 +88,7 @@ export default function BacklogDetailPage() {
       setHideFirst(!!p.hideFirst);
       setHideFuture(!!p.hideFuture);
       setOverflowOnly(!!p.overflowOnly);
+      setHiddenLayerIds(new Set(p.hiddenLayerIds ?? []));
     }
     prefsLoadedRef.current = currentProject.id;
   }, [currentProject, filterPrefsQuery.data]);
@@ -99,10 +101,11 @@ export default function BacklogDetailPage() {
         levelIds: [...filterLevels],
         topicIds: [...filterTopics],
         hideFirst, hideFuture, overflowOnly,
+        hiddenLayerIds: [...hiddenLayerIds],
       },
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filterSubjects, filterLevels, filterTopics, hideFirst, hideFuture, overflowOnly]);
+  }, [filterSubjects, filterLevels, filterTopics, hideFirst, hideFuture, overflowOnly, hiddenLayerIds]);
 
   const qc = useQueryClient();
   const allProblems = useProblemsList(currentProject?.id).data ?? [];
@@ -527,6 +530,8 @@ export default function BacklogDetailPage() {
           onOpen={openDetail}
           showMilestonePins={showMilestonePins}
           milestoneAnchors={milestoneAnchors}
+          hiddenLayerIds={hiddenLayerIds}
+          onHiddenLayersChange={setHiddenLayerIds}
           /* すべてローカル state を更新するだけ。API は「確定」で発火。 */
           onMilestoneDateDraft={(id, newDate) =>
             setLocalMilestones((prev) => prev.map((m) => (m.id === id ? { ...m, date: newDate } : m)))}

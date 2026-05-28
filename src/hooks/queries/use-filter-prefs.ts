@@ -21,6 +21,8 @@ export type BacklogPrefs = {
   /** Planned (未着手) を非表示 */
   hideFuture?: boolean;
   overflowOnly?: boolean;
+  /** ユーザーが目隠ししたレイヤ id (eye toggle) */
+  hiddenLayerIds?: string[];
 };
 export type ThroughputPrefs = {
   subjectIds?: string[];

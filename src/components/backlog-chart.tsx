@@ -75,6 +75,9 @@ type BacklogChartProps = {
   showMilestonePins?: boolean;
   /** 各 milestone の「実際に N 問目に相当する problem」をハイライトするためのアンカー */
   milestoneAnchors?: { target: number; problemId: string | null; layer_id?: string }[];
+  /** 表示/非表示状態を呼び出し側で管理する (未指定なら内部 state)。 */
+  hiddenLayerIds?: Set<string>;
+  onHiddenLayersChange?: (next: Set<string>) => void;
 };
 
 
@@ -110,6 +113,8 @@ export const BacklogChart = forwardRef<BacklogChartHandle, BacklogChartProps>(fu
   rightPanelExtra,
   showMilestonePins,
   milestoneAnchors,
+  hiddenLayerIds,
+  onHiddenLayersChange,
 }: BacklogChartProps, ref) {
   const _showPins = showMilestonePins ?? true;
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -117,7 +122,12 @@ export const BacklogChart = forwardRef<BacklogChartHandle, BacklogChartProps>(fu
   const draggingRef = useRef<string | null>(null);
   const dragMovedRef = useRef(false);
   const [menu, setMenu] = useState<{ id: string; x: number; y: number } | null>(null);
-  const [hiddenLayers, setHiddenLayers] = useState<Set<string>>(new Set());
+  const [internalHidden, setInternalHidden] = useState<Set<string>>(new Set());
+  const hiddenLayers = hiddenLayerIds ?? internalHidden;
+  const updateHidden = (next: Set<string>) => {
+    if (onHiddenLayersChange) onHiddenLayersChange(next);
+    else setInternalHidden(next);
+  };
 
   useEffect(() => {
     if (!menu) return;
@@ -134,11 +144,9 @@ export const BacklogChart = forwardRef<BacklogChartHandle, BacklogChartProps>(fu
   }, [menu]);
 
   function toggleLayerHidden(layerId: string) {
-    setHiddenLayers((prev) => {
-      const next = new Set(prev);
-      if (next.has(layerId)) next.delete(layerId); else next.add(layerId);
-      return next;
-    });
+    const next = new Set(hiddenLayers);
+    if (next.has(layerId)) next.delete(layerId); else next.add(layerId);
+    updateHidden(next);
   }
   const isLayerHidden = (layerId: string) => hiddenLayers.has(layerId);
   /** 非表示 layer に属する anchor は除外 (anchor 枠線描画用) */
