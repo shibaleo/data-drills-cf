@@ -47,7 +47,7 @@ function OverdueBadge() {
   const lvlSet = new Set(rev.levelIds ?? []);
   const stSet = new Set(rev.statuses ?? []);
   const count = data.filter((r) => {
-    if (r.answerCount === 0 || r.daysUntil > 0) return false;
+    if (r.answerCount === 0 || r.daysUntil !== 0) return false;
     if (subjSet.size > 0 && (!r.subjectId || !subjSet.has(r.subjectId))) return false;
     if (lvlSet.size > 0 && (!r.levelId || !lvlSet.has(r.levelId))) return false;
     if (stSet.size > 0 && !stSet.has(r.lastStatus)) return false;
