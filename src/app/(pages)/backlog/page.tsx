@@ -3,7 +3,7 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { useProject } from "@/hooks/use-project";
 import { useBacklogList } from "@/hooks/queries/use-backlog";
 import { usePageTitle } from "@/lib/page-context";
-import { Button } from "@/components/ui/button";
+import { Plus } from "lucide-react";
 
 export default function BacklogPage() {
   usePageTitle("Backlog");
@@ -15,14 +15,7 @@ export default function BacklogPage() {
 
   return (
     <div className="p-3 md:p-4 flex flex-col gap-2">
-      <div className="flex items-center justify-end">
-        <Button onClick={() => navigate({ to: "/backlog/new" as string })}>+ New</Button>
-      </div>
-
       {isLoading && <div>Loading...</div>}
-      {!isLoading && backlogs.length === 0 && (
-        <div className="text-muted-foreground text-sm">No backlogs yet. Use "+ New" to create one.</div>
-      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {backlogs.map((b) => (
@@ -34,6 +27,12 @@ export default function BacklogPage() {
             </div>
           </Link>
         ))}
+        <button type="button"
+          onClick={() => navigate({ to: "/backlog/new" as string })}
+          className="flex items-center justify-center gap-2 rounded border border-dashed border-muted-foreground/40 p-4 text-muted-foreground hover:text-foreground hover:border-foreground/60 hover:bg-accent/30 transition min-h-[5.5rem]">
+          <Plus className="size-4"/>
+          <span className="text-sm font-medium">New</span>
+        </button>
       </div>
     </div>
   );
