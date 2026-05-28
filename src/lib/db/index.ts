@@ -2,6 +2,7 @@ import postgres from "postgres";
 import { drizzle, type PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import { AsyncLocalStorage } from "node:async_hooks";
 import * as schema from "./schema";
+import { env } from "@/lib/env";
 
 type DB = PostgresJsDatabase<typeof schema>;
 
@@ -35,7 +36,7 @@ function getOrCreateDb(): DB {
   if (store) {
     // CF Workers: per-request client
     if (!store.db) {
-      store.client = postgres(process.env.DATABASE_URL!, {
+      store.client = postgres(env.DATABASE_URL, {
         max: 1,
         idle_timeout: 20,
         connect_timeout: 10,
@@ -48,7 +49,7 @@ function getOrCreateDb(): DB {
 
   // Local dev: cached client
   if (!_fallbackDb) {
-    const client = postgres(process.env.DATABASE_URL!, {
+    const client = postgres(env.DATABASE_URL, {
       max: 1,
       idle_timeout: 20,
       connect_timeout: 10,

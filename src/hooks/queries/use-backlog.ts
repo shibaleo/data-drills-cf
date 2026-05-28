@@ -3,6 +3,7 @@ import { rpc, unwrap, type RpcData } from "@/lib/rpc-client";
 import type {
   BacklogCreateInput,
   BacklogUpdateInput,
+  BacklogBatchInput,
   GoalLayerCreateInput,
   GoalLayerUpdateInput,
   GoalLayerReorderInput,
@@ -30,6 +31,8 @@ export function useBacklogTodayCount(projectId: string | undefined) {
       return json.data.count;
     },
     enabled: !!projectId,
+    // サーバ側も 5 分キャッシュ + mutation で invalidate。クライアントは 1 分 stale で十分。
+    staleTime: 60 * 1000,
   });
 }
 
@@ -89,6 +92,22 @@ export function useUpdateBacklog(projectId: string | undefined) {
       unwrap(rpc.api.v1.backlog[":id"].$put({ param: { id: vars.id }, json: vars.payload })),
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: backlogKeys.detail(vars.id) });
+      if (projectId) qc.invalidateQueries({ queryKey: backlogKeys.list(projectId) });
+    },
+  });
+}
+
+/**
+ * Atomic batch save — backlog + 全 layer / milestone の create/update/delete を
+ * 1 トランザクションで適用。返り値の id_map で tmp-id → real-id を解決。
+ */
+export function useBacklogBatchSave(backlogId: string, projectId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: BacklogBatchInput) =>
+      unwrap(rpc.api.v1.backlog[":id"].batch.$post({ param: { id: backlogId }, json: payload })),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: backlogKeys.detail(backlogId) });
       if (projectId) qc.invalidateQueries({ queryKey: backlogKeys.list(projectId) });
     },
   });

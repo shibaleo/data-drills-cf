@@ -8,6 +8,7 @@ import { randomUUID } from "node:crypto";
 import {
   backlogCreateInputSchema,
   backlogUpdateInputSchema,
+  backlogBatchInputSchema,
   goalLayerCreateInputSchema,
   goalLayerUpdateInputSchema,
   goalLayerReorderInputSchema,
@@ -16,6 +17,16 @@ import {
 } from "@/lib/schemas/backlog";
 import { projectIdQuerySchema } from "@/lib/schemas/common";
 import { allocate, type MemberInput, type Milestone as AMilestone } from "@/lib/backlog-allocate";
+
+// Today-count キャッシュ (per-project、5 分 TTL)。
+// allocate() がメンバー全件 + 全 milestone を必要とするため per-request 計算は重い。
+// サイドバーバッジの再フェッチが多発するので、軽くキャッシュする。
+const todayCountCache = new Map<string, { count: number; expiresAt: number }>();
+const TODAY_COUNT_TTL_MS = 5 * 60 * 1000;
+
+function invalidateTodayCount() {
+  todayCountCache.clear();  // 個人運用想定 (project 数少なめ)。全クリアで十分。
+}
 
 /* ── helpers ──────────────────────────────────────────────────── */
 
@@ -147,6 +158,7 @@ const app = new Hono()
       weekdayWeights: body.weekday_weights,
       filter: body.filter,
     }).returning();
+    invalidateTodayCount();
     return c.json({ data: backlogToApi(row) }, 201);
   })
   /**
@@ -155,6 +167,10 @@ const app = new Hono()
    */
   .get("/today-count", zValidator("query", projectIdQuerySchema), async (c) => {
     const { project_id: projectId } = c.req.valid("query");
+    const cached = todayCountCache.get(projectId);
+    if (cached && Date.now() < cached.expiresAt) {
+      return c.json({ data: { count: cached.count } });
+    }
     const today = new Date().toISOString().slice(0, 10);
     const backlogs = await db.select().from(backlog)
       .where(and(eq(backlog.projectId, projectId), isNull(backlog.validTo), eq(backlog.isActive, true)));
@@ -178,6 +194,7 @@ const app = new Hono()
       const allocated = allocate(memberInputs, milestones, b.dailyMinutes, today, b.timeMultiplierPct, b.weekdayWeights);
       total += allocated.filter((a) => a.side === "future" && a.date === today).length;
     }
+    todayCountCache.set(projectId, { count: total, expiresAt: Date.now() + TODAY_COUNT_TTL_MS });
     return c.json({ data: { count: total } });
   })
   .get("/:id", zValidator("query", z.object({ as_of: z.string().optional() })), async (c) => {
@@ -309,6 +326,7 @@ const app = new Hono()
       }).returning();
       return row;
     });
+    invalidateTodayCount();
     return c.json({ data: backlogToApi(newRow) });
   })
   .delete("/:id", async (c) => {
@@ -331,7 +349,148 @@ const app = new Hono()
       }).returning();
       return row;
     });
+    invalidateTodayCount();
     return c.json({ data: backlogToApi(newRow) });
+  })
+
+  /**
+   * POST /:id/batch — backlog 本体 + 全 layer / milestone の create/update/delete を
+   * 単一トランザクションで適用。tmp-id (= クライアント側の一時 id) はサーバが本物の
+   * UUID に置き換えてレスポンスの id_map で返す。半完了 (= 一部だけ反映) を防ぐ。
+   */
+  .post("/:id/batch", zValidator("json", backlogBatchInputSchema), async (c) => {
+    const backlogId = c.req.param("id");
+    const body = c.req.valid("json");
+
+    const current = await fetchCurrentBacklog(backlogId);
+    if (!current) return c.json({ error: "Not found" }, 404);
+
+    type Maps = { layer_id_map: Record<string, string>; milestone_id_map: Record<string, string> };
+    const maps: Maps = await db.transaction(async (tx) => {
+      const layerIdMap: Record<string, string> = {};
+      const milestoneIdMap: Record<string, string> = {};
+
+      // 1. backlog 本体の編集 (新 revision)
+      if (body.backlog_update) {
+        const upd = body.backlog_update;
+        await tx.update(backlog).set({ validTo: new Date() })
+          .where(and(eq(backlog.id, backlogId), eq(backlog.revision, current.revision)));
+        await tx.insert(backlog).values({
+          id: backlogId,
+          revision: current.revision + 1,
+          projectId: current.projectId,
+          name: upd.name ?? current.name,
+          dailyMinutes: upd.daily_minutes ?? current.dailyMinutes,
+          timeMultiplierPct: upd.time_multiplier_pct ?? current.timeMultiplierPct,
+          weekdayWeights: upd.weekday_weights ?? current.weekdayWeights,
+          filter: upd.filter ?? current.filter,
+          isActive: current.isActive,
+        });
+      }
+
+      // 2. layer deletes (= is_active=false の新 revision)
+      for (const lid of body.layer_deletes) {
+        const [cur] = await tx.select().from(goalLayer)
+          .where(and(eq(goalLayer.id, lid), isNull(goalLayer.validTo), eq(goalLayer.isActive, true)))
+          .orderBy(desc(goalLayer.revision))
+          .limit(1);
+        if (!cur) continue;
+        await tx.update(goalLayer).set({ validTo: new Date() })
+          .where(and(eq(goalLayer.id, lid), eq(goalLayer.revision, cur.revision)));
+        await tx.insert(goalLayer).values({
+          id: lid, revision: cur.revision + 1, backlogId: cur.backlogId,
+          name: cur.name, color: cur.color,
+          opacityPct: cur.opacityPct, lineStyle: cur.lineStyle, lineWidth: cur.lineWidth,
+          sortOrder: cur.sortOrder, isActive: false,
+        });
+      }
+
+      // 3. layer creates (= 新規 INSERT)
+      for (const l of body.layer_creates) {
+        const realId = randomUUID();
+        layerIdMap[l.temp_id] = realId;
+        await tx.insert(goalLayer).values({
+          id: realId, revision: 1, backlogId: l.backlog_id, name: l.name,
+          color: l.color ?? null,
+          opacityPct: l.opacity_pct ?? null,
+          lineStyle: l.line_style ?? null,
+          lineWidth: l.line_width ?? null,
+          sortOrder: l.sort_order,
+        });
+      }
+
+      // 4. layer updates
+      for (const u of body.layer_updates) {
+        const [cur] = await tx.select().from(goalLayer)
+          .where(and(eq(goalLayer.id, u.id), isNull(goalLayer.validTo), eq(goalLayer.isActive, true)))
+          .orderBy(desc(goalLayer.revision))
+          .limit(1);
+        if (!cur) continue;
+        await tx.update(goalLayer).set({ validTo: new Date() })
+          .where(and(eq(goalLayer.id, u.id), eq(goalLayer.revision, cur.revision)));
+        await tx.insert(goalLayer).values({
+          id: u.id, revision: cur.revision + 1, backlogId: cur.backlogId,
+          name: u.payload.name ?? cur.name,
+          color: u.payload.color !== undefined ? u.payload.color : cur.color,
+          opacityPct: u.payload.opacity_pct !== undefined ? u.payload.opacity_pct : cur.opacityPct,
+          lineStyle: u.payload.line_style !== undefined ? u.payload.line_style : cur.lineStyle,
+          lineWidth: u.payload.line_width !== undefined ? u.payload.line_width : cur.lineWidth,
+          sortOrder: u.payload.sort_order ?? cur.sortOrder,
+          isActive: cur.isActive,
+        });
+      }
+
+      // 5. milestone deletes
+      for (const mid of body.milestone_deletes) {
+        const [cur] = await tx.select().from(goalMilestone)
+          .where(and(eq(goalMilestone.id, mid), isNull(goalMilestone.validTo), eq(goalMilestone.isActive, true)))
+          .orderBy(desc(goalMilestone.revision))
+          .limit(1);
+        if (!cur) continue;
+        await tx.update(goalMilestone).set({ validTo: new Date() })
+          .where(and(eq(goalMilestone.id, mid), eq(goalMilestone.revision, cur.revision)));
+        await tx.insert(goalMilestone).values({
+          id: mid, revision: cur.revision + 1, backlogId: cur.backlogId,
+          layerId: cur.layerId, target: cur.target,
+          date: typeof cur.date === "string" ? cur.date : (cur.date as Date).toISOString().slice(0, 10),
+          isActive: false,
+        });
+      }
+
+      // 6. milestone creates (= layer_id が tmp なら id_map で解決)
+      for (const m of body.milestone_creates) {
+        const realId = randomUUID();
+        milestoneIdMap[m.temp_id] = realId;
+        const resolvedLayerId = layerIdMap[m.layer_id] ?? m.layer_id;
+        await tx.insert(goalMilestone).values({
+          id: realId, revision: 1, backlogId: m.backlog_id,
+          layerId: resolvedLayerId, target: m.target, date: m.date,
+        });
+      }
+
+      // 7. milestone updates
+      for (const u of body.milestone_updates) {
+        const [cur] = await tx.select().from(goalMilestone)
+          .where(and(eq(goalMilestone.id, u.id), isNull(goalMilestone.validTo), eq(goalMilestone.isActive, true)))
+          .orderBy(desc(goalMilestone.revision))
+          .limit(1);
+        if (!cur) continue;
+        await tx.update(goalMilestone).set({ validTo: new Date() })
+          .where(and(eq(goalMilestone.id, u.id), eq(goalMilestone.revision, cur.revision)));
+        await tx.insert(goalMilestone).values({
+          id: u.id, revision: cur.revision + 1, backlogId: cur.backlogId,
+          layerId: u.payload.layer_id ?? cur.layerId,
+          target: u.payload.target ?? cur.target,
+          date: u.payload.date ?? (typeof cur.date === "string" ? cur.date : (cur.date as Date).toISOString().slice(0, 10)),
+          isActive: cur.isActive,
+        });
+      }
+
+      return { layer_id_map: layerIdMap, milestone_id_map: milestoneIdMap };
+    });
+
+    invalidateTodayCount();
+    return c.json({ data: maps });
   })
 
   /* ── Goal Layer ────────────────────────────────────────────── */
@@ -346,6 +505,7 @@ const app = new Hono()
       lineWidth: body.line_width ?? null,
       sortOrder: body.sort_order,
     }).returning();
+    invalidateTodayCount();
     return c.json({ data: layerToApi(row) }, 201);
   })
   .put("/layers/:id", zValidator("json", goalLayerUpdateInputSchema), async (c) => {
@@ -368,6 +528,7 @@ const app = new Hono()
       }).returning();
       return row;
     });
+    invalidateTodayCount();
     return c.json({ data: layerToApi(newRow) });
   })
   .delete("/layers/:id", async (c) => {
@@ -385,6 +546,7 @@ const app = new Hono()
       }).returning();
       return row;
     });
+    invalidateTodayCount();
     return c.json({ data: layerToApi(newRow) });
   })
   .post("/layers/reorder", zValidator("json", goalLayerReorderInputSchema), async (c) => {
@@ -411,6 +573,7 @@ const app = new Hono()
       }
       return out;
     });
+    invalidateTodayCount();
     return c.json({ data: updated.map(layerToApi) });
   })
 
@@ -421,6 +584,7 @@ const app = new Hono()
     const [row] = await db.insert(goalMilestone).values({
       id, revision: 1, backlogId: body.backlog_id, layerId: body.layer_id, target: body.target, date: body.date,
     }).returning();
+    invalidateTodayCount();
     return c.json({ data: milestoneToApi(row) }, 201);
   })
   .put("/milestones/:id", zValidator("json", goalMilestoneUpdateInputSchema), async (c) => {
@@ -440,6 +604,7 @@ const app = new Hono()
       }).returning();
       return row;
     });
+    invalidateTodayCount();
     return c.json({ data: milestoneToApi(newRow) });
   })
   .delete("/milestones/:id", async (c) => {
@@ -457,6 +622,7 @@ const app = new Hono()
       }).returning();
       return row;
     });
+    invalidateTodayCount();
     return c.json({ data: milestoneToApi(newRow) });
   });
 

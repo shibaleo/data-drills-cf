@@ -1,17 +1,17 @@
 /**
  * Google OAuth2 helpers — fetch-based (no googleapis dependency).
  */
+import { env } from "@/lib/env";
 
 const SCOPES = ["https://www.googleapis.com/auth/drive"];
 
 function getRedirectUri() {
-  const baseUrl = process.env.VITE_BASE_URL ?? "http://localhost:3000";
-  return `${baseUrl}/api/auth/google/callback`;
+  return `${env.BASE_URL}/api/auth/google/callback`;
 }
 
 export function getAuthUrl() {
   const params = new URLSearchParams({
-    client_id: process.env.GOOGLE_CLIENT_ID!,
+    client_id: env.GOOGLE_CLIENT_ID,
     redirect_uri: getRedirectUri(),
     response_type: "code",
     scope: SCOPES.join(" "),
@@ -27,8 +27,8 @@ export async function exchangeCode(code: string) {
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
       code,
-      client_id: process.env.GOOGLE_CLIENT_ID!,
-      client_secret: process.env.GOOGLE_CLIENT_SECRET!,
+      client_id: env.GOOGLE_CLIENT_ID,
+      client_secret: env.GOOGLE_CLIENT_SECRET,
       redirect_uri: getRedirectUri(),
       grant_type: "authorization_code",
     }),
@@ -71,8 +71,8 @@ export async function getValidAccessToken(tokens: {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
-      client_id: process.env.GOOGLE_CLIENT_ID!,
-      client_secret: process.env.GOOGLE_CLIENT_SECRET!,
+      client_id: env.GOOGLE_CLIENT_ID,
+      client_secret: env.GOOGLE_CLIENT_SECRET,
       refresh_token: tokens.refresh_token,
       grant_type: "refresh_token",
     }),

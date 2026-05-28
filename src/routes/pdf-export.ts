@@ -7,6 +7,7 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
+import { env } from "@/lib/env";
 
 export const pdfExportInputSchema = z.object({
   // 100 件上限。Worker メモリ + Render free plan の処理時間を考慮。
@@ -23,7 +24,7 @@ const app = new Hono()
    * to distinguish the "起床中" phase from "PDF 処理中".
    */
   .get("/health", async (c) => {
-    const pdfApiUrl = process.env.PDF_API_URL;
+    const pdfApiUrl = env.PDF_API_URL;
     if (!pdfApiUrl) {
       return c.json({ error: "PDF_API_URL is not configured" }, 500);
     }
@@ -34,7 +35,7 @@ const app = new Hono()
     return c.json({ ok: true });
   })
   .post("/", zValidator("json", pdfExportInputSchema), async (c) => {
-    const pdfApiUrl = process.env.PDF_API_URL;
+    const pdfApiUrl = env.PDF_API_URL;
     if (!pdfApiUrl) {
       return c.json({ error: "PDF_API_URL is not configured" }, 500);
     }
@@ -43,7 +44,7 @@ const app = new Hono()
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-pdf-service-key": process.env.PDF_SERVICE_KEY || "",
+        "x-pdf-service-key": env.PDF_SERVICE_KEY,
       },
       body: JSON.stringify(body),
     });

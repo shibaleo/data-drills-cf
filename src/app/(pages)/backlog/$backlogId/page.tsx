@@ -2,12 +2,12 @@
 import { useMemo, useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "@tanstack/react-router";
 import {
-  useBacklog, useUpdateBacklog, useArchiveBacklog,
-  useCreateGoalLayer, useUpdateGoalLayer, useDeleteGoalLayer,
-  useCreateGoalMilestone, useUpdateGoalMilestone, useDeleteGoalMilestone,
+  useBacklog, useArchiveBacklog,
+  useBacklogBatchSave,
   useBacklogRevisions,
   type BacklogMember,
 } from "@/hooks/queries/use-backlog";
+import type { BacklogBatchInput } from "@/lib/schemas/backlog";
 import { useProject } from "@/hooks/use-project";
 import { useProblemsList } from "@/hooks/queries/use-problems";
 import { useProblemDialogs } from "@/hooks/use-problem-dialogs";
@@ -44,15 +44,8 @@ export default function BacklogDetailPage() {
   const readOnly = asOf != null;
   const { data, isLoading } = useBacklog(backlogId, asOf);
   const revisionsQuery = useBacklogRevisions(backlogId);
-  const update = useUpdateBacklog(currentProject?.id);
   const archive = useArchiveBacklog(currentProject?.id);
-
-  const createLayer = useCreateGoalLayer(backlogId);
-  const updateLayer = useUpdateGoalLayer(backlogId);
-  const deleteLayer = useDeleteGoalLayer(backlogId);
-  const createMilestone = useCreateGoalMilestone(backlogId);
-  const updateMilestone = useUpdateGoalMilestone(backlogId);
-  const deleteMilestone = useDeleteGoalMilestone(backlogId);
+  const batchSave = useBacklogBatchSave(backlogId, currentProject?.id);
 
   // 編集はすべてローカル state、「確定」で diff を計算して mutations を発火する。
   const [dailyMinutes, setDailyMinutes] = useState<number>(60);
@@ -262,83 +255,70 @@ export default function BacklogDetailPage() {
 
   async function onConfirm() {
     if (!data) return;
-    // backlog-level
-    if (planDirty) {
-      await update.mutateAsync({
-        id: backlogId,
-        payload: { name, daily_minutes: dailyMinutes, time_multiplier_pct: multPct, weekday_weights: weekdayWeights },
-      });
-    }
 
-    // layer 削除 (server に存在、local に無い)
+    // ローカルの diff を 1 つの batch payload に組み立てる
+    const payload: BacklogBatchInput = {
+      layer_deletes: [], layer_creates: [], layer_updates: [],
+      milestone_deletes: [], milestone_creates: [], milestone_updates: [],
+    };
+    if (planDirty) {
+      payload.backlog_update = {
+        name, daily_minutes: dailyMinutes, time_multiplier_pct: multPct, weekday_weights: weekdayWeights,
+      };
+    }
+    // layer
     const localLayerIds = new Set(localLayers.map((l) => l.id));
     for (const sv of data.layers) {
-      if (!localLayerIds.has(sv.id)) {
-        await deleteLayer.mutateAsync(sv.id);
-      }
+      if (!localLayerIds.has(sv.id)) payload.layer_deletes!.push(sv.id);
     }
-    // layer 新規 (tmp- prefix)、id を解決して map に
-    const layerIdMap = new Map<string, string>();  // tmp → real
     for (let i = 0; i < localLayers.length; i++) {
       const l = localLayers[i];
       if (isTmp(l.id)) {
-        const res = await createLayer.mutateAsync({
-          backlog_id: backlogId, name: l.name,
+        payload.layer_creates!.push({
+          temp_id: l.id, backlog_id: backlogId, name: l.name,
           color: l.color ?? undefined,
           opacity_pct: l.opacity_pct ?? undefined,
           line_style: l.line_style ?? undefined,
           line_width: l.line_width ?? undefined,
           sort_order: i,
         });
-        layerIdMap.set(l.id, res.data.id);
+      } else {
+        const orig = data.layers.find((o) => o.id === l.id);
+        if (!orig) continue;
+        const origOrder = data.layers.findIndex((o) => o.id === l.id);
+        const diff: { name?: string; color?: string | null; opacity_pct?: number | null; line_style?: "solid" | "dashed" | "dotted" | null; line_width?: number | null; sort_order?: number } = {};
+        if (orig.name !== l.name) diff.name = l.name;
+        if ((orig.color ?? null) !== (l.color ?? null)) diff.color = l.color;
+        if ((orig.opacity_pct ?? null) !== (l.opacity_pct ?? null)) diff.opacity_pct = l.opacity_pct;
+        if ((orig.line_style ?? null) !== (l.line_style ?? null)) diff.line_style = l.line_style;
+        if ((orig.line_width ?? null) !== (l.line_width ?? null)) diff.line_width = l.line_width;
+        if (origOrder !== i) diff.sort_order = i;
+        if (Object.keys(diff).length > 0) payload.layer_updates!.push({ id: l.id, payload: diff });
       }
     }
-    // layer 既存編集 (name or sort_order 変化)
-    for (let i = 0; i < localLayers.length; i++) {
-      const l = localLayers[i];
-      if (isTmp(l.id)) continue;
-      const orig = data.layers.find((o) => o.id === l.id);
-      if (!orig) continue;
-      const origOrder = data.layers.findIndex((o) => o.id === l.id);
-      const payload: { name?: string; color?: string | null; opacity_pct?: number | null; line_style?: "solid" | "dashed" | "dotted" | null; line_width?: number | null; sort_order?: number } = {};
-      if (orig.name !== l.name) payload.name = l.name;
-      if ((orig.color ?? null) !== (l.color ?? null)) payload.color = l.color;
-      if ((orig.opacity_pct ?? null) !== (l.opacity_pct ?? null)) payload.opacity_pct = l.opacity_pct;
-      if ((orig.line_style ?? null) !== (l.line_style ?? null)) payload.line_style = l.line_style;
-      if ((orig.line_width ?? null) !== (l.line_width ?? null)) payload.line_width = l.line_width;
-      if (origOrder !== i) payload.sort_order = i;
-      if (Object.keys(payload).length > 0) {
-        await updateLayer.mutateAsync({ id: l.id, payload });
-      }
-    }
-
-    // milestone 削除
+    // milestone
     const localMsIds = new Set(localMilestones.map((m) => m.id));
     for (const sv of data.milestones) {
-      if (!localMsIds.has(sv.id)) {
-        await deleteMilestone.mutateAsync(sv.id);
-      }
+      if (!localMsIds.has(sv.id)) payload.milestone_deletes!.push(sv.id);
     }
-    // milestone 新規
     for (const m of localMilestones) {
       if (isTmp(m.id)) {
-        const layerId = isTmp(m.layer_id) ? layerIdMap.get(m.layer_id)! : m.layer_id;
-        await createMilestone.mutateAsync({ backlog_id: backlogId, layer_id: layerId, target: m.target, date: m.date });
+        payload.milestone_creates!.push({
+          temp_id: m.id, backlog_id: backlogId,
+          layer_id: m.layer_id,  // tmp なら server が id_map で解決
+          target: m.target, date: m.date,
+        });
+      } else {
+        const orig = data.milestones.find((o) => o.id === m.id);
+        if (!orig) continue;
+        const diff: { layer_id?: string; target?: number; date?: string } = {};
+        if (orig.layer_id !== m.layer_id) diff.layer_id = m.layer_id;
+        if (orig.target !== m.target) diff.target = m.target;
+        if (orig.date !== m.date) diff.date = m.date;
+        if (Object.keys(diff).length > 0) payload.milestone_updates!.push({ id: m.id, payload: diff });
       }
     }
-    // milestone 既存編集
-    for (const m of localMilestones) {
-      if (isTmp(m.id)) continue;
-      const orig = data.milestones.find((o) => o.id === m.id);
-      if (!orig) continue;
-      const payload: { layer_id?: string; target?: number; date?: string } = {};
-      if (orig.layer_id !== m.layer_id) payload.layer_id = m.layer_id;
-      if (orig.target !== m.target) payload.target = m.target;
-      if (orig.date !== m.date) payload.date = m.date;
-      if (Object.keys(payload).length > 0) {
-        await updateMilestone.mutateAsync({ id: m.id, payload });
-      }
-    }
+    await batchSave.mutateAsync(payload);
     // backlog.revision が変わらなくても (layer/milestone のみの編集) ローカルを
     // 次の data fetch で再同期させるため、sync ガードを外しておく。
     lastSyncRevRef.current = null;
@@ -514,13 +494,13 @@ export default function BacklogDetailPage() {
                     setLocalLayers(data.layers.map((l) => ({ id: l.id, name: l.name, color: l.color ?? null, opacity_pct: l.opacity_pct ?? null, line_style: (l.line_style as "solid" | "dashed" | "dotted" | null) ?? null, line_width: l.line_width ?? null })));
                     setLocalMilestones(data.milestones.map((m) => ({ id: m.id, layer_id: m.layer_id, target: m.target, date: m.date })));
                   }}
-                  disabled={update.isPending}
+                  disabled={batchSave.isPending}
                   className="inline-flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground disabled:opacity-50"
                   title="Discard changes"><RotateCcw className="size-3"/>Reset</button>
-                <Button size="sm" onClick={onConfirm} disabled={update.isPending}
+                <Button size="sm" onClick={onConfirm} disabled={batchSave.isPending}
                   className="h-7 text-xs">
-                  {update.isPending ? <Loader2 className="size-3 mr-1 animate-spin"/> : <Save className="size-3 mr-1"/>}
-                  {update.isPending ? "Saving..." : "Save"}
+                  {batchSave.isPending ? <Loader2 className="size-3 mr-1 animate-spin"/> : <Save className="size-3 mr-1"/>}
+                  {batchSave.isPending ? "Saving..." : "Save"}
                 </Button>
               </>
             )}
