@@ -5,6 +5,7 @@ import { useThroughputList, type ThroughputRow } from "@/hooks/queries/use-throu
 import { useProblemsList } from "@/hooks/queries/use-problems";
 import { useProblemDialogs } from "@/hooks/use-problem-dialogs";
 import { blockColor, COLOR_FIRST_ATTEMPT } from "@/lib/block-color";
+import { formatRelDay } from "@/lib/relative-day";
 import { Filter } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -208,7 +209,7 @@ export default function ThroughputPage() {
                         <text x={x + CELL / 2} y={chartHeight - 4} textAnchor="middle"
                           className="fill-muted-foreground" fontSize={9}
                           fontWeight={isToday ? 700 : 400}>
-                          {diff === 0 ? "today" : diff > 0 ? `+${diff} d` : `-${Math.abs(diff)} d`}
+                          {formatRelDay(diff)}
                         </text>
                       )}
                     </g>

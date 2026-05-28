@@ -15,6 +15,7 @@ import { backlogKeys } from "@/hooks/queries/use-backlog";
 import { problemsKeys } from "@/hooks/queries/use-problems";
 import { BacklogChart, type BacklogChartHandle } from "@/components/backlog-chart";
 import { allocate, type MemberInput } from "@/lib/backlog-allocate";
+import { formatRelDay } from "@/lib/relative-day";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -516,7 +517,7 @@ export default function BacklogDetailPage() {
                     {delta != null && (
                       <span className={`text-xs tabular-nums font-medium ${delta < 0 ? "text-green-600" : delta > 0 ? "text-red-500" : "text-muted-foreground"}`}
                         title={`Milestone #${anchor!.target} by ${anchorMs!.date}: ${delta < 0 ? "early" : delta > 0 ? "late" : "on time"}`}>
-                        {delta > 0 ? `+${delta}d` : delta < 0 ? `${delta}d` : "0"}
+                        {formatRelDay(delta)}
                       </span>
                     )}
                   </TableCell>

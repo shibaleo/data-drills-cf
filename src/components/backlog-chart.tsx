@@ -14,6 +14,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import type { AllocatedProblem, Milestone } from "@/lib/backlog-allocate";
 import { blockColor, blockBorder } from "@/lib/block-color";
+import { formatRelDay } from "@/lib/relative-day";
 
 export type BacklogChartHandle = {
   getCenterDate(): string;
@@ -375,7 +376,7 @@ export const BacklogChart = forwardRef<BacklogChartHandle, BacklogChartProps>(fu
                 {(() => {
                   const diff = todayIdx >= 0 ? colIdx - todayIdx : 0;
                   if (diff % 7 !== 0) return null;
-                  const label = diff === 0 ? "today" : diff > 0 ? `+${diff} d` : `-${Math.abs(diff)} d`;
+                  const label = formatRelDay(diff);
                   return (
                     <text x={x + CELL / 2} y={chartHeight - 4} textAnchor="middle"
                       className="fill-muted-foreground" fontSize={9}

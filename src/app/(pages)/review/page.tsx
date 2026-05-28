@@ -41,6 +41,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import type { ReviewRow as ReviewApiRow } from "@/hooks/queries/use-review";
+import { formatRelDay } from "@/lib/relative-day";
 
 /* ── Row types ── */
 
@@ -268,7 +269,7 @@ function ScheduleChart({
               {(() => {
                 const diff = todayIdx >= 0 ? colIdx - todayIdx : 0;
                 if (diff % 7 !== 0) return null;
-                const label = diff === 0 ? "today" : diff > 0 ? `+${diff} d` : `-${Math.abs(diff)} d`;
+                const label = formatRelDay(diff);
                 return (
                   <text
                     x={x + CELL / 2}
@@ -520,7 +521,7 @@ const columns: ColumnDef<ScheduleRow>[] = [
                 : "text-muted-foreground"
           }`}
         >
-          {d < 0 ? `-${Math.abs(d)} d` : d === 0 ? "today" : `+${d} d`}
+          {formatRelDay(d)}
         </span>
       );
     },
