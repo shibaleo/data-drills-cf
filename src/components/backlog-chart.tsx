@@ -340,8 +340,9 @@ export const BacklogChart = forwardRef<BacklogChartHandle, BacklogChartProps>(fu
                   const isSelected = item.problemId === selectedId;
                   const anchor = visibleAnchors.find((a) => a.problemId === item.problemId);
                   const anchorLayer = anchor?.layer_id ? layers.find((l) => l.id === anchor.layer_id) : null;
-                  const anchorColor = anchorLayer?.color || MS_COLOR;
-                  const anchorOpacity = anchorLayer ? (anchorLayer.opacity_pct ?? 40) / 100 : 1;
+                  const anchorIsPast = anchor && date < today;
+                  const anchorColor = anchorIsPast ? mixGray(anchorLayer?.color || MS_COLOR) : (anchorLayer?.color || MS_COLOR);
+                  const anchorOpacity = anchorIsPast ? PAST_OPACITY : (anchorLayer ? (anchorLayer.opacity_pct ?? 40) / 100 : 1);
                   const by = chartHeight - BOTTOM_AXIS_H - (stackIdx + 1) * STEP;
                   // anchor (milestone tie) > warn border > selection highlight, all stroked on the same rect.
                   const stroke = anchor ? anchorColor : warn?.stroke ?? "none";
@@ -376,11 +377,13 @@ export const BacklogChart = forwardRef<BacklogChartHandle, BacklogChartProps>(fu
                     .filter(({ it }) => visibleAnchors.some((a) => a.problemId === it.problemId));
                   if (anchorsHere.length === 0) return null;
                   const topY = chartHeight - BOTTOM_AXIS_H - dayItems.length * STEP - 4;
+                  const aPast = date < today;
                   return anchorsHere.map(({ it }) => {
                     const a = visibleAnchors.find((x) => x.problemId === it.problemId)!;
                     const aLayer = a.layer_id ? layers.find((l) => l.id === a.layer_id) : null;
-                    const col = aLayer?.color || MS_COLOR;
-                    const op = aLayer ? (aLayer.opacity_pct ?? 40) / 100 : 1;
+                    const rawCol = aLayer?.color || MS_COLOR;
+                    const col = aPast ? mixGray(rawCol) : rawCol;
+                    const op = aPast ? PAST_OPACITY : (aLayer ? (aLayer.opacity_pct ?? 40) / 100 : 1);
                     return (
                       <text key={`anchor-${it.problemId}`}
                         x={x + CELL / 2} y={topY} textAnchor="middle"
