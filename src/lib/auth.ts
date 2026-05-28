@@ -29,6 +29,10 @@ const API_KEY_CACHE_TTL = 5 * 60 * 1000;
 async function verifyApiKeyToken(token: string): Promise<AuthResult | null> {
   const cached = apiKeyAuthCache.get(token);
   if (cached && Date.now() < cached.expiresAt) {
+    // last-used を非同期で更新 (キャッシュヒット時も)
+    void db.update(apiKey).set({ lastUsedAt: new Date() })
+      .where(eq(apiKey.keyPrefix, token.slice(0, 11)))
+      .catch(() => { /* best-effort */ });
     return cached.result;
   }
 
@@ -46,6 +50,11 @@ async function verifyApiKeyToken(token: string): Promise<AuthResult | null> {
   const rawKey = token.slice(3); // strip dd_ prefix
   const valid = await bcrypt.compare(rawKey, row.keyHash);
   if (!valid) return null;
+
+  // 認証成功 → last-used を更新 (await しない、認証経路を遅らせない)
+  void db.update(apiKey).set({ lastUsedAt: new Date() })
+    .where(eq(apiKey.keyPrefix, prefix))
+    .catch(() => { /* best-effort */ });
 
   const result: AuthResult = { authenticated: true, userId: "", name: "API", email: "" };
   apiKeyAuthCache.set(token, { result, expiresAt: Date.now() + API_KEY_CACHE_TTL });
@@ -195,8 +204,6 @@ export async function authenticate(req: Request): Promise<AuthResult | null> {
   const bearerToken = extractBearerToken(req);
   const cookieToken = extractSessionCookie(req);
 
-  console.log("[auth] bearer:", !!bearerToken, "cookie:", !!cookieToken);
-
   for (const token of [bearerToken, cookieToken]) {
     if (!token) continue;
 
@@ -205,26 +212,20 @@ export async function authenticate(req: Request): Promise<AuthResult | null> {
     }
 
     // Try Clerk JWKS → verify user exists in DB by email
-    const clerkDomain = getClerkDomain();
-    console.log("[auth] clerkDomain:", clerkDomain, "pkEnv:", !!process.env.VITE_CLERK_PUBLISHABLE_KEY);
     const clerkIdentity = await verifyClerkToken(token);
-    console.log("[auth] clerkIdentity:", clerkIdentity);
     if (clerkIdentity) {
       if (clerkIdentity.email) {
         const cached = getCachedAuth(clerkIdentity.email);
         if (cached) return cached;
         const result = await findUser(clerkIdentity.email);
-        console.log("[auth] findUser result:", !!result);
         if (result) {
           setCachedAuth(clerkIdentity.email, result);
           return result;
         }
       }
-      console.log("[auth] Clerk token valid but no email or user not in DB");
       return null;
     }
   }
 
-  console.log("[auth] no valid token found");
   return null;
 }

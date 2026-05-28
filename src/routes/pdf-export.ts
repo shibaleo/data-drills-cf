@@ -9,7 +9,8 @@ import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 
 export const pdfExportInputSchema = z.object({
-  problem_ids: z.array(z.string().uuid()).min(1),
+  // 100 件上限。Worker メモリ + Render free plan の処理時間を考慮。
+  problem_ids: z.array(z.string().uuid()).min(1).max(100),
 });
 
 const app = new Hono()

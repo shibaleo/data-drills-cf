@@ -41,14 +41,14 @@ const app = new Hono()
       if (!metaRes.ok) {
         if (metaRes.status === 404) {
           await db.delete(problemFile).where(eq(problemFile.gdriveFileId, fileId));
-          return c.json({ error: "File not found on Google Drive", deleted: true }, 404);
+          return c.json({ error: "File not found on Google Drive" }, 404);
         }
         throw new Error(`Drive API error: ${metaRes.status}`);
       }
       const meta = await metaRes.json() as { trashed?: boolean };
       if (meta.trashed) {
         await db.delete(problemFile).where(eq(problemFile.gdriveFileId, fileId));
-        return c.json({ error: "File is in trash", deleted: true }, 404);
+        return c.json({ error: "File is in trash" }, 404);
       }
 
       const res = await fetch(`${DRIVE_API}/files/${fileId}?alt=media`, {
