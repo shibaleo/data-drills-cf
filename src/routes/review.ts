@@ -7,8 +7,12 @@ import { computeNextReview, computeDaysOverdue } from "@/lib/fsrs";
 import { toJSTDateString } from "@/lib/date-utils";
 import { problemColor } from "@/lib/problem-color";
 import { projectIdQuerySchema } from "@/lib/schemas/common";
+import { ownsProject } from "@/lib/ownership";
+import type { AuthResult } from "@/lib/auth";
 
-const app = new Hono()
+type Env = { Variables: { authResult: AuthResult } };
+
+const app = new Hono<Env>()
   /**
    * GET / — プロジェクトの復習スケジュール（描画に必要な全フィールドを確定）
    *
@@ -16,7 +20,9 @@ const app = new Hono()
    * クライアント側は受け取ったまま表示するだけでよい。
    */
   .get("/", zValidator("query", projectIdQuerySchema), async (c) => {
+    const userId = c.get("authResult").userId;
     const { project_id: projectId } = c.req.valid("query");
+    if (!(await ownsProject(projectId, userId))) return c.json({ data: [], next_cursor: null });
 
     const problems = await db.select().from(problem)
       .where(eq(problem.projectId, projectId))

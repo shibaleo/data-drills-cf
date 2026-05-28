@@ -17,6 +17,10 @@ import {
 } from "@/lib/schemas/backlog";
 import { projectIdQuerySchema } from "@/lib/schemas/common";
 import { allocate, type MemberInput, type Milestone as AMilestone } from "@/lib/backlog-allocate";
+import { ownsProject } from "@/lib/ownership";
+import type { AuthResult } from "@/lib/auth";
+
+type Env = { Variables: { authResult: AuthResult } };
 
 // Today-count キャッシュ (per-project、5 分 TTL)。
 // allocate() がメンバー全件 + 全 milestone を必要とするため per-request 計算は重い。
@@ -136,17 +140,30 @@ function milestoneToApi(row: typeof goalMilestone.$inferSelect) {
   };
 }
 
-const app = new Hono()
+/** backlogId からその backlog の projectId を取得し、認証 user の所有か検証する。 */
+async function ownsBacklog(backlogId: string, userId: string): Promise<boolean> {
+  if (!userId) return false;
+  const [row] = await db.select({ projectId: backlog.projectId }).from(backlog)
+    .where(eq(backlog.id, backlogId)).orderBy(desc(backlog.revision)).limit(1);
+  if (!row) return false;
+  return ownsProject(row.projectId, userId);
+}
+
+const app = new Hono<Env>()
   /* ── Backlog ───────────────────────────────────────────────── */
   .get("/", zValidator("query", projectIdQuerySchema), async (c) => {
+    const userId = c.get("authResult").userId;
     const { project_id: projectId } = c.req.valid("query");
+    if (!(await ownsProject(projectId, userId))) return c.json({ data: [] });
     const rows = await db.select().from(backlog)
       .where(and(eq(backlog.projectId, projectId), isNull(backlog.validTo), eq(backlog.isActive, true)))
       .orderBy(desc(backlog.createdAt));
     return c.json({ data: rows.map(backlogToApi) });
   })
   .post("/", zValidator("json", backlogCreateInputSchema), async (c) => {
+    const userId = c.get("authResult").userId;
     const body = c.req.valid("json");
+    if (!(await ownsProject(body.project_id, userId))) return c.json({ error: "Not found" }, 404);
     const id = randomUUID();
     const [row] = await db.insert(backlog).values({
       id,
@@ -166,7 +183,9 @@ const app = new Hono()
    * backlogs in the project. Used by the sidebar badge.
    */
   .get("/today-count", zValidator("query", projectIdQuerySchema), async (c) => {
+    const userId = c.get("authResult").userId;
     const { project_id: projectId } = c.req.valid("query");
+    if (!(await ownsProject(projectId, userId))) return c.json({ data: { count: 0 } });
     const cached = todayCountCache.get(projectId);
     if (cached && Date.now() < cached.expiresAt) {
       return c.json({ data: { count: cached.count } });
@@ -198,7 +217,9 @@ const app = new Hono()
     return c.json({ data: { count: total } });
   })
   .get("/:id", zValidator("query", z.object({ as_of: z.string().optional() })), async (c) => {
+    const userId = c.get("authResult").userId;
     const backlogId = c.req.param("id");
+    if (!(await ownsBacklog(backlogId, userId))) return c.json({ error: "Not found" }, 404);
     const { as_of: asOfStr } = c.req.valid("query");
     const asOf = asOfStr ? new Date(asOfStr) : null;
 
@@ -255,7 +276,9 @@ const app = new Hono()
     });
   })
   .get("/:id/revisions", async (c) => {
+    const userId = c.get("authResult").userId;
     const backlogId = c.req.param("id");
+    if (!(await ownsBacklog(backlogId, userId))) return c.json({ data: [] });
     type Entry = {
       kind: "backlog" | "layer" | "milestone";
       entity_id: string;
@@ -305,7 +328,9 @@ const app = new Hono()
   })
 
   .put("/:id", zValidator("json", backlogUpdateInputSchema), async (c) => {
+    const userId = c.get("authResult").userId;
     const id = c.req.param("id");
+    if (!(await ownsBacklog(id, userId))) return c.json({ error: "Not found" }, 404);
     const body = c.req.valid("json");
     const current = await fetchCurrentBacklog(id);
     if (!current) return c.json({ error: "Not found" }, 404);
@@ -330,7 +355,9 @@ const app = new Hono()
     return c.json({ data: backlogToApi(newRow) });
   })
   .delete("/:id", async (c) => {
+    const userId = c.get("authResult").userId;
     const id = c.req.param("id");
+    if (!(await ownsBacklog(id, userId))) return c.json({ error: "Not found" }, 404);
     const current = await fetchCurrentBacklog(id);
     if (!current) return c.json({ error: "Not found" }, 404);
     const newRow = await db.transaction(async (tx) => {
@@ -359,7 +386,9 @@ const app = new Hono()
    * UUID に置き換えてレスポンスの id_map で返す。半完了 (= 一部だけ反映) を防ぐ。
    */
   .post("/:id/batch", zValidator("json", backlogBatchInputSchema), async (c) => {
+    const userId = c.get("authResult").userId;
     const backlogId = c.req.param("id");
+    if (!(await ownsBacklog(backlogId, userId))) return c.json({ error: "Not found" }, 404);
     const body = c.req.valid("json");
 
     const current = await fetchCurrentBacklog(backlogId);
@@ -495,7 +524,9 @@ const app = new Hono()
 
   /* ── Goal Layer ────────────────────────────────────────────── */
   .post("/layers", zValidator("json", goalLayerCreateInputSchema), async (c) => {
+    const userId = c.get("authResult").userId;
     const body = c.req.valid("json");
+    if (!(await ownsBacklog(body.backlog_id, userId))) return c.json({ error: "Not found" }, 404);
     const id = randomUUID();
     const [row] = await db.insert(goalLayer).values({
       id, revision: 1, backlogId: body.backlog_id, name: body.name,
@@ -509,10 +540,12 @@ const app = new Hono()
     return c.json({ data: layerToApi(row) }, 201);
   })
   .put("/layers/:id", zValidator("json", goalLayerUpdateInputSchema), async (c) => {
+    const userId = c.get("authResult").userId;
     const id = c.req.param("id");
     const body = c.req.valid("json");
     const current = await fetchCurrentLayer(id);
     if (!current) return c.json({ error: "Not found" }, 404);
+    if (!(await ownsBacklog(current.backlogId, userId))) return c.json({ error: "Not found" }, 404);
     const newRow = await db.transaction(async (tx) => {
       await tx.update(goalLayer).set({ validTo: new Date() })
         .where(and(eq(goalLayer.id, id), eq(goalLayer.revision, current.revision)));
@@ -532,9 +565,11 @@ const app = new Hono()
     return c.json({ data: layerToApi(newRow) });
   })
   .delete("/layers/:id", async (c) => {
+    const userId = c.get("authResult").userId;
     const id = c.req.param("id");
     const current = await fetchCurrentLayer(id);
     if (!current) return c.json({ error: "Not found" }, 404);
+    if (!(await ownsBacklog(current.backlogId, userId))) return c.json({ error: "Not found" }, 404);
     const newRow = await db.transaction(async (tx) => {
       await tx.update(goalLayer).set({ validTo: new Date() })
         .where(and(eq(goalLayer.id, id), eq(goalLayer.revision, current.revision)));
@@ -550,7 +585,9 @@ const app = new Hono()
     return c.json({ data: layerToApi(newRow) });
   })
   .post("/layers/reorder", zValidator("json", goalLayerReorderInputSchema), async (c) => {
+    const userId = c.get("authResult").userId;
     const { backlog_id, layer_ids } = c.req.valid("json");
+    if (!(await ownsBacklog(backlog_id, userId))) return c.json({ error: "Not found" }, 404);
     const updated = await db.transaction(async (tx) => {
       const out: (typeof goalLayer.$inferSelect)[] = [];
       for (let i = 0; i < layer_ids.length; i++) {
@@ -579,7 +616,9 @@ const app = new Hono()
 
   /* ── Goal Milestone ────────────────────────────────────────── */
   .post("/milestones", zValidator("json", goalMilestoneCreateInputSchema), async (c) => {
+    const userId = c.get("authResult").userId;
     const body = c.req.valid("json");
+    if (!(await ownsBacklog(body.backlog_id, userId))) return c.json({ error: "Not found" }, 404);
     const id = randomUUID();
     const [row] = await db.insert(goalMilestone).values({
       id, revision: 1, backlogId: body.backlog_id, layerId: body.layer_id, target: body.target, date: body.date,
@@ -588,10 +627,12 @@ const app = new Hono()
     return c.json({ data: milestoneToApi(row) }, 201);
   })
   .put("/milestones/:id", zValidator("json", goalMilestoneUpdateInputSchema), async (c) => {
+    const userId = c.get("authResult").userId;
     const id = c.req.param("id");
     const body = c.req.valid("json");
     const current = await fetchCurrentMilestone(id);
     if (!current) return c.json({ error: "Not found" }, 404);
+    if (!(await ownsBacklog(current.backlogId, userId))) return c.json({ error: "Not found" }, 404);
     const newRow = await db.transaction(async (tx) => {
       await tx.update(goalMilestone).set({ validTo: new Date() })
         .where(and(eq(goalMilestone.id, id), eq(goalMilestone.revision, current.revision)));
@@ -608,9 +649,11 @@ const app = new Hono()
     return c.json({ data: milestoneToApi(newRow) });
   })
   .delete("/milestones/:id", async (c) => {
+    const userId = c.get("authResult").userId;
     const id = c.req.param("id");
     const current = await fetchCurrentMilestone(id);
     if (!current) return c.json({ error: "Not found" }, 404);
+    if (!(await ownsBacklog(current.backlogId, userId))) return c.json({ error: "Not found" }, 404);
     const newRow = await db.transaction(async (tx) => {
       await tx.update(goalMilestone).set({ validTo: new Date() })
         .where(and(eq(goalMilestone.id, id), eq(goalMilestone.revision, current.revision)));

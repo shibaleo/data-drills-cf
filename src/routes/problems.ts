@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { db } from "@/lib/db";
-import { problem, problemTag, problemFile } from "@/lib/db/schema";
+import { problem, problemTag, problemFile, project } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 import { randomCode } from "@/lib/utils";
 import {
@@ -11,17 +11,31 @@ import {
   problemFileCreateInputSchema,
 } from "@/lib/schemas/problem";
 import { z } from "zod";
+import { ownsProject, ownsProblem } from "@/lib/ownership";
+import type { AuthResult } from "@/lib/auth";
 
-const app = new Hono()
+type Env = { Variables: { authResult: AuthResult } };
+
+const app = new Hono<Env>()
   .get("/", zValidator("query", z.object({ project_id: z.string().uuid().optional() })), async (c) => {
+    const userId = c.get("authResult").userId;
     const { project_id: projectId } = c.req.valid("query");
-    const rows = projectId
-      ? await db.select().from(problem).where(eq(problem.projectId, projectId)).orderBy(problem.createdAt)
-      : await db.select().from(problem).orderBy(problem.createdAt);
-    return c.json({ data: rows, next_cursor: null });
+    if (projectId) {
+      if (!(await ownsProject(projectId, userId))) return c.json({ data: [], next_cursor: null });
+      const rows = await db.select().from(problem)
+        .where(eq(problem.projectId, projectId)).orderBy(problem.createdAt);
+      return c.json({ data: rows, next_cursor: null });
+    }
+    // 全件は user の全 project を JOIN で絞り込み
+    const rows = await db.select({ p: problem }).from(problem)
+      .innerJoin(project, eq(problem.projectId, project.id))
+      .where(eq(project.userId, userId)).orderBy(problem.createdAt);
+    return c.json({ data: rows.map((r) => r.p), next_cursor: null });
   })
   .post("/", zValidator("json", problemCreateInputSchema), async (c) => {
+    const userId = c.get("authResult").userId;
     const body = c.req.valid("json");
+    if (!(await ownsProject(body.project_id, userId))) return c.json({ error: "Not found" }, 404);
     const values = {
       code: body.code || randomCode(),
       projectId: body.project_id,
@@ -37,11 +51,17 @@ const app = new Hono()
     return c.json({ data: row }, 201);
   })
   .get("/:id", async (c) => {
-    const [row] = await db.select().from(problem).where(eq(problem.id, c.req.param("id")));
+    const userId = c.get("authResult").userId;
+    const id = c.req.param("id");
+    if (!(await ownsProblem(id, userId))) return c.json({ error: "Not found" }, 404);
+    const [row] = await db.select().from(problem).where(eq(problem.id, id));
     if (!row) return c.json({ error: "Not found" }, 404);
     return c.json({ data: row });
   })
   .put("/:id", zValidator("json", problemUpdateInputSchema), async (c) => {
+    const userId = c.get("authResult").userId;
+    const id = c.req.param("id");
+    if (!(await ownsProblem(id, userId))) return c.json({ error: "Not found" }, 404);
     const body = c.req.valid("json");
     const updates: Record<string, unknown> = { updatedAt: new Date() };
     if (body.code !== undefined) updates.code = body.code;
@@ -51,21 +71,28 @@ const app = new Hono()
     if (body.level_id !== undefined) updates.levelId = body.level_id;
     if (body.topic_id !== undefined) updates.topicId = body.topic_id;
     if (body.standard_time !== undefined) updates.standardTime = body.standard_time;
-    const [row] = await db.update(problem).set(updates).where(eq(problem.id, c.req.param("id"))).returning();
+    const [row] = await db.update(problem).set(updates).where(eq(problem.id, id)).returning();
     if (!row) return c.json({ error: "Not found" }, 404);
     return c.json({ data: row });
   })
   .delete("/:id", async (c) => {
-    const [row] = await db.delete(problem).where(eq(problem.id, c.req.param("id"))).returning();
+    const userId = c.get("authResult").userId;
+    const id = c.req.param("id");
+    if (!(await ownsProblem(id, userId))) return c.json({ error: "Not found" }, 404);
+    const [row] = await db.delete(problem).where(eq(problem.id, id)).returning();
     if (!row) return c.json({ error: "Not found" }, 404);
     return c.json({ data: row });
   })
   // ── Problem Tags ──
   .get("/:id/tags", async (c) => {
+    const userId = c.get("authResult").userId;
+    if (!(await ownsProblem(c.req.param("id"), userId))) return c.json({ data: [] });
     const rows = await db.select().from(problemTag).where(eq(problemTag.problemId, c.req.param("id")));
     return c.json({ data: rows });
   })
   .post("/:id/tags", zValidator("json", problemTagCreateInputSchema), async (c) => {
+    const userId = c.get("authResult").userId;
+    if (!(await ownsProblem(c.req.param("id"), userId))) return c.json({ error: "Not found" }, 404);
     const body = c.req.valid("json");
     const [row] = await db.insert(problemTag).values({
       problemId: c.req.param("id"),
@@ -74,6 +101,8 @@ const app = new Hono()
     return c.json({ data: row }, 201);
   })
   .delete("/:id/tags/:tagId", async (c) => {
+    const userId = c.get("authResult").userId;
+    if (!(await ownsProblem(c.req.param("id"), userId))) return c.json({ error: "Not found" }, 404);
     await db.delete(problemTag).where(
       and(eq(problemTag.problemId, c.req.param("id")), eq(problemTag.tagId, c.req.param("tagId"))),
     );
@@ -81,10 +110,14 @@ const app = new Hono()
   })
   // ── Problem Files ──
   .get("/:id/files", async (c) => {
+    const userId = c.get("authResult").userId;
+    if (!(await ownsProblem(c.req.param("id"), userId))) return c.json({ data: [] });
     const rows = await db.select().from(problemFile).where(eq(problemFile.problemId, c.req.param("id")));
     return c.json({ data: rows });
   })
   .post("/:id/files", zValidator("json", problemFileCreateInputSchema), async (c) => {
+    const userId = c.get("authResult").userId;
+    if (!(await ownsProblem(c.req.param("id"), userId))) return c.json({ error: "Not found" }, 404);
     const body = c.req.valid("json");
     const values = {
       problemId: c.req.param("id"),
@@ -96,6 +129,8 @@ const app = new Hono()
     return c.json({ data: row }, 201);
   })
   .delete("/:id/files/:fileId", async (c) => {
+    const userId = c.get("authResult").userId;
+    if (!(await ownsProblem(c.req.param("id"), userId))) return c.json({ error: "Not found" }, 404);
     const [row] = await db.delete(problemFile).where(eq(problemFile.id, c.req.param("fileId"))).returning();
     if (!row) return c.json({ error: "Not found" }, 404);
     return c.json({ data: row });

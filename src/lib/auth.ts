@@ -57,11 +57,11 @@ async function verifyApiKeyToken(token: string): Promise<AuthResult | null> {
     .where(eq(apiKey.keyPrefix, prefix))
     .catch(() => { /* best-effort */ });
 
-  // API key は user に紐付かないので userId は空のまま。name は key の名前で
-  // 「誰が叩いたか」を最低限ログ・debug に出せるようにする。
+  // API key を発行した user を実行主体として扱う。これでマルチユーザ環境でも
+  // 各 user の権限境界を正しくスコープできる。
   const result: AuthResult = {
     authenticated: true,
-    userId: "",
+    userId: row.userId,
     name: `apikey:${row.name}`,
     email: "",
   };

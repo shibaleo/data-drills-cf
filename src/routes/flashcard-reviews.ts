@@ -2,18 +2,39 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { flashcardReview } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { flashcardReview, flashcard, project } from "@/lib/db/schema";
+import { and, eq } from "drizzle-orm";
+import { ownsFlashcard } from "@/lib/ownership";
+import type { AuthResult } from "@/lib/auth";
 
-const app = new Hono()
+type Env = { Variables: { authResult: AuthResult } };
+
+const app = new Hono<Env>()
   .get("/", zValidator("query", z.object({ flashcard_id: z.string().uuid().optional() })), async (c) => {
+    const userId = c.get("authResult").userId;
     const { flashcard_id: flashcardId } = c.req.valid("query");
-    const rows = flashcardId
-      ? await db.select().from(flashcardReview).where(eq(flashcardReview.flashcardId, flashcardId)).orderBy(flashcardReview.reviewedAt)
-      : await db.select().from(flashcardReview).orderBy(flashcardReview.reviewedAt);
-    return c.json({ data: rows, next_cursor: null });
+    if (flashcardId) {
+      if (!(await ownsFlashcard(flashcardId, userId))) return c.json({ data: [], next_cursor: null });
+      const rows = await db.select().from(flashcardReview)
+        .where(eq(flashcardReview.flashcardId, flashcardId)).orderBy(flashcardReview.reviewedAt);
+      return c.json({ data: rows, next_cursor: null });
+    }
+    const rows = await db.select({ fr: flashcardReview }).from(flashcardReview)
+      .innerJoin(flashcard, eq(flashcardReview.flashcardId, flashcard.id))
+      .innerJoin(project, eq(flashcard.projectId, project.id))
+      .where(eq(project.userId, userId)).orderBy(flashcardReview.reviewedAt);
+    return c.json({ data: rows.map((r) => r.fr), next_cursor: null });
   })
   .delete("/:id", async (c) => {
+    const userId = c.get("authResult").userId;
+    // ownership: traverse flashcardReview → flashcard → project
+    const [check] = await db.select({ id: flashcardReview.id })
+      .from(flashcardReview)
+      .innerJoin(flashcard, eq(flashcardReview.flashcardId, flashcard.id))
+      .innerJoin(project, eq(flashcard.projectId, project.id))
+      .where(and(eq(flashcardReview.id, c.req.param("id")), eq(project.userId, userId)))
+      .limit(1);
+    if (!check) return c.json({ error: "Not found" }, 404);
     const [row] = await db.delete(flashcardReview).where(eq(flashcardReview.id, c.req.param("id"))).returning();
     if (!row) return c.json({ error: "Not found" }, 404);
     return c.json({ data: row });

@@ -30,6 +30,7 @@ const timestamps = () => ({
 
 export const project = pgTable("project", {
   id: id(),
+  userId: uuid("user_id").notNull(),  // FK は user 定義より下なので constraint は SQL 側
   code: code(),
   name: name(),
   color: text("color"),
@@ -37,7 +38,7 @@ export const project = pgTable("project", {
   sortOrder: integer("sort_order").notNull().default(0),
   ...timestamps(),
 }, (t) => [
-  uniqueIndex("project_code_key").on(t.code),
+  uniqueIndex("project_user_code_key").on(t.userId, t.code),
 ]);
 
 // =============================================================================
@@ -94,13 +95,14 @@ export const topic = pgTable("topic", {
 
 export const tag = pgTable("tag", {
   id: id(),
+  userId: uuid("user_id").notNull(),
   code: code(),
   name: name(),
   color: text("color"),
   sortOrder: integer("sort_order").notNull().default(0),
   ...timestamps(),
 }, (t) => [
-  uniqueIndex("tag_code_key").on(t.code),
+  uniqueIndex("tag_user_code_key").on(t.userId, t.code),
 ]);
 
 // =============================================================================
@@ -109,6 +111,7 @@ export const tag = pgTable("tag", {
 
 export const answerStatus = pgTable("answer_status", {
   id: id(),
+  userId: uuid("user_id").notNull(),
   code: code(),
   name: name(),
   color: text("color"),
@@ -118,7 +121,7 @@ export const answerStatus = pgTable("answer_status", {
   description: text("description"),
   ...timestamps(),
 }, (t) => [
-  uniqueIndex("answer_status_code_key").on(t.code),
+  uniqueIndex("answer_status_user_code_key").on(t.userId, t.code),
 ]);
 
 // =============================================================================
@@ -280,6 +283,7 @@ export const userCredential = pgTable("user_credential", {
 
 export const apiKey = pgTable("api_key", {
   id: id(),
+  userId: uuid("user_id").notNull(),
   name: text("name").notNull(),
   keyHash: text("key_hash").notNull(),
   keyPrefix: text("key_prefix").notNull(),
@@ -294,12 +298,15 @@ export const apiKey = pgTable("api_key", {
 
 export const oauthToken = pgTable("oauth_token", {
   id: id(),
+  userId: uuid("user_id").notNull(),
   provider: text("provider").notNull(), // 'google'
   accessToken: text("access_token").notNull(),
   refreshToken: text("refresh_token"),
   tokenExpiresAt: timestamp("token_expires_at", { withTimezone: true }),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (t) => [
+  uniqueIndex("oauth_token_user_provider_key").on(t.userId, t.provider),
+]);
 
 // =============================================================================
 // 23. FilterPref
@@ -307,11 +314,12 @@ export const oauthToken = pgTable("oauth_token", {
 
 export const filterPref = pgTable("filter_pref", {
   id: id(),
+  userId: uuid("user_id").notNull(),
   projectId: uuid("project_id").notNull().references(() => project.id, { onDelete: "cascade" }),
   filters: jsonb("filters").notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
-  uniqueIndex("filter_pref_project_key").on(t.projectId),
+  uniqueIndex("filter_pref_user_project_key").on(t.userId, t.projectId),
 ]);
 
 // =============================================================================

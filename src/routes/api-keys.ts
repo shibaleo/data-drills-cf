@@ -2,9 +2,12 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { db } from "@/lib/db";
 import { apiKey } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { apiKeyCreateInputSchema } from "@/lib/schemas/api-key";
+import type { AuthResult } from "@/lib/auth";
+
+type Env = { Variables: { authResult: AuthResult } };
 
 function randomBase64url(bytes: number): string {
   const buf = new Uint8Array(bytes);
@@ -14,8 +17,9 @@ function randomBase64url(bytes: number): string {
   return btoa(binStr).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
-const app = new Hono()
+const app = new Hono<Env>()
   .get("/", async (c) => {
+    const userId = c.get("authResult").userId;
     const rows = await db
       .select({
         id: apiKey.id,
@@ -25,10 +29,12 @@ const app = new Hono()
         createdAt: apiKey.createdAt,
       })
       .from(apiKey)
+      .where(eq(apiKey.userId, userId))
       .orderBy(apiKey.createdAt);
     return c.json({ data: rows });
   })
   .post("/", zValidator("json", apiKeyCreateInputSchema), async (c) => {
+    const userId = c.get("authResult").userId;
     const body = c.req.valid("json");
     const rawKey = randomBase64url(32);
     const fullKey = `dd_${rawKey}`;
@@ -36,6 +42,7 @@ const app = new Hono()
     const keyPrefix = fullKey.slice(0, 11);
 
     const [row] = await db.insert(apiKey).values({
+      userId,
       name: body.name,
       keyHash,
       keyPrefix,
@@ -44,10 +51,11 @@ const app = new Hono()
     return c.json({ data: { ...row, key: fullKey } }, 201);
   })
   .delete("/:id", async (c) => {
+    const userId = c.get("authResult").userId;
     const [row] = await db
       .update(apiKey)
       .set({ isActive: false })
-      .where(eq(apiKey.id, c.req.param("id")))
+      .where(and(eq(apiKey.id, c.req.param("id")), eq(apiKey.userId, userId)))
       .returning();
     if (!row) return c.json({ error: "Not found" }, 404);
     return c.json({ data: row });

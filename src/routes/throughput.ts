@@ -3,6 +3,10 @@ import { zValidator } from "@hono/zod-validator";
 import { db } from "@/lib/db";
 import { sql } from "drizzle-orm";
 import { projectIdQuerySchema } from "@/lib/schemas/common";
+import { ownsProject } from "@/lib/ownership";
+import type { AuthResult } from "@/lib/auth";
+
+type Env = { Variables: { authResult: AuthResult } };
 
 type Row = {
   id: string;
@@ -27,9 +31,11 @@ type Row = {
  * GET / — project の全 answer を時系列で返す。各行に「直前 answer の status color」を同梱。
  * Throughput chart 用。1 answer = 1 ブロック。
  */
-const app = new Hono()
+const app = new Hono<Env>()
   .get("/", zValidator("query", projectIdQuerySchema), async (c) => {
+    const userId = c.get("authResult").userId;
     const { project_id: projectId } = c.req.valid("query");
+    if (!(await ownsProject(projectId, userId))) return c.json({ data: [] });
     const rows = await db.execute<Row>(sql`
       SELECT
         a.id,

@@ -1,14 +1,18 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { db } from "@/lib/db";
-import { answer } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { answer, problem, project } from "@/lib/db/schema";
+import { and, eq } from "drizzle-orm";
 import { toJSTDateString } from "@/lib/date-utils";
 import {
   answerCreateInputSchema,
   answerUpdateInputSchema,
 } from "@/lib/schemas/answer";
 import { z } from "zod";
+import { ownsProblem, ownsAnswer } from "@/lib/ownership";
+import type { AuthResult } from "@/lib/auth";
+
+type Env = { Variables: { authResult: AuthResult } };
 
 const toRow = (r: typeof answer.$inferSelect) => ({
   ...r,
@@ -16,16 +20,26 @@ const toRow = (r: typeof answer.$inferSelect) => ({
   createdAt: r.createdAt.toISOString(),
 });
 
-const app = new Hono()
+const app = new Hono<Env>()
   .get("/", zValidator("query", z.object({ problem_id: z.string().uuid().optional() })), async (c) => {
+    const userId = c.get("authResult").userId;
     const { problem_id: problemId } = c.req.valid("query");
-    const rows = problemId
-      ? await db.select().from(answer).where(eq(answer.problemId, problemId)).orderBy(answer.date, answer.createdAt)
-      : await db.select().from(answer).orderBy(answer.date, answer.createdAt);
-    return c.json({ data: rows.map(toRow), next_cursor: null });
+    if (problemId) {
+      if (!(await ownsProblem(problemId, userId))) return c.json({ data: [], next_cursor: null });
+      const rows = await db.select().from(answer)
+        .where(eq(answer.problemId, problemId)).orderBy(answer.date, answer.createdAt);
+      return c.json({ data: rows.map(toRow), next_cursor: null });
+    }
+    const rows = await db.select({ a: answer }).from(answer)
+      .innerJoin(problem, eq(answer.problemId, problem.id))
+      .innerJoin(project, eq(problem.projectId, project.id))
+      .where(eq(project.userId, userId)).orderBy(answer.date, answer.createdAt);
+    return c.json({ data: rows.map((r) => toRow(r.a)), next_cursor: null });
   })
   .post("/", zValidator("json", answerCreateInputSchema), async (c) => {
+    const userId = c.get("authResult").userId;
     const body = c.req.valid("json");
+    if (!(await ownsProblem(body.problem_id, userId))) return c.json({ error: "Not found" }, 404);
     const values = {
       problemId: body.problem_id,
       date: new Date(body.date),
@@ -37,22 +51,31 @@ const app = new Hono()
     return c.json({ data: toRow(row) }, 201);
   })
   .get("/:id", async (c) => {
-    const [row] = await db.select().from(answer).where(eq(answer.id, c.req.param("id")));
+    const userId = c.get("authResult").userId;
+    const id = c.req.param("id");
+    if (!(await ownsAnswer(id, userId))) return c.json({ error: "Not found" }, 404);
+    const [row] = await db.select().from(answer).where(eq(answer.id, id));
     if (!row) return c.json({ error: "Not found" }, 404);
     return c.json({ data: toRow(row) });
   })
   .put("/:id", zValidator("json", answerUpdateInputSchema), async (c) => {
+    const userId = c.get("authResult").userId;
+    const id = c.req.param("id");
+    if (!(await ownsAnswer(id, userId))) return c.json({ error: "Not found" }, 404);
     const body = c.req.valid("json");
     const updates: Record<string, unknown> = {};
     if (body.date !== undefined) updates.date = new Date(body.date);
     if (body.duration !== undefined) updates.duration = body.duration;
     if (body.answer_status_id !== undefined) updates.answerStatusId = body.answer_status_id;
-    const [row] = await db.update(answer).set(updates).where(eq(answer.id, c.req.param("id"))).returning();
+    const [row] = await db.update(answer).set(updates).where(eq(answer.id, id)).returning();
     if (!row) return c.json({ error: "Not found" }, 404);
     return c.json({ data: toRow(row) });
   })
   .delete("/:id", async (c) => {
-    const [row] = await db.delete(answer).where(eq(answer.id, c.req.param("id"))).returning();
+    const userId = c.get("authResult").userId;
+    const id = c.req.param("id");
+    if (!(await ownsAnswer(id, userId))) return c.json({ error: "Not found" }, 404);
+    const [row] = await db.delete(answer).where(eq(answer.id, id)).returning();
     if (!row) return c.json({ error: "Not found" }, 404);
     return c.json({ data: toRow(row) });
   });

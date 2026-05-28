@@ -17,9 +17,13 @@ import { problemColor } from "@/lib/problem-color";
 import { secondsToHmsNullable } from "@/lib/duration";
 import { toJSTDateString } from "@/lib/date-utils";
 import { projectIdQuerySchema } from "@/lib/schemas/common";
+import { ownsProject } from "@/lib/ownership";
 import type { ReviewType } from "@/lib/types";
+import type { AuthResult } from "@/lib/auth";
 
-const app = new Hono()
+type Env = { Variables: { authResult: AuthResult } };
+
+const app = new Hono<Env>()
   /**
    * GET / — `/problems` ページ用の確定版レスポンス
    *
@@ -27,7 +31,9 @@ const app = new Hono()
    * クライアントが `ProblemWithAnswers[]` をそのまま `setState` できる形で返す。
    */
   .get("/", zValidator("query", projectIdQuerySchema), async (c) => {
+    const userId = c.get("authResult").userId;
     const { project_id: projectId } = c.req.valid("query");
+    if (!(await ownsProject(projectId, userId))) return c.json({ data: [], next_cursor: null });
 
     const problems = await db.select().from(problem)
       .where(eq(problem.projectId, projectId))
@@ -42,10 +48,10 @@ const app = new Hono()
             db.select().from(answer)
               .where(inArray(answer.problemId, problemIds))
               .orderBy(answer.date, answer.createdAt),
-            db.select().from(answerStatus),
+            db.select().from(answerStatus).where(eq(answerStatus.userId, userId)),
             db.select().from(subject).where(eq(subject.projectId, projectId)),
             db.select().from(level).where(eq(level.projectId, projectId)),
-            db.select().from(tag),
+            db.select().from(tag).where(eq(tag.userId, userId)),
             db.select().from(problemFile).where(inArray(problemFile.problemId, problemIds)),
           ]);
 

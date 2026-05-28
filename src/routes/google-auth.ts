@@ -1,29 +1,29 @@
 import { Hono } from "hono";
-import { authenticate } from "@/lib/auth";
+import { authenticate, type AuthResult } from "@/lib/auth";
 import { env } from "@/lib/env";
 import { db } from "@/lib/db";
 import { oauthToken } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { getAuthUrl, exchangeCode, getValidAccessToken } from "@/lib/google-oauth";
 
-const app = new Hono()
-  /**
-   * GET / — Initiate Google OAuth flow (redirect to Google consent screen)
-   */
-  .get("/", async (c) => {
+type Env = { Variables: { authResult: AuthResult } };
+
+// すべてのハンドラで authResult を期待する。/callback も Google からのリダイレクト時に
+// ブラウザが Clerk セッション cookie を付けるので、同じ middleware で通せる。
+const app = new Hono<Env>()
+  .use("*", async (c, next) => {
     const result = await authenticate(c.req.raw);
     if (!result) return c.json({ error: "Unauthorized" }, 401);
-
-    const authUrl = getAuthUrl();
-    return c.redirect(authUrl);
+    c.set("authResult", result);
+    await next();
   })
-  /**
-   * GET /callback — OAuth callback from Google (public — no auth required)
-   */
+  .get("/", async (c) => {
+    return c.redirect(getAuthUrl());
+  })
   .get("/callback", async (c) => {
     const code = c.req.query("code");
     if (!code) return c.json({ error: "Missing code" }, 400);
-
+    const userId = c.get("authResult").userId;
     const baseUrl = env.BASE_URL;
 
     try {
@@ -32,10 +32,11 @@ const app = new Hono()
         ? new Date(Date.now() + tokens.expires_in * 1000)
         : null;
 
+      // upsert: (user_id, provider) ユニーク
       const existing = await db
         .select({ id: oauthToken.id })
         .from(oauthToken)
-        .where(eq(oauthToken.provider, "google"))
+        .where(and(eq(oauthToken.userId, userId), eq(oauthToken.provider, "google")))
         .limit(1);
 
       if (existing.length > 0) {
@@ -50,6 +51,7 @@ const app = new Hono()
           .where(eq(oauthToken.id, existing[0].id));
       } else {
         await db.insert(oauthToken).values({
+          userId,
           provider: "google",
           accessToken: tokens.access_token ?? "",
           refreshToken: tokens.refresh_token ?? null,
@@ -63,17 +65,12 @@ const app = new Hono()
       return c.redirect(`${baseUrl}/?google=error`);
     }
   })
-  /**
-   * GET /token — Return a fresh access_token for client-side Google Picker API
-   */
   .get("/token", async (c) => {
-    const result = await authenticate(c.req.raw);
-    if (!result) return c.json({ error: "Unauthorized" }, 401);
-
+    const userId = c.get("authResult").userId;
     const [tokens] = await db
       .select()
       .from(oauthToken)
-      .where(eq(oauthToken.provider, "google"))
+      .where(and(eq(oauthToken.userId, userId), eq(oauthToken.provider, "google")))
       .limit(1);
 
     if (!tokens) return c.json({ error: "Google Drive not connected" }, 400);
@@ -87,26 +84,18 @@ const app = new Hono()
     if (accessToken !== tokens.accessToken) {
       await db
         .update(oauthToken)
-        .set({
-          accessToken,
-          updatedAt: new Date(),
-        })
+        .set({ accessToken, updatedAt: new Date() })
         .where(eq(oauthToken.id, tokens.id));
     }
 
     return c.json({ accessToken });
   })
-  /**
-   * GET /status — Check if Google Drive is connected
-   */
   .get("/status", async (c) => {
-    const result = await authenticate(c.req.raw);
-    if (!result) return c.json({ error: "Unauthorized" }, 401);
-
+    const userId = c.get("authResult").userId;
     const rows = await db
       .select({ id: oauthToken.id, updatedAt: oauthToken.updatedAt })
       .from(oauthToken)
-      .where(eq(oauthToken.provider, "google"))
+      .where(and(eq(oauthToken.userId, userId), eq(oauthToken.provider, "google")))
       .limit(1);
 
     return c.json({
@@ -114,14 +103,10 @@ const app = new Hono()
       updatedAt: rows[0]?.updatedAt ?? null,
     });
   })
-  /**
-   * POST /disconnect — Disconnect Google Drive
-   */
   .post("/disconnect", async (c) => {
-    const result = await authenticate(c.req.raw);
-    if (!result) return c.json({ error: "Unauthorized" }, 401);
-
-    await db.delete(oauthToken).where(eq(oauthToken.provider, "google"));
+    const userId = c.get("authResult").userId;
+    await db.delete(oauthToken)
+      .where(and(eq(oauthToken.userId, userId), eq(oauthToken.provider, "google")));
     return c.json({ ok: true });
   });
 

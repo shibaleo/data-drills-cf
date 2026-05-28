@@ -1,20 +1,23 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
-import { authenticate } from "@/lib/auth";
+import { authenticate, type AuthResult } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { oauthToken, problemFile } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { getValidAccessToken } from "@/lib/google-oauth";
 import { driveLinkInputSchema } from "@/lib/schemas/drive";
 
 const DRIVE_API = "https://www.googleapis.com/drive/v3";
 
-const app = new Hono()
+type Env = { Variables: { authResult: AuthResult } };
+
+const app = new Hono<Env>()
   // /api/drive は v1 の外にマウントされているため、v1 ミドルウェアが効かない。
-  // ルート単位で認証を一括する。
+  // ルート単位で認証を一括し、authResult を context に乗せる。
   .use("*", async (c, next) => {
     const result = await authenticate(c.req.raw);
     if (!result) return c.json({ error: "Unauthorized" }, 401);
+    c.set("authResult", result);
     await next();
   })
   /**
@@ -24,10 +27,11 @@ const app = new Hono()
     const fileId = c.req.query("id");
     if (!fileId) return c.json({ error: "Missing id" }, 400);
 
+    const userId = c.get("authResult").userId;
     const [tokens] = await db
       .select()
       .from(oauthToken)
-      .where(eq(oauthToken.provider, "google"))
+      .where(and(eq(oauthToken.userId, userId), eq(oauthToken.provider, "google")))
       .limit(1);
 
     if (!tokens) return c.json({ error: "Google Drive not connected" }, 400);
