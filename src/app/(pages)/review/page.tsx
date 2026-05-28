@@ -389,10 +389,6 @@ function StabilitySlider({
   );
 }
 
-/* ── Summary Card ── */
-
-type SummaryFilter = "today" | "week";
-
 function FilterSection({
   label,
   items,
@@ -427,36 +423,6 @@ function FilterSection({
         </label>
       ))}
     </div>
-  );
-}
-
-function SummaryCard({
-  label,
-  count,
-  active,
-  onClick,
-  variant,
-}: {
-  label: string;
-  count: number;
-  active: boolean;
-  onClick: () => void;
-  variant: "default" | "muted";
-}) {
-  const base = "flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs font-medium cursor-pointer transition-colors select-none";
-  const variants = {
-    default: active
-      ? "bg-foreground/10 border-foreground/30 text-foreground"
-      : "hover:bg-foreground/5 text-foreground/70",
-    muted: active
-      ? "bg-accent border-accent-foreground/20 text-accent-foreground"
-      : "hover:bg-muted text-muted-foreground",
-  };
-  return (
-    <button type="button" className={`${base} ${variants[variant]}`} onClick={onClick}>
-      <span>{label}</span>
-      <span className="tabular-nums font-bold">{count}</span>
-    </button>
   );
 }
 
@@ -640,7 +606,6 @@ export default function SchedulePage() {
   const [exportPhase, setExportPhase] = useState<"waking" | "generating" | "downloading" | null>(null);
 
   // Filter state
-  const [summaryFilter, setSummaryFilter] = useState<SummaryFilter | null>(null);
   const [filterSubjects, setFilterSubjects] = useState<Set<string>>(new Set());
   const [filterLevels, setFilterLevels] = useState<Set<string>>(new Set());
   const [filterStatuses, setFilterStatuses] = useState<Set<string>>(new Set());
@@ -732,20 +697,7 @@ export default function SchedulePage() {
     });
   }, [rows, filterSubjects, filterLevels, filterStatuses]);
 
-  const summaryCounts = useMemo(() => {
-    const todayRows = baseFilteredRows.filter((r) => r.daysUntil <= 0);
-    const weekRows = baseFilteredRows.filter((r) => r.daysUntil > 0 && r.daysUntil <= 7);
-    return {
-      today: todayRows.length,
-      week: weekRows.length,
-    };
-  }, [baseFilteredRows]);
-
-  const displayRows = useMemo(() => {
-    if (!summaryFilter) return baseFilteredRows;
-    if (summaryFilter === "today") return baseFilteredRows.filter((r) => r.daysUntil <= 0);
-    return baseFilteredRows.filter((r) => r.daysUntil > 0 && r.daysUntil <= 7);
-  }, [baseFilteredRows, summaryFilter]);
+  const displayRows = baseFilteredRows;
 
   const chartRows = useMemo(
     () => baseFilteredRows.filter((r) => r.reviewCount > 0),
@@ -861,31 +813,48 @@ export default function SchedulePage() {
         <div className="text-center py-12 text-muted-foreground">No data</div>
       ) : (
         <>
-          {/* Summary cards + Filters */}
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2 flex-wrap">
-              <SummaryCard
-                label="Today"
-                count={summaryCounts.today}
+          {/* Export controls (only when items selected) */}
+          {exportSelected.size > 0 && (
+            <div className="flex items-center justify-between gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 text-xs"
+                onClick={handleExport}
+                disabled={exporting}
+              >
+                {exporting ? (
+                  <Loader2 className="size-3 mr-1 animate-spin" />
+                ) : (
+                  <Download className="size-3 mr-1" />
+                )}
+                {exporting
+                  ? exportPhase === "waking"
+                    ? "Render 起床中..."
+                    : exportPhase === "generating"
+                      ? "PDF 処理中..."
+                      : exportPhase === "downloading"
+                        ? "ダウンロード中..."
+                        : "エクスポート中..."
+                  : `PDF (${exportSelected.size})`}
+              </Button>
+              {selectedMinutes > 0 && (
+                <div className="shrink-0 rounded-md border px-3 py-1 text-center">
+                  <div className="text-lg font-semibold tabular-nums">
+                    {selectedMinutes >= 60 && <>{Math.floor(selectedMinutes / 60)}<span className="text-xs font-normal text-muted-foreground ml-0.5 mr-1">H</span></>}
+                    {selectedMinutes % 60 > 0 && <>{selectedMinutes % 60}<span className="text-xs font-normal text-muted-foreground ml-0.5">min</span></>}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
-                active={summaryFilter === "today"}
-                onClick={() => setSummaryFilter((p) => p === "today" ? null : "today")}
-                variant="default"
-              />
-              <SummaryCard
-                label="Within 7 d"
-                count={summaryCounts.week}
-
-                active={summaryFilter === "week"}
-                onClick={() => setSummaryFilter((p) => p === "week" ? null : "week")}
-                variant="muted"
-              />
-
-              <div className="h-4 w-px bg-border mx-1" />
-
+          {/* Schedule chart */}
+          <div className="shrink-0 rounded-md border p-3">
+            <div className="flex justify-between items-center gap-2 mb-1">
               <Popover>
                 <PopoverTrigger asChild>
-                  <Button size="sm" variant="outline" className="h-7 text-xs relative">
+                  <Button size="sm" variant="outline" className="h-6 text-[10px] px-2 relative">
                     <Filter className="size-3 mr-1" />
                     Filter
                     {activeFilterCount > 0 && (
@@ -931,50 +900,7 @@ export default function SchedulePage() {
                   )}
                 </PopoverContent>
               </Popover>
-
-              {exportSelected.size > 0 && (
-                <div className="h-4 w-px bg-border mx-1" />
-              )}
-              {exportSelected.size > 0 && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-7 text-xs"
-                  onClick={handleExport}
-                  disabled={exporting}
-                >
-                  {exporting ? (
-                    <Loader2 className="size-3 mr-1 animate-spin" />
-                  ) : (
-                    <Download className="size-3 mr-1" />
-                  )}
-                  {exporting
-                    ? exportPhase === "waking"
-                      ? "Render 起床中..."
-                      : exportPhase === "generating"
-                        ? "PDF 処理中..."
-                        : exportPhase === "downloading"
-                          ? "ダウンロード中..."
-                          : "エクスポート中..."
-                    : `PDF (${exportSelected.size})`}
-                </Button>
-              )}
-            </div>
-
-            {/* Selected time card (right side) */}
-            {exportSelected.size > 0 && selectedMinutes > 0 && (
-              <div className="shrink-0 rounded-md border px-3 py-1 text-center">
-                <div className="text-lg font-semibold tabular-nums">
-                  {selectedMinutes >= 60 && <>{Math.floor(selectedMinutes / 60)}<span className="text-xs font-normal text-muted-foreground ml-0.5 mr-1">H</span></>}
-                  {selectedMinutes % 60 > 0 && <>{selectedMinutes % 60}<span className="text-xs font-normal text-muted-foreground ml-0.5">min</span></>}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Schedule chart */}
-          <div className="shrink-0 rounded-md border p-3">
-            <div className="flex justify-end items-center gap-2 mb-1">
+              <div className="flex items-center gap-2">
               {showSlider && stabilityOverrides.size > 0 && (
                 <>
                   <button
@@ -1036,6 +962,7 @@ export default function SchedulePage() {
                   )}
                 </button>
               )}
+              </div>
             </div>
             {showSlider && sliderStatuses.length > 0 && (
               <div className="mb-2 px-2">
