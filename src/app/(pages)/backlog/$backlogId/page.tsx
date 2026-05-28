@@ -61,7 +61,7 @@ export default function BacklogDetailPage() {
   const [localMilestones, setLocalMilestones] = useState<LocalMilestone[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showMilestonePins, setShowMilestonePins] = useState(false);
-  const [hideCompleted, setHideCompleted] = useState(false);
+  const [hideFirst, setHideFirst] = useState(false);
   const [hideFuture, setHideFuture] = useState(false);
   const [overflowOnly, setOverflowOnly] = useState(false);
   const [filterSubjects, setFilterSubjects] = useState<Set<string>>(new Set());
@@ -84,7 +84,7 @@ export default function BacklogDetailPage() {
       setFilterSubjects(new Set(p.subjectIds ?? []));
       setFilterLevels(new Set(p.levelIds ?? []));
       setFilterTopics(new Set(p.topicIds ?? []));
-      setHideCompleted(!!p.hideCompleted);
+      setHideFirst(!!p.hideFirst);
       setHideFuture(!!p.hideFuture);
       setOverflowOnly(!!p.overflowOnly);
     }
@@ -98,11 +98,11 @@ export default function BacklogDetailPage() {
         subjectIds: [...filterSubjects],
         levelIds: [...filterLevels],
         topicIds: [...filterTopics],
-        hideCompleted, hideFuture, overflowOnly,
+        hideFirst, hideFuture, overflowOnly,
       },
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filterSubjects, filterLevels, filterTopics, hideCompleted, hideFuture, overflowOnly]);
+  }, [filterSubjects, filterLevels, filterTopics, hideFirst, hideFuture, overflowOnly]);
 
   const qc = useQueryClient();
   const allProblems = useProblemsList(currentProject?.id).data ?? [];
@@ -235,7 +235,7 @@ export default function BacklogDetailPage() {
     if (filterSubjects.size > 0 && (!m.subject_id || !filterSubjects.has(m.subject_id))) return false;
     if (filterLevels.size > 0 && (!m.level_id || !filterLevels.has(m.level_id))) return false;
     if (filterTopics.size > 0 && (!m.topic_id || !filterTopics.has(m.topic_id))) return false;
-    if (hideCompleted && m.first_answer_date) return false;
+    if (hideFirst && m.first_answer_date) return false;
     if (hideFuture && !m.first_answer_date) return false;
     if (overflowOnly && !allocByProblemId.get(m.id)?.overflow) return false;
     return true;
@@ -246,7 +246,7 @@ export default function BacklogDetailPage() {
 
   const activeFilterCount =
     filterSubjects.size + filterLevels.size + filterTopics.size
-    + (hideCompleted ? 1 : 0) + (hideFuture ? 1 : 0) + (overflowOnly ? 1 : 0);
+    + (hideFirst ? 1 : 0) + (hideFuture ? 1 : 0) + (overflowOnly ? 1 : 0);
 
   function tmpId(): string {
     return `tmp-${(crypto as Crypto & { randomUUID(): string }).randomUUID()}`;
@@ -387,7 +387,7 @@ export default function BacklogDetailPage() {
               </PopoverTrigger>
               <PopoverContent className="w-56 p-3 space-y-3" align="start">
                 <FilterToggleSection>
-                  <FilterToggle label="Hide completed" checked={hideCompleted} onChange={setHideCompleted}/>
+                  <FilterToggle label="Hide First" checked={hideFirst} onChange={setHideFirst}/>
                   <FilterToggle label="Hide pending" checked={hideFuture} onChange={setHideFuture}/>
                   <FilterToggle label="Overflow only" checked={overflowOnly} onChange={setOverflowOnly}/>
                 </FilterToggleSection>
@@ -408,13 +408,13 @@ export default function BacklogDetailPage() {
                     className="text-[10px] text-muted-foreground hover:text-foreground w-full text-center pt-1"
                     onClick={() => {
                       setFilterSubjects(new Set()); setFilterLevels(new Set()); setFilterTopics(new Set());
-                      setHideCompleted(false); setHideFuture(false); setOverflowOnly(false);
+                      setHideFirst(false); setHideFuture(false); setOverflowOnly(false);
                     }}>Clear all</button>
                 )}
               </PopoverContent>
             </Popover>
             <BlockLegend entries={[
-              ...(hideCompleted ? [] : [{ kind: "fill" as const, label: "First", color: "#ec4899" }]),
+              ...(hideFirst ? [] : [{ kind: "fill" as const, label: "First", color: "#ec4899" }]),
               ...(hideFuture ? [] : [{ kind: "fill" as const, label: "Planned", color: "#8b5cf6" }]),
               { kind: "ring" as const, label: "Over budget", color: "#f59e0b" },
               { kind: "ring" as const, label: "Overflow", color: "#ef4444" },

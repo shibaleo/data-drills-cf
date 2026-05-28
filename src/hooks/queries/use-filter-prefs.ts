@@ -9,13 +9,16 @@ export const filterPrefsKeys = {
 export type ReviewPrefs = {
   subjectIds?: string[];
   levelIds?: string[];
-  statuses?: string[];
+  /** 最終回答 status (= 各問題の現在ステータス) でフィルタ */
+  lastStatuses?: string[];
 };
 export type BacklogPrefs = {
   subjectIds?: string[];
   levelIds?: string[];
   topicIds?: string[];
-  hideCompleted?: boolean;
+  /** First (初回着手済み) を非表示 */
+  hideFirst?: boolean;
+  /** Planned (未着手) を非表示 */
   hideFuture?: boolean;
   overflowOnly?: boolean;
 };

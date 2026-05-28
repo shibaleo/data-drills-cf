@@ -572,7 +572,7 @@ export default function SchedulePage() {
   // Filter state
   const [filterSubjects, setFilterSubjects] = useState<Set<string>>(new Set());
   const [filterLevels, setFilterLevels] = useState<Set<string>>(new Set());
-  const [filterStatuses, setFilterStatuses] = useState<Set<string>>(new Set());
+  const [filterLastStatuses, setFilterLastStatuses] = useState<Set<string>>(new Set());
   // DB 永続化
   const filterPrefsQuery = useFilterPrefs(currentProject?.id);
   const saveFilterPrefs = useSaveFilterPrefs(currentProject?.id);
@@ -583,7 +583,7 @@ export default function SchedulePage() {
     if (data) {
       setFilterSubjects(new Set(data.subjectIds ?? []));
       setFilterLevels(new Set(data.levelIds ?? []));
-      setFilterStatuses(new Set(data.statuses ?? []));
+      setFilterLastStatuses(new Set(data.lastStatuses ?? []));
     }
     prefsLoadedRef.current = currentProject.id;
   }, [filterPrefsQuery.data, currentProject]);
@@ -595,11 +595,11 @@ export default function SchedulePage() {
       review: {
         subjectIds: [...filterSubjects],
         levelIds: [...filterLevels],
-        statuses: [...filterStatuses],
+        lastStatuses: [...filterLastStatuses],
       },
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filterSubjects, filterLevels, filterStatuses]);
+  }, [filterSubjects, filterLevels, filterLastStatuses]);
 
   const now = useMemo(() => new Date(), []);
   const todayStr = useMemo(() => toJSTDateString(now), [now]);
@@ -656,10 +656,10 @@ export default function SchedulePage() {
       if (r.reviewCount === 0) return false;  // 未回答問題はテーブル/チャート両方から除外
       if (filterSubjects.size > 0 && (!r.subjectId || !filterSubjects.has(r.subjectId))) return false;
       if (filterLevels.size > 0 && (!r.levelId || !filterLevels.has(r.levelId))) return false;
-      if (filterStatuses.size > 0 && !filterStatuses.has(r.lastStatus)) return false;
+      if (filterLastStatuses.size > 0 && !filterLastStatuses.has(r.lastStatus)) return false;
       return true;
     });
-  }, [rows, filterSubjects, filterLevels, filterStatuses]);
+  }, [rows, filterSubjects, filterLevels, filterLastStatuses]);
 
   const displayRows = baseFilteredRows;
 
@@ -678,7 +678,7 @@ export default function SchedulePage() {
     });
   }, []);
 
-  const activeFilterCount = filterSubjects.size + filterLevels.size + filterStatuses.size;
+  const activeFilterCount = filterSubjects.size + filterLevels.size + filterLastStatuses.size;
 
   const selectAllVisible = useCallback(() => {
     const ids = new Set(displayRows.map((r) => r.problemId));
@@ -813,15 +813,15 @@ export default function SchedulePage() {
                     <FilterSection
                       label="Status"
                       items={availableStatuses.map((s) => ({ value: s, label: s }))}
-                      selected={filterStatuses}
-                      onChange={setFilterStatuses}
+                      selected={filterLastStatuses}
+                      onChange={setFilterLastStatuses}
                     />
                   )}
                   {activeFilterCount > 0 && (
                     <button
                       type="button"
                       className="text-[10px] text-muted-foreground hover:text-foreground w-full text-center pt-1"
-                      onClick={() => { setFilterSubjects(new Set()); setFilterLevels(new Set()); setFilterStatuses(new Set()); }}
+                      onClick={() => { setFilterSubjects(new Set()); setFilterLevels(new Set()); setFilterLastStatuses(new Set()); }}
                     >
                       フィルター解除
                     </button>
@@ -830,8 +830,8 @@ export default function SchedulePage() {
               </Popover>
               <BlockLegend entries={statuses.map<LegendEntry>((s) => ({
                 kind: "fill", label: s.name, color: s.color ?? "#888",
-                active: filterStatuses.has(s.name),
-                onClick: () => setFilterStatuses((prev) => {
+                active: filterLastStatuses.has(s.name),
+                onClick: () => setFilterLastStatuses((prev) => {
                   const next = new Set(prev);
                   if (next.has(s.name)) next.delete(s.name); else next.add(s.name);
                   return next;
