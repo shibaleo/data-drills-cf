@@ -659,9 +659,23 @@ export default function SchedulePage() {
     }
     prefsLoadedRef.current = currentProject.id;
   }, [filterPrefsQuery.data, currentProject]);
-  // 変更時に save (debounce 不要、変化が低頻度)
+  // 変更時に save (debounce 不要、変化が低頻度)。
+  // 直前の snapshot と一致するなら server と同期済み → 冗長な PUT を防ぐ。
+  const lastSavedPrefsRef = useRef<string | null>(null);
   useEffect(() => {
     if (!currentProject || prefsLoadedRef.current !== currentProject.id) return;
+    const snapshot = JSON.stringify({
+      s: [...filterSubjects].sort(),
+      l: [...filterLevels].sort(),
+      st: [...filterLastStatuses].sort(),
+    });
+    if (lastSavedPrefsRef.current === null) {
+      // 初回 sync (load 直後): snapshot を記録するだけで PUT しない
+      lastSavedPrefsRef.current = snapshot;
+      return;
+    }
+    if (lastSavedPrefsRef.current === snapshot) return;
+    lastSavedPrefsRef.current = snapshot;
     saveFilterPrefs.mutate({
       ...(filterPrefsQuery.data ?? {}),
       review: {

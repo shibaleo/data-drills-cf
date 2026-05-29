@@ -119,8 +119,21 @@ export default function ThroughputPage() {
     }
     prefsLoadedRef.current = currentProject.id;
   }, [currentProject, filterPrefsQuery.data]);
+  const lastSavedPrefsRef = useRef<string | null>(null);
   useEffect(() => {
     if (!currentProject || prefsLoadedRef.current !== currentProject.id) return;
+    const snapshot = JSON.stringify({
+      s: [...filterSubjects].sort(),
+      l: [...filterLevels].sort(),
+      ps: [...filterPrevStatuses].sort(),
+      maxRowsCap,
+    });
+    if (lastSavedPrefsRef.current === null) {
+      lastSavedPrefsRef.current = snapshot;
+      return;
+    }
+    if (lastSavedPrefsRef.current === snapshot) return;
+    lastSavedPrefsRef.current = snapshot;
     saveFilterPrefs.mutate({
       ...(filterPrefsQuery.data ?? {}),
       throughput: {

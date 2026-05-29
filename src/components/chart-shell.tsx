@@ -92,28 +92,36 @@ export const ChartShell = forwardRef<ChartShellHandle, ChartShellProps>(function
     },
   }), [dates, cursorDate]);
 
-  // 初回 mount (= ページ遷移直後) のみ、cursor を 1/3 位置にスクロール。
-  // データロード完了を待つため dates.length が初期 padding (= 22) を超えてから init。
-  // 以降は scrollLeft を触らない (= ユーザーの scroll 操作を尊重)。
+  // 初回 mount で cursor を 1/3 位置に scroll。以降はユーザー scroll を尊重して触らないが、
+  // データ遅延ロードで dates が大きく拡張され cursor が viewport 外に出た場合は再スクロールする。
   //
   // 注意: 複数 effect 起動で rAF が並走すると stale な cursorIdx で繰り返し scroll
   //       するため、cleanup で前回の rAF をキャンセルする。
   useEffect(() => {
-    if (!scrollRef.current || cursorIdx < 0 || didInitScrollRef.current) return;
+    if (!scrollRef.current || cursorIdx < 0) return;
     if (isDraggingRef.current) return;
-    if (dates.length <= 22) return;
     let cancelled = false;
     const tryScroll = () => {
-      if (cancelled || didInitScrollRef.current) return;
+      if (cancelled) return;
       const el = scrollRef.current;
       if (!el) return;
       if (el.clientWidth === 0) {
         requestAnimationFrame(tryScroll);
         return;
       }
-      didInitScrollRef.current = true;
-      const cursorX = cursorIdx * STEP;
-      el.scrollLeft = Math.max(0, cursorX - el.clientWidth / 3);
+      const cursorX = cursorIdx * STEP + CELL / 2;
+      const inView = cursorX >= el.scrollLeft && cursorX <= el.scrollLeft + el.clientWidth;
+      // 初回: dates が確定 (>22) してから 1/3 位置にセット
+      if (!didInitScrollRef.current) {
+        if (dates.length <= 22) return;
+        didInitScrollRef.current = true;
+        el.scrollLeft = Math.max(0, cursorX - el.clientWidth / 3);
+        return;
+      }
+      // 既に init 済 + cursor が viewport 外 → 1/3 位置に呼び戻す (= データ拡張で cursor が外れた場合)
+      if (!inView) {
+        el.scrollLeft = Math.max(0, cursorX - el.clientWidth / 3);
+      }
     };
     requestAnimationFrame(tryScroll);
     return () => { cancelled = true; };

@@ -25,9 +25,14 @@ export default {
 
     const url = new URL(request.url);
 
-    // API routes → Hono (each request gets its own DB client via AsyncLocalStorage)
+    // API routes → Hono
+    // 本番 (Hyperdrive あり) のみ per-request DB client。ローカル dev は globalThis 共有 client を使うため
+    // withRequestDb をスキップする (毎リクエスト postgres client を作って .end() すると Supabase 接続上限を消費する)
     if (url.pathname.startsWith("/api/")) {
-      return withRequestDb(() => app.fetch(request, env, ctx)) as Promise<Response>;
+      if (env.HYPERDRIVE) {
+        return withRequestDb(() => app.fetch(request, env, ctx)) as Promise<Response>;
+      }
+      return app.fetch(request, env, ctx);
     }
 
     // Everything else → static assets (with SPA fallback)

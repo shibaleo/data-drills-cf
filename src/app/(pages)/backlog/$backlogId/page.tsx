@@ -102,8 +102,22 @@ export default function BacklogDetailPage() {
     }
     prefsLoadedRef.current = currentProject.id;
   }, [currentProject, filterPrefsQuery.data]);
+  const lastSavedPrefsRef = useRef<string | null>(null);
   useEffect(() => {
     if (!currentProject || prefsLoadedRef.current !== currentProject.id) return;
+    const snapshot = JSON.stringify({
+      s: [...filterSubjects].sort(),
+      l: [...filterLevels].sort(),
+      t: [...filterTopics].sort(),
+      hideFirst, hideFuture, overflowOnly,
+      h: [...hiddenLayerIds].sort(),
+    });
+    if (lastSavedPrefsRef.current === null) {
+      lastSavedPrefsRef.current = snapshot;
+      return;
+    }
+    if (lastSavedPrefsRef.current === snapshot) return;
+    lastSavedPrefsRef.current = snapshot;
     saveFilterPrefs.mutate({
       ...(filterPrefsQuery.data ?? {}),
       backlog: {

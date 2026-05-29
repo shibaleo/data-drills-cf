@@ -52,8 +52,9 @@ export function useSaveFilterPrefs(projectId: string | undefined) {
   return useMutation({
     mutationFn: (filters: FilterPrefsBag) =>
       unwrap(rpc.api.v1["filter-prefs"].$put({ json: { project_id: projectId!, filters } })),
-    onSuccess: () => {
-      if (projectId) qc.invalidateQueries({ queryKey: filterPrefsKeys.byProject(projectId) });
+    onSuccess: (_data, filters) => {
+      // server を round-trip せず cache を直接更新 (= 無駄な GET を抑える)
+      if (projectId) qc.setQueryData(filterPrefsKeys.byProject(projectId), filters);
     },
   });
 }
