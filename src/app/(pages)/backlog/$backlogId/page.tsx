@@ -674,7 +674,7 @@ export default function BacklogDetailPage() {
               </div>
               <div className="flex items-baseline justify-between border-t pt-1">
                 <span className="text-[9px] uppercase tracking-wide text-muted-foreground">Weekly</span>
-                <span className="text-[11px] tabular-nums">{Math.round(weekdayWeights.reduce((s, w) => s + w * dailyMinutes, 0))} m</span>
+                <span className="text-[11px] tabular-nums text-muted-foreground">{Math.round(weekdayWeights.reduce((s, w) => s + w * dailyMinutes, 0))} m</span>
               </div>
               {lastMs && daysToDeadline != null && (
                 <div className="flex items-baseline justify-between">
