@@ -253,7 +253,8 @@ export default function ThroughputPage() {
   const nameDirty = synced && localName !== scope!.name;
   const dirty = filterDirty || nameDirty;
   const membersOpen = membersEditorOpen || filterDirty;
-  const historyOpen = historyPanelOpen || asOf != null;
+  // history panel は明示的に ⋮ メニューで開いた時のみ。
+  const historyOpen = historyPanelOpen;
 
   async function onConfirm() {
     if (!scope) return;
@@ -300,7 +301,7 @@ export default function ThroughputPage() {
             <button type="button" title="More"
               aria-pressed={moreMenuOpen || membersOpen || historyOpen}
               className={`${dirty ? "" : "ml-auto"} inline-flex items-center justify-center size-7 rounded-md border transition-colors ${
-                filterDirty
+                filterDirty || asOf != null
                   ? "border-primary/50 text-primary"
                   : (membersOpen || historyOpen || moreMenuOpen)
                     ? "bg-accent text-accent-foreground border-accent-foreground/40"
@@ -319,7 +320,7 @@ export default function ThroughputPage() {
             <MenuItem
               icon={<History className="size-3.5"/>}
               label="View history"
-              active={historyOpen}
+              active={historyOpen || asOf != null}
               onClick={() => { setHistoryPanelOpen((v) => !v); setMoreMenuOpen(false); }}
             />
             <div className="h-px bg-border my-1"/>

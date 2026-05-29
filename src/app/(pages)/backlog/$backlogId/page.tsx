@@ -263,9 +263,9 @@ export default function BacklogDetailPage() {
   const filterDirty = synced && JSON.stringify(localFilter) !== JSON.stringify(data.backlog.filter ?? {});
   // dirty な間は editor を閉じられないようにする (preview を隠したくない)
   const membersOpen = membersEditorOpen || filterDirty;
-  // readOnly (= 過去 snapshot 表示中) なら history panel を自動展開
-  // (= 戻るためのトリガーを常時露出させる)
-  const historyOpen = historyPanelOpen || readOnly;
+  // history panel は明示的に ⋮ メニューで開いた時のみ展開する。
+  // (asOf でドラッグした時に panel が勝手に開いてレイアウトがずれないように)
+  const historyOpen = historyPanelOpen;
   // filter dirty 中は chart 上の milestone pin 編集 UI も自動的に展開
   // (= ユーザーが overflow / anchor を直接調整できるようにする)
   const milestonePinsVisible = showMilestonePins || filterDirty;
@@ -476,7 +476,7 @@ export default function BacklogDetailPage() {
             <button type="button" title="More"
               aria-pressed={moreMenuOpen || membersOpen || historyOpen}
               className={`${dirty && !readOnly ? "" : "ml-auto"} inline-flex items-center justify-center size-7 rounded-md border transition-colors ${
-                filterDirty
+                filterDirty || asOf != null
                   ? "border-primary/50 text-primary"
                   : (membersOpen || historyOpen || moreMenuOpen)
                     ? "bg-accent text-accent-foreground border-accent-foreground/40"
@@ -496,7 +496,7 @@ export default function BacklogDetailPage() {
             <MenuItem
               icon={<History className="size-3.5"/>}
               label="View history"
-              active={historyOpen}
+              active={historyOpen || asOf != null}
               onClick={() => { setHistoryPanelOpen((v) => !v); setMoreMenuOpen(false); }}
             />
             <div className="h-px bg-border my-1"/>
