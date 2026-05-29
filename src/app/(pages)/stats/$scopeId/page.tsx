@@ -186,10 +186,7 @@ export default function StatsDetailPage() {
         setPeriod={setMatrixPeriod}
       />
 
-      <HourPattern
-        rows={rows}
-        statuses={statuses.map((s) => ({ id: s.id, name: s.name, color: s.color ?? null, sortOrder: s.sortOrder }))}
-      />
+      <HourPattern rows={rows}/>
 
       <CycleTimeStats
         problems={filteredProblems}
