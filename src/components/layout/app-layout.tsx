@@ -61,10 +61,8 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
 
       <main className="flex-1 overflow-y-auto flex flex-col">
         <div
-          style={{ minHeight: scrollingDown ? 0 : "var(--header-height-desktop)" }}
-          className={`hidden md:flex items-center gap-2 px-4 transition-all duration-200 overflow-hidden ${
-            scrollingDown ? "max-h-0 opacity-0" : "max-h-16 opacity-100"
-          }`}>
+          style={{ minHeight: "var(--header-height-desktop)" }}
+          className="hidden md:flex items-center gap-2 px-4 max-h-16">
           {onBack && (
             <button type="button" onClick={onBack}
               title="Back"

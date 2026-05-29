@@ -162,10 +162,12 @@ export default function BacklogDetailPage() {
   const effectiveMembers = useMemo<BacklogMember[]>(() => {
     if (!data) return [];
     const sameFilter = JSON.stringify(data.backlog.filter ?? {}) === JSON.stringify(localFilter);
-    if (sameFilter) return data.members;
+    // 過去 cursor (asOf < todayJST) のみ first_answer_date を asOf でフィルタ
+    // (= 過去時点の状態を再現)。未来 cursor の場合は全 answer を含める。
+    const realToday = todayJST();
+    const pastAsOf = asOf && asOf < realToday ? asOf : null;
+    if (sameFilter && !pastAsOf) return data.members;
     if (allProblems.length === 0) return data.members;
-    // 注: first_answer_date は **実績** なので asOf に依らない (cursor を動かしても
-    // 過去ブロックは動かない)。asOf は allocate(today=asOf) で未来配分のみ動かす。
     const filtered = applyMemberFilter(
       allProblems.map((p) => ({
         subjectId: p.subject_id || null,
@@ -175,18 +177,23 @@ export default function BacklogDetailPage() {
       localFilter,
     );
     return filtered
-      .map(({ _orig: p }) => ({
-        id: p.id,
-        code: p.code,
-        name: p.name || null,
-        standard_time: p.standard_time,
-        subject_id: p.subject_id || null,
-        level_id: p.level_id || null,
-        topic_id: p.topic_id,
-        first_answer_date: p.answers[0]?.date ?? null,
-      }))
+      .map(({ _orig: p }) => {
+        const firstAns = pastAsOf
+          ? p.answers.find((a) => a.date <= pastAsOf)?.date ?? null
+          : p.answers[0]?.date ?? null;
+        return {
+          id: p.id,
+          code: p.code,
+          name: p.name || null,
+          standard_time: p.standard_time,
+          subject_id: p.subject_id || null,
+          level_id: p.level_id || null,
+          topic_id: p.topic_id,
+          first_answer_date: firstAns,
+        };
+      })
       .sort((a, b) => a.code === b.code ? a.id.localeCompare(b.id) : a.code.localeCompare(b.code));
-  }, [data, localFilter, allProblems]);
+  }, [data, localFilter, allProblems, asOf]);
 
   const allocated = useMemo(() => {
     if (!data) return [];
