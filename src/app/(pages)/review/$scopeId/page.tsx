@@ -25,7 +25,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { rpc } from "@/lib/rpc-client";
 import { useProject } from "@/hooks/use-project";
 import { useFilterPrefs, useSaveFilterPrefs } from "@/hooks/queries/use-filter-prefs";
-import { usePageTitle } from "@/lib/page-context";
+import { usePageTitle, useHeaderSlot } from "@/lib/page-context";
 import { OpaqueTag } from "@/components/problem-card";
 import { useProblemDialogs } from "@/hooks/use-problem-dialogs";
 import { useReviewList, reviewKeys } from "@/hooks/queries/use-review";
@@ -461,6 +461,7 @@ const columns: ColumnDef<ScheduleRow>[] = [
 
 export default function SchedulePage() {
   usePageTitle("Review");
+  const renderHeaderSlot = useHeaderSlot();
   const { scopeId } = useParams({ strict: false }) as { scopeId: string };
   const navigate = useNavigate();
   const { currentProject, subjects, levels, statuses } = useProject();
@@ -869,8 +870,8 @@ export default function SchedulePage() {
 
   return (
     <div className="p-3 md:p-4 flex flex-col gap-2">
-      {/* Top bar */}
-      <div className="flex items-center gap-2 flex-wrap">
+      {renderHeaderSlot(
+      <>
         <button onClick={() => navigate({ to: "/review" as string })}
           className="text-muted-foreground hover:text-foreground transition-colors" title="Back to list">
           <ArrowLeft className="size-4"/>
@@ -934,7 +935,8 @@ export default function SchedulePage() {
             />
           </PopoverContent>
         </Popover>
-      </div>
+      </>
+      )}
 
       {/* History panel */}
       {historyOpen && (

@@ -12,7 +12,7 @@ import { PageProvider, usePageContext } from "@/lib/page-context";
 function LayoutInner({ children }: { children: React.ReactNode }) {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
-  const { title, subtitle, headerSlot, scrollingDown } = usePageContext();
+  const { title, subtitle, headerSlot, scrollingDown, setHeaderSlotNode } = usePageContext();
   useEffect(() => setMounted(true), []);
 
   return (
@@ -65,11 +65,11 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
           className={`hidden md:flex items-center gap-2 px-4 transition-all duration-200 overflow-hidden ${
             scrollingDown ? "max-h-0 opacity-0" : "max-h-16 opacity-100"
           }`}>
-          {title && !headerSlot && (
-            <h1 className="text-lg font-semibold truncate">{title}</h1>
+          {title && (
+            <h1 className="text-lg font-semibold truncate shrink-0">{title}</h1>
           )}
-          {headerSlot && <div className="flex-1 min-w-0">{headerSlot}</div>}
-          {!headerSlot && <div className="flex-1" />}
+          {/* Portal target: detail pages inject their top-bar content here via useHeaderSlot(). */}
+          <div ref={setHeaderSlotNode} className="flex-1 min-w-0 flex items-center gap-2"/>
           {subtitle && <span className="text-xs text-muted-foreground">{subtitle}</span>}
           <FilterPopover />
         </div>

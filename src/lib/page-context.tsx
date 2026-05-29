@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 
 interface PageContextValue {
   title: string;
@@ -9,6 +10,8 @@ interface PageContextValue {
   setSubtitle: (s: string) => void;
   headerSlot: React.ReactNode;
   setHeaderSlot: (node: React.ReactNode) => void;
+  headerSlotNode: HTMLElement | null;
+  setHeaderSlotNode: (el: HTMLElement | null) => void;
   scrollingDown: boolean;
   setScrollingDown: (v: boolean) => void;
 }
@@ -20,6 +23,8 @@ const PageContext = createContext<PageContextValue>({
   setSubtitle: () => {},
   headerSlot: null,
   setHeaderSlot: () => {},
+  headerSlotNode: null,
+  setHeaderSlotNode: () => {},
   scrollingDown: false,
   setScrollingDown: () => {},
 });
@@ -28,6 +33,7 @@ export function PageProvider({ children }: { children: React.ReactNode }) {
   const [title, setTitle] = useState("");
   const [subtitle, setSubtitle] = useState("");
   const [headerSlot, setHeaderSlot] = useState<React.ReactNode>(null);
+  const [headerSlotNode, setHeaderSlotNode] = useState<HTMLElement | null>(null);
   const [scrollingDown, setScrollingDown] = useState(false);
   const lastScrollY = useRef(0);
   const cooldown = useRef(false);
@@ -58,7 +64,7 @@ export function PageProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <PageContext.Provider value={{ title, setTitle, subtitle, setSubtitle, headerSlot, setHeaderSlot, scrollingDown, setScrollingDown }}>
+    <PageContext.Provider value={{ title, setTitle, subtitle, setSubtitle, headerSlot, setHeaderSlot, headerSlotNode, setHeaderSlotNode, scrollingDown, setScrollingDown }}>
       {children}
     </PageContext.Provider>
   );
@@ -82,4 +88,19 @@ export function usePageSubtitle(subtitle: string) {
     setSubtitle(subtitle);
     return () => setSubtitle("");
   }, [subtitle, setSubtitle]);
+}
+
+/**
+ * Global header の slot に detail-page のコンテンツを portal で差し込む。
+ * 親 ([components/layout/app-layout.tsx]) が空 div を ref で公開しているので、
+ * その div に対して createPortal する。setState ループの心配なし。
+ *
+ * 使い方:
+ *   const slot = useHeaderSlot();
+ *   return <>{slot(<div>...header slot content...</div>)} ...page body... </>;
+ */
+export function useHeaderSlot() {
+  const { headerSlotNode } = usePageContext();
+  return (children: React.ReactNode) =>
+    headerSlotNode ? createPortal(children, headerSlotNode) : null;
 }

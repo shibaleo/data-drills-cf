@@ -36,7 +36,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Filter, SlidersHorizontal, ArrowLeft, Archive, Save, RotateCcw, Loader2, Download, History, ListFilter, MoreVertical, Check, X } from "lucide-react";
 import { AsOfControls } from "@/components/as-of-controls";
 import { useTopicsList } from "@/hooks/queries/use-topics";
-import { usePageTitle } from "@/lib/page-context";
+import { usePageTitle, useHeaderSlot } from "@/lib/page-context";
 import { rpc } from "@/lib/rpc-client";
 import { toast } from "sonner";
 
@@ -205,6 +205,7 @@ export default function BacklogDetailPage() {
   }, [data, effectiveMembers, localMilestones, dailyMinutes, timeMultiplier, weekdayWeights, today]);
 
   usePageTitle("Backlog");
+  const renderHeaderSlot = useHeaderSlot();
 
   const handleExport = useCallback(async () => {
     if (exportSelected.size === 0) return;
@@ -437,19 +438,14 @@ export default function BacklogDetailPage() {
 
   return (
     <div className="p-3 md:p-4 flex flex-col gap-2">
-      <div className="flex items-center gap-2 flex-wrap">
+      {renderHeaderSlot(
+      <>
         <button onClick={() => navigate({ to: "/backlog" as string })}
           className="text-muted-foreground hover:text-foreground transition-colors" title="Back to list">
           <ArrowLeft className="size-4"/>
         </button>
         <Input value={name} onChange={(e) => setName(e.target.value)} disabled={readOnly}
           className="h-7 text-xs max-w-xs"/>
-        <div className="flex-1 max-w-xs h-1.5 bg-muted rounded-full overflow-hidden">
-          <div className="h-full bg-green-500 transition-all" style={{ width: `${progressPct}%` }}/>
-        </div>
-        <div className="text-xs text-muted-foreground tabular-nums whitespace-nowrap">
-          {doneCount} / {memberCount} ({progressPct} %)
-        </div>
         {dirty && !readOnly && (
           <div className="ml-auto flex items-center gap-2">
             <button type="button"
@@ -509,7 +505,8 @@ export default function BacklogDetailPage() {
             />
           </PopoverContent>
         </Popover>
-      </div>
+      </>
+      )}
 
       {historyOpen && (
         <div className="rounded-md border px-3 py-2 text-xs space-y-2">

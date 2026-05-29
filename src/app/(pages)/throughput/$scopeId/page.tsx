@@ -6,7 +6,7 @@ import { useProblemsList } from "@/hooks/queries/use-problems";
 import { useProblemDialogs } from "@/hooks/use-problem-dialogs";
 import { blockColor, COLOR_FIRST_ATTEMPT } from "@/lib/block-color";
 import { formatRelDay } from "@/lib/relative-day";
-import { usePageTitle } from "@/lib/page-context";
+import { usePageTitle, useHeaderSlot } from "@/lib/page-context";
 import { rpc } from "@/lib/rpc-client";
 import { toast } from "sonner";
 import { useParams, useNavigate } from "@tanstack/react-router";
@@ -46,6 +46,7 @@ function diffDays(from: string, to: string): number {
 
 export default function ThroughputPage() {
   usePageTitle("Throughput");
+  const renderHeaderSlot = useHeaderSlot();
   const { scopeId } = useParams({ strict: false }) as { scopeId: string };
   const navigate = useNavigate();
   const { currentProject, subjects, levels, statuses } = useProject();
@@ -274,8 +275,8 @@ export default function ThroughputPage() {
 
   return (
     <div className="p-3 md:p-4 flex flex-col gap-2">
-      {/* Top bar */}
-      <div className="flex items-center gap-2 flex-wrap">
+      {renderHeaderSlot(
+      <>
         <button onClick={() => navigate({ to: "/throughput" as string })}
           className="text-muted-foreground hover:text-foreground transition-colors" title="Back to list">
           <ArrowLeft className="size-4"/>
@@ -332,7 +333,8 @@ export default function ThroughputPage() {
             />
           </PopoverContent>
         </Popover>
-      </div>
+      </>
+      )}
 
       {/* History panel */}
       {historyOpen && (
