@@ -52,13 +52,21 @@ async function fetchMembers(projectId: string, filter: MemberFilter) {
   return applyMemberFilter(rows, filter);
 }
 
-async function fetchFirstAnswers(problemIds: string[]) {
+async function fetchFirstAnswers(problemIds: string[], asOfDate?: string | null) {
   if (problemIds.length === 0) return new Map<string, string>();
-  const rows = await db.execute<{ problem_id: string; min_date: string }>(sql`
-    SELECT problem_id, MIN(date)::date::text AS min_date
-    FROM answer WHERE problem_id IN ${problemIds}
-    GROUP BY problem_id
-  `);
+  // asOfDate (YYYY-MM-DD) を指定すると、その日以前の answer のみを集計対象にする。
+  const rows = asOfDate
+    ? await db.execute<{ problem_id: string; min_date: string }>(sql`
+        SELECT problem_id, MIN(date)::date::text AS min_date
+        FROM answer
+        WHERE problem_id IN ${problemIds} AND (date AT TIME ZONE 'Asia/Tokyo')::date <= ${asOfDate}::date
+        GROUP BY problem_id
+      `)
+    : await db.execute<{ problem_id: string; min_date: string }>(sql`
+        SELECT problem_id, MIN(date)::date::text AS min_date
+        FROM answer WHERE problem_id IN ${problemIds}
+        GROUP BY problem_id
+      `);
   return new Map(rows.map((r) => [r.problem_id, r.min_date.slice(0, 10)]));
 }
 
@@ -234,7 +242,9 @@ const app = new Hono<Env>()
     if (!current) return c.json({ error: "Not found" }, 404);
 
     const members = await fetchMembers(current.projectId, current.filter);
-    const firstAnswers = await fetchFirstAnswers(members.map((m) => m.id));
+    // asOf 指定中はその日 (JST) までの回答だけで first_answer_date を計算する。
+    const asOfDate = asOf ? asOf.toISOString().slice(0, 10) : null;
+    const firstAnswers = await fetchFirstAnswers(members.map((m) => m.id), asOfDate);
 
     const layerCond = asOf
       ? and(eq(goalLayer.backlogId, backlogId), lte(goalLayer.validFrom, asOf), or(isNull(goalLayer.validTo), gt(goalLayer.validTo, asOf))!, eq(goalLayer.isActive, true))

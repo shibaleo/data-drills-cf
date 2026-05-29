@@ -522,7 +522,7 @@ export default function SchedulePage() {
   const qc = useQueryClient();
 
   // Fast path: /api/v1/review (driven by TanStack Query)
-  const scheduleQuery = useReviewList(currentProject?.id);
+  const scheduleQuery = useReviewList(currentProject?.id, asOf);
   const serverRows = useMemo<ScheduleRow[]>(() => {
     const rows: ScheduleRow[] = (scheduleQuery.data ?? []).map((r) => ({
       problemId: r.problemId,
@@ -634,7 +634,8 @@ export default function SchedulePage() {
   }, [filterSubjects, filterLevels, filterLastStatuses]);
 
   const now = useMemo(() => new Date(), []);
-  const todayStr = useMemo(() => toJSTDateString(now), [now]);
+  // asOf 指定中はその日を "今日" として扱う (chart の今日線、daysUntil の起点)。
+  const todayStr = useMemo(() => asOf ?? toJSTDateString(now), [now, asOf]);
 
   // Apply overrides by proportionally scaling each row's (nextReview - lastDate)
   // by sliderStab / baseStab. The C_T adjustment server applies divides out.

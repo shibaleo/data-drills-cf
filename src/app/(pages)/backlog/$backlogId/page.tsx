@@ -146,7 +146,8 @@ export default function BacklogDetailPage() {
     setLocalFilter(data.backlog.filter ?? {});
   }, [data]);
 
-  const today = todayJST();
+  // asOf 指定中はその日を "今日" として扱う (allocate 起点 + chart の今日線)。
+  const today = asOf ?? todayJST();
 
   /**
    * filter が編集中なら useProblemsList + applyMemberFilter で再計算、

@@ -1,12 +1,12 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
+import { z } from "zod";
 import { db } from "@/lib/db";
 import { problem, answer, answerStatus, subject, level } from "@/lib/db/schema";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, lte, sql } from "drizzle-orm";
 import { computeNextReview, computeDaysOverdue } from "@/lib/review-scoring";
 import { toJSTDateString } from "@/lib/date-utils";
 import { problemColor } from "@/lib/problem-color";
-import { projectIdQuerySchema } from "@/lib/schemas/common";
 import { ownsProject } from "@/lib/ownership";
 import type { AuthResult } from "@/lib/auth";
 
@@ -19,9 +19,12 @@ const app = new Hono<Env>()
    * subject / level / answer_status まで join し、色もサーバーで決定する。
    * クライアント側は受け取ったまま表示するだけでよい。
    */
-  .get("/", zValidator("query", projectIdQuerySchema), async (c) => {
+  .get("/", zValidator("query", z.object({
+    project_id: z.string().uuid(),
+    as_of: z.string().optional(),
+  })), async (c) => {
     const userId = c.get("authResult").userId;
-    const { project_id: projectId } = c.req.valid("query");
+    const { project_id: projectId, as_of: asOfStr } = c.req.valid("query");
     if (!(await ownsProject(projectId, userId))) return c.json({ data: [], next_cursor: null });
 
     const problems = await db.select().from(problem)
@@ -30,12 +33,20 @@ const app = new Hono<Env>()
 
     const problemIds = problems.map((p) => p.id);
 
+    // asOf 指定中はその日 (JST) までの answer のみ集計対象。
+    const answerWhere = asOfStr
+      ? and(
+          inArray(answer.problemId, problemIds),
+          lte(sql`(${answer.date} AT TIME ZONE 'Asia/Tokyo')::date`, sql`${asOfStr}::date`),
+        )
+      : inArray(answer.problemId, problemIds);
+
     const [answers, statuses, subjects, levels] =
       problemIds.length === 0
         ? [[], [], [], []] as const
         : await Promise.all([
             db.select().from(answer)
-              .where(inArray(answer.problemId, problemIds))
+              .where(answerWhere)
               .orderBy(answer.date, answer.createdAt),
             db.select().from(answerStatus).orderBy(answerStatus.sortOrder),
             db.select().from(subject).where(eq(subject.projectId, projectId)),
@@ -71,7 +82,8 @@ const app = new Hono<Env>()
       }
     }
 
-    const today = toJSTDateString(new Date());
+    // asOf 指定中は "今日" を asOf として扱う (daysUntil 等の起点)。
+    const today = asOfStr ?? toJSTDateString(new Date());
 
     const data = problems.map((p) => {
       const latest = latestAnswer.get(p.id);

@@ -5,15 +5,18 @@ export type ThroughputRow = RpcData<typeof rpc.api.v1.throughput.$get>["data"][n
 
 export const throughputKeys = {
   all: ["throughput"] as const,
-  list: (projectId: string) => [...throughputKeys.all, "list", projectId] as const,
+  list: (projectId: string, asOf?: string | null) =>
+    [...throughputKeys.all, "list", projectId, { asOf: asOf ?? null }] as const,
 };
 
-export function useThroughputList(projectId: string | undefined) {
+export function useThroughputList(projectId: string | undefined, asOf?: string | null) {
   return useQuery({
-    queryKey: projectId ? throughputKeys.list(projectId) : throughputKeys.all,
+    queryKey: projectId ? throughputKeys.list(projectId, asOf) : throughputKeys.all,
     queryFn: async () => {
       const json = await unwrap(
-        rpc.api.v1.throughput.$get({ query: { project_id: projectId! } }),
+        rpc.api.v1.throughput.$get({
+          query: asOf ? { project_id: projectId!, as_of: asOf } : { project_id: projectId! },
+        }),
       );
       return json.data;
     },

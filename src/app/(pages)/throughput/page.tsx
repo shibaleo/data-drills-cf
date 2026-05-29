@@ -9,7 +9,8 @@ import { formatRelDay } from "@/lib/relative-day";
 import { usePageTitle } from "@/lib/page-context";
 import { rpc } from "@/lib/rpc-client";
 import { toast } from "sonner";
-import { Filter, Download, Loader2, SlidersHorizontal } from "lucide-react";
+import { Filter, Download, Loader2, SlidersHorizontal, History, X } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
@@ -40,7 +41,8 @@ export default function ThroughputPage() {
   const { currentProject, subjects, levels, statuses } = useProject();
   const subjectMap = useMemo(() => new Map(subjects.map((s) => [s.id, s])), [subjects]);
   const levelMap = useMemo(() => new Map(levels.map((l) => [l.id, l])), [levels]);
-  const { data: rows = [], isLoading } = useThroughputList(currentProject?.id);
+  const [asOf, setAsOf] = useState<string | null>(null);
+  const { data: rows = [], isLoading } = useThroughputList(currentProject?.id, asOf);
   const allProblems = useProblemsList(currentProject?.id).data ?? [];
   const { openDetail, renderDialogs } = useProblemDialogs({ allProblems, onDataChanged: () => {} });
   const tableRef = useRef<HTMLDivElement>(null);
@@ -106,7 +108,8 @@ export default function ThroughputPage() {
     });
   }, []);
 
-  const today = useMemo(() => todayJST(), []);
+  // asOf 指定中はその日を "今日" として扱う (chart の今日線、テーブル下のラベル等)。
+  const today = useMemo(() => asOf ?? todayJST(), [asOf]);
 
   const { startDate, totalDays, columns, maxStack, renderCap, todayIdx } = useMemo(() => {
     const cols = new Map<string, ThroughputRow[]>();
@@ -257,6 +260,16 @@ export default function ThroughputPage() {
             </Button>
           )}
         </div>
+        <div className="flex items-center gap-2">
+        <button type="button"
+          title="Time travel" aria-pressed={asOf != null}
+          onClick={() => {
+            if (asOf) setAsOf(null);
+            else setAsOf(todayJST());
+          }}
+          className={`inline-flex items-center justify-center size-[26px] rounded-md border transition-colors ${asOf != null ? "bg-accent text-accent-foreground border-accent-foreground/40" : "text-muted-foreground hover:bg-muted"}`}>
+          <History className="size-3"/>
+        </button>
         <Popover>
           <PopoverTrigger asChild>
             <button type="button"
@@ -282,6 +295,24 @@ export default function ThroughputPage() {
           </PopoverContent>
         </Popover>
         </div>
+        </div>
+
+        {asOf != null && (
+          <div className="rounded-md border px-3 py-1.5 text-xs flex items-center gap-2">
+            <History className="size-3.5 text-muted-foreground"/>
+            <span className="text-muted-foreground">As of</span>
+            <Input type="date" value={asOf}
+              onChange={(e) => setAsOf(e.target.value || todayJST())}
+              className="h-6 text-[10px] w-32"/>
+            <span className="text-muted-foreground">— ignoring answers after this date.</span>
+            <button type="button" onClick={() => setAsOf(null)}
+              title="Back to now"
+              className="ml-auto inline-flex items-center justify-center size-5 rounded-sm text-muted-foreground hover:text-foreground hover:bg-accent">
+              <X className="size-3.5"/>
+            </button>
+          </div>
+        )}
+
 
         {isLoading ? (
           <div className="text-sm text-muted-foreground py-8 text-center">Loading...</div>

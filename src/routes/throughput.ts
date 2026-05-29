@@ -1,8 +1,8 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
+import { z } from "zod";
 import { db } from "@/lib/db";
 import { sql } from "drizzle-orm";
-import { projectIdQuerySchema } from "@/lib/schemas/common";
 import { ownsProject } from "@/lib/ownership";
 import type { AuthResult } from "@/lib/auth";
 
@@ -32,10 +32,17 @@ type Row = {
  * Throughput chart 用。1 answer = 1 ブロック。
  */
 const app = new Hono<Env>()
-  .get("/", zValidator("query", projectIdQuerySchema), async (c) => {
+  .get("/", zValidator("query", z.object({
+    project_id: z.string().uuid(),
+    as_of: z.string().optional(),
+  })), async (c) => {
     const userId = c.get("authResult").userId;
-    const { project_id: projectId } = c.req.valid("query");
+    const { project_id: projectId, as_of: asOf } = c.req.valid("query");
     if (!(await ownsProject(projectId, userId))) return c.json({ data: [] });
+    // asOf 指定中は JST のその日以前の answer のみ対象。
+    // LAG over partition は WHERE 適用後に評価されるため "前回 status" も
+    // 巻き戻し後の系列でちゃんと計算される。
+    const asOfCond = asOf ? sql`AND (a.date AT TIME ZONE 'Asia/Tokyo')::date <= ${asOf}::date` : sql``;
     const rows = await db.execute<Row>(sql`
       SELECT
         a.id,
@@ -58,6 +65,7 @@ const app = new Hono<Env>()
       JOIN problem p ON p.id = a.problem_id
       LEFT JOIN answer_status s ON s.id = a.answer_status_id
       WHERE p.project_id = ${projectId}
+      ${asOfCond}
       ORDER BY a.date ASC, a.created_at ASC
     `);
     return c.json({
