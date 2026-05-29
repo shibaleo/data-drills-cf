@@ -999,11 +999,9 @@ export default function SchedulePage() {
 
       {loading ? (
         <div className="text-center py-12 text-muted-foreground">Loading...</div>
-      ) : rows.length === 0 ? (
-        <div className="text-center py-12 text-muted-foreground">No data</div>
       ) : (
         <>
-          {/* Schedule chart */}
+          {/* Schedule chart (常時 mount: rows=0 でも chart 構造は保持して didInit/scroll を残す) */}
           <div className="shrink-0 rounded-md border p-3">
             <div className="flex justify-between items-center gap-2 mb-1">
               <div className="flex items-center gap-2">
@@ -1164,7 +1162,8 @@ export default function SchedulePage() {
               onTodayDrag={(d) => setAsOf(d === toJSTDateString(now) ? null : d)}/>
           </div>
 
-          {/* Table */}
+          {/* Table (rows=0 なら非表示) */}
+          {rows.length > 0 && (
           <ResizableTableShell ref={tableRef}>
             <Table className="table-fixed">
               <TableHeader>
@@ -1231,6 +1230,7 @@ export default function SchedulePage() {
               </TableBody>
             </Table>
           </ResizableTableShell>
+          )}
         </>
       )}
 
