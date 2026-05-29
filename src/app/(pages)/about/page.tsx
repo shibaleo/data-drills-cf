@@ -159,7 +159,7 @@ export default function AboutPage() {
           <ul className="text-xs text-muted-foreground space-y-2 mt-2">
             <li>
               <span className="text-foreground font-medium">Review</span> —
-              FSRS スケジュールに基づく今日と未来の復習予定を Tetris で表示。
+              FSRS を参考にしたスケジューリングアルゴリズムで、今日と未来の復習予定を Tetris で表示。
               当日の問題数はサイドバーバッジに出る。
               Subject / Level / Status でフィルタ、選択した問題を PDF 一括出力可能。
             </li>
@@ -223,7 +223,7 @@ export default function AboutPage() {
           <h2 className="text-base font-semibold mb-2">復習トリアージ戦略 (滞留時の運用)</h2>
           <p className="text-sm text-muted-foreground leading-relaxed">
             復習が滞留して overdue が積み上がった時、<strong>古い順から消化しない</strong>。
-            FSRS 的に retention は時間経過で非線形に低下するため、<strong>遅延が浅いものほど救命価値が高い</strong>。
+            FSRS を参考にした保持率モデル的に retention は時間経過で非線形に低下するため、<strong>遅延が浅いものほど救命価値が高い</strong>。
           </p>
           <ol className="text-xs text-muted-foreground list-decimal list-inside space-y-1 mt-3">
             <li><strong>Today scheduled (▲0d)</strong> — 必ず全消化。target retention 90% で最適タイミング。</li>
@@ -251,12 +251,12 @@ export default function AboutPage() {
           <ul className="text-xs text-muted-foreground space-y-2 mt-3">
             <li>
               <strong>Review は分散が定説</strong> — Spacing Effect (Ebbinghaus, Cepeda 2008)。
-              FSRS 自体が平準化前提で設計されている。バースト消化は短期記憶頼みで、次の review で Miss を量産する罠。
+              スケジューリングアルゴリズム自体が平準化前提で設計されている。バースト消化は短期記憶頼みで、次の review で Miss を量産する罠。
             </li>
             <li>
               <strong>新規 (Backlog) はハイブリッド</strong> — 初期習得には集中 (blocked) が有効だが、
               本試験は混在出題のためインターリーブ練習が転移性を高める (Rohrer & Taylor 2007)。
-              実運用としては「FSRS の review schedule に従う = テーマが自動でインターリーブされる」+「新規 1-2 問/日」で十分。
+              実運用としては「review schedule に従う = テーマが自動でインターリーブされる」+「新規 1-2 問/日」で十分。
             </li>
             <li>
               <strong>1日のボリューム</strong> — 個人 baseline (Throughput の中央値) を基準に、
@@ -561,20 +561,20 @@ export default function AboutPage() {
               </tbody>
             </table>
             <p className="text-xs text-muted-foreground mt-2 leading-relaxed">
-              SM-2 / FSRS の canonical 間隔（Rough 3-7d, Fair 10-14d, Fluent 30-45d, Done 90-180d）と比較するときは、
+              SM-2 / FSRS など既存アルゴリズムの canonical 間隔（Rough 3-7d, Fair 10-14d, Fluent 30-45d, Done 90-180d）と比較するときは、
               <strong>nominal ではなく「習熟時の実効値」列</strong>を見てください。同じ桁感になります。
               暴走防止で <Tex>{"C_T^{\\,k}"}</Tex> は <Tex>{"[0.1, 10]"}</Tex> にクランプしています。
             </p>
           </div>
 
-          {/* FSRS 保持率モデル（補足） */}
+          {/* 保持率モデル（補足） */}
           <details className="mt-3">
             <summary className="text-xs text-muted-foreground cursor-pointer hover:text-foreground transition-colors">
-              FSRS 保持率モデル（詳細）
+              保持率モデル（詳細）
             </summary>
             <div className="mt-2">
               <p className="text-xs text-muted-foreground leading-relaxed">
-                復習予定日の背景にはFSRS準拠のべき乗関数による保持率推定があります。
+                復習予定日の背景には FSRS を参考にしたべき乗関数による保持率推定があります。
               </p>
               <TexBlock>
                 {`R(t, S) = \\left(1 + ${fVal.toFixed(4)} \\times \\frac{t}{S}\\right)^{${cVal.toFixed(1)}}`}
@@ -610,7 +610,7 @@ export default function AboutPage() {
               <span className="text-foreground font-medium">FSRS（Free Spaced Repetition Scheduler）</span> —
               Ankiで採用されているアルゴリズム。べき乗関数で保持率を推定し、
               復習回数・成功/失敗の履歴から安定性 <Tex>{"S"}</Tex> を更新する。
-              本サイトのStats保持率推定はFSRS準拠のモデルを使用。
+              本サイトの保持率推定はこれを参考にしたモデルを使用 (ただし安定性はユーザーがステータスごとに設定する固定値)。
             </li>
             <li>
               <span className="text-foreground font-medium">Stevens&apos; Power Law</span> —

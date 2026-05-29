@@ -32,7 +32,7 @@ CF Pages (React + Vite SPA, TanStack Router)
 
 ### Key Features
 
-- **Review** — FSRS ベースの復習スケジュール Tetris (問題ごとに次回復習日を算出)
+- **Review** — FSRS を参考にしたスケジューリングアルゴリズムによる復習 Tetris (問題ごとに次回復習日を算出)
 - **Backlog** — 未着手新規問題の milestone 配分 Tetris (bitemporal 履歴付き)
 - **Throughput** — 過去回答実績の Tetris (1 answer = 1 ブロック、色は直前 status)
 - **Flashcards** — Markdown 表裏のフラッシュカード演習
