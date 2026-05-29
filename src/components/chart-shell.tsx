@@ -91,12 +91,23 @@ export const ChartShell = forwardRef<ChartShellHandle, ChartShellProps>(function
     },
   }), [dates, cursorDate]);
 
-  // 初回 mount: cursor を 1/3 位置にスクロール
+  // 初回 mount: cursor を 1/3 位置にスクロール。
+  // clientWidth が 0 のタイミング (= 初回 paint 前) を避けるため rAF で待つ。
   useEffect(() => {
     if (!scrollRef.current || cursorIdx < 0 || didInitScrollRef.current) return;
-    didInitScrollRef.current = true;
-    const cursorX = cursorIdx * STEP;
-    scrollRef.current.scrollLeft = Math.max(0, cursorX - scrollRef.current.clientWidth / 3);
+    const tryScroll = () => {
+      const el = scrollRef.current;
+      if (!el) return;
+      if (el.clientWidth === 0) {
+        // 次フレームに再試行
+        requestAnimationFrame(tryScroll);
+        return;
+      }
+      didInitScrollRef.current = true;
+      const cursorX = cursorIdx * STEP;
+      el.scrollLeft = Math.max(0, cursorX - el.clientWidth / 3);
+    };
+    requestAnimationFrame(tryScroll);
   }, [cursorIdx]);
 
   return (

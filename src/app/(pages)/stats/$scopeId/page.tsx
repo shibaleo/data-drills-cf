@@ -4,9 +4,12 @@ import { useParams, useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { useProject } from "@/hooks/use-project";
 import { useThroughputList } from "@/hooks/queries/use-throughput";
+import { useProblemsList } from "@/hooks/queries/use-problems";
+import { useProblemDialogs } from "@/hooks/use-problem-dialogs";
 import { useStatsScope, useUpdateStatsScope, useArchiveStatsScope, useStatsScopeRevisions } from "@/hooks/queries/use-stats-scopes";
 import { usePageTitle, useHeaderSlot, usePageBack } from "@/lib/page-context";
 import { StatusTransitionMatrix } from "@/components/status-transition-matrix";
+import { TimeBottleneckList } from "@/components/time-bottleneck-list";
 import { MemberFilterPicker } from "@/components/member-filter-picker";
 import { applyMemberFilter } from "@/lib/member-filter";
 import { Input } from "@/components/ui/input";
@@ -44,7 +47,8 @@ export default function StatsDetailPage() {
   }, [scopeQuery.data]);
 
   const { data: rawRows = [] } = useThroughputList(currentProject?.id);
-  // scope の member filter を適用
+  const { data: allProblems = [] } = useProblemsList(currentProject?.id);
+  // scope の member filter を throughput rows と problems の両方に適用
   const rows = useMemo(() => {
     if (!localFilter.subjectIds?.length && !localFilter.levelIds?.length) return rawRows;
     return applyMemberFilter(
@@ -52,6 +56,19 @@ export default function StatsDetailPage() {
       localFilter,
     ).map(({ _r }) => _r);
   }, [rawRows, localFilter]);
+  const filteredProblems = useMemo(() => {
+    if (!localFilter.subjectIds?.length && !localFilter.levelIds?.length) return allProblems;
+    return applyMemberFilter(
+      allProblems.map((p) => ({
+        subjectId: p.subject_id || null,
+        levelId: p.level_id || null,
+        _p: p,
+      })),
+      localFilter,
+    ).map(({ _p }) => _p);
+  }, [allProblems, localFilter]);
+
+  const { openDetail, renderDialogs } = useProblemDialogs({ allProblems, onDataChanged: () => {} });
 
   const scope = scopeQuery.data?.scope;
   const synced = !!scope && lastSyncRevRef.current === scope.revision;
@@ -161,6 +178,14 @@ export default function StatsDetailPage() {
         period={matrixPeriod}
         setPeriod={setMatrixPeriod}
       />
+
+      <TimeBottleneckList
+        problems={filteredProblems}
+        statuses={statuses.map((s) => ({ id: s.id, name: s.name, color: s.color ?? null, sortOrder: s.sortOrder }))}
+        onOpenProblem={openDetail}
+      />
+
+      {renderDialogs()}
     </div>
   );
 }
