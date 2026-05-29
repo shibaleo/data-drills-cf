@@ -498,7 +498,7 @@ export default function BacklogDetailPage() {
       )}
 
       {membersOpen && !readOnly && currentProject && (
-        <div className={`rounded-md border ${filterDirty ? "border-primary/40 bg-primary/5" : ""} px-3 py-3 text-xs space-y-3`}>
+        <div className={`relative rounded-md border ${filterDirty ? "border-primary/40 bg-primary/5" : ""} px-3 py-2 pr-32 text-xs space-y-2`}>
           <BacklogFilterPicker
             projectId={currentProject.id}
             value={localFilter}
@@ -506,7 +506,7 @@ export default function BacklogDetailPage() {
           />
           {filterDirty && (
             milestoneImpacts.some((i) => i.overflow || i.changed) ? (
-              <ul className="space-y-1 pt-2 border-t">
+              <ul className="space-y-1 pt-1.5 border-t">
                 {milestoneImpacts.filter((i) => i.overflow || i.changed).map(({ ms, oldAnchor, newAnchor, overflow }) => (
                   <li key={ms.id} className="flex items-center gap-2">
                     <OpaqueTag
@@ -524,15 +524,15 @@ export default function BacklogDetailPage() {
               </ul>
             )
             : (
-              <div className="text-[10px] text-muted-foreground pt-2 border-t">No milestone impact</div>
+              <div className="text-[10px] text-muted-foreground pt-1.5 border-t">No milestone impact</div>
             )
           )}
-          <div className="flex items-center justify-end gap-3 text-[10px] text-muted-foreground">
+          <div className="absolute bottom-1.5 right-3 flex items-center gap-3 text-[10px] text-muted-foreground">
             {filterDirty && (
               <button type="button"
                 className="hover:text-foreground"
                 onClick={() => setLocalFilter(data.backlog.filter ?? {})}>
-                Reset filter
+                Reset
               </button>
             )}
             <span className="tabular-nums">
