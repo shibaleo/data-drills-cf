@@ -959,25 +959,12 @@ export default function SchedulePage() {
       {/* History panel */}
       {historyOpen && (
         <div className="rounded-md border px-3 py-2 text-xs space-y-2">
-          {asOf ? (
-            <AsOfControls
-              asOf={asOf}
-              setAsOf={setAsOf}
-              latest={toJSTDateString(now)}
-            />
-          ) : (
-          <div className="flex items-center gap-2">
-            <span className="font-semibold">History</span>
-            <Input type="date" value=""
-              onChange={(e) => setAsOf(e.target.value || null)}
-              className="h-6 text-[10px] w-32 ml-2"/>
-            <button type="button" onClick={() => setHistoryPanelOpen(false)} disabled={readOnly}
-              title="Close"
-              className="ml-auto inline-flex items-center justify-center size-5 rounded-sm text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-40 disabled:cursor-not-allowed">
-              <X className="size-3.5"/>
-            </button>
-          </div>
-          )}
+          <AsOfControls
+            asOf={asOf}
+            setAsOf={setAsOf}
+            latest={toJSTDateString(now)}
+            onClose={readOnly ? undefined : () => setHistoryPanelOpen(false)}
+          />
           <div className="max-h-56 overflow-y-auto pr-1 space-y-0.5 border-t pt-1.5">
             {(revisionsQuery.data ?? []).length === 0 && (
               <div className="text-[10px] text-muted-foreground italic py-2 text-center">No revisions yet</div>

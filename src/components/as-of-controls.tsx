@@ -1,21 +1,22 @@
 /**
- * As-of date controls — date picker + close + animation playback.
+ * As-of date controls — date picker + play/pause + speed.
  * 各ページの asOf inline panel で共通利用。
  *
- * 親が `asOf` (state) と `setAsOf` を渡す。
- * 親は asOf 範囲 (from..to) を渡す必要がある (= start を超えない、today を超えない)。
+ * asOf=null は "now" を意味する。Play 押下時は earliest (= latest-30d 既定) から再生開始。
  */
 import { useEffect, useRef, useState } from "react";
 import { Pause, Play, X, History } from "lucide-react";
 import { Input } from "@/components/ui/input";
 
 type Props = {
-  asOf: string;            // YYYY-MM-DD
+  asOf: string | null;     // null = "now" mode
   setAsOf: (v: string | null) => void;
-  /** 再生範囲の最古 (YYYY-MM-DD)。指定無ければ 1 ヶ月前。 */
+  /** 再生範囲の最古 (YYYY-MM-DD)。未指定なら latest-30d。 */
   earliest?: string;
-  /** 再生範囲の最新 (YYYY-MM-DD)。指定無ければ today。 */
+  /** 再生範囲の最新 (YYYY-MM-DD)。通常 today。 */
   latest: string;
+  /** "Close" X ボタン。指定すると AsOf 内 X とは別に表示される。 */
+  onClose?: () => void;
 };
 
 function addDays(d: string, n: number): string {
@@ -31,13 +32,14 @@ const SPEEDS = [
   { ms: 50, label: "4x" },
 ];
 
-export function AsOfControls({ asOf, setAsOf, earliest, latest }: Props) {
+export function AsOfControls({ asOf, setAsOf, earliest, latest, onClose }: Props) {
   const [playing, setPlaying] = useState(false);
   const [speedIdx, setSpeedIdx] = useState(1);  // 1x default
   const start = earliest ?? addDays(latest, -30);
+  const effectiveAsOf = asOf ?? latest;  // null は today 同義
 
-  const asOfRef = useRef(asOf);
-  asOfRef.current = asOf;
+  const asOfRef = useRef(effectiveAsOf);
+  asOfRef.current = effectiveAsOf;
 
   useEffect(() => {
     if (!playing) return;
@@ -53,23 +55,22 @@ export function AsOfControls({ asOf, setAsOf, earliest, latest }: Props) {
     return () => clearInterval(interval);
   }, [playing, speedIdx, latest, setAsOf]);
 
-  // setAsOf is React.Dispatch — accept functional update via overload.
-  // Wrap to a stable updater.
   return (
     <div className="flex items-center gap-2 flex-wrap text-xs">
       <History className="size-3.5 text-muted-foreground"/>
       <span className="text-muted-foreground">As of</span>
-      <Input type="date" value={asOf} min={start} max={latest}
-        onChange={(e) => { setPlaying(false); setAsOf(e.target.value || latest); }}
+      <Input type="date" value={asOf ?? ""} min={start} max={latest}
+        placeholder="now"
+        onChange={(e) => { setPlaying(false); setAsOf(e.target.value || null); }}
         className="h-6 text-[10px] w-32"/>
       <button type="button"
         onClick={() => {
           if (playing) { setPlaying(false); return; }
-          // start から開始 (asOf が latest 以上なら戻す)
-          if (asOf >= latest) setAsOf(start);
+          // 再生開始: asOf が "now" または latest 以上なら start に巻き戻す
+          if (!asOf || asOf >= latest) setAsOf(start);
           setPlaying(true);
         }}
-        title={playing ? "Pause" : "Play"}
+        title={playing ? "Pause" : "Play from start"}
         className="inline-flex items-center justify-center size-5 rounded-sm text-muted-foreground hover:text-foreground hover:bg-accent">
         {playing ? <Pause className="size-3.5"/> : <Play className="size-3.5"/>}
       </button>
@@ -85,11 +86,20 @@ export function AsOfControls({ asOf, setAsOf, earliest, latest }: Props) {
       <span className="text-[10px] text-muted-foreground">
         {start} → {latest}
       </span>
-      <button type="button" onClick={() => { setPlaying(false); setAsOf(null); }}
-        title="Back to now"
-        className="ml-auto inline-flex items-center justify-center size-5 rounded-sm text-muted-foreground hover:text-foreground hover:bg-accent">
-        <X className="size-3.5"/>
-      </button>
+      {asOf && (
+        <button type="button" onClick={() => { setPlaying(false); setAsOf(null); }}
+          title="Back to now"
+          className="ml-auto inline-flex items-center justify-center px-1.5 py-0.5 rounded-sm text-[10px] text-muted-foreground hover:text-foreground hover:bg-accent">
+          Now
+        </button>
+      )}
+      {onClose && (
+        <button type="button" onClick={() => { setPlaying(false); onClose(); }}
+          title="Close"
+          className={`${asOf ? "" : "ml-auto"} inline-flex items-center justify-center size-5 rounded-sm text-muted-foreground hover:text-foreground hover:bg-accent`}>
+          <X className="size-3.5"/>
+        </button>
+      )}
     </div>
   );
 }
