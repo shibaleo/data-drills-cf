@@ -45,6 +45,12 @@ function getOrCreateDb(): DB {
         idle_timeout: 20,
         connect_timeout: 10,
         ssl: false, // Hyperdrive handles SSL
+        // CF Hyperdrive 推奨設定
+        //  fetch_types: false → 接続直後の型 OID 取得クエリをスキップ (これが workerd 上で
+        //    intermittent に失敗し "Network connection lost" を起こすことが多い)
+        //  prepare: false → Hyperdrive プール越しに prepared statement cache が不整合になるのを回避
+        fetch_types: false,
+        prepare: false,
       });
       store.db = drizzle(store.client, { schema });
     }
