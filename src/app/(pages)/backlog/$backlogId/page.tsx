@@ -31,7 +31,7 @@ import { FilterSection } from "@/components/filter-section";
 import { useFilterPrefs, useSaveFilterPrefs } from "@/hooks/queries/use-filter-prefs";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Filter, SlidersHorizontal, ArrowLeft, Archive, Save, RotateCcw, Loader2, Download, History, Target } from "lucide-react";
+import { Filter, SlidersHorizontal, ArrowLeft, Archive, Save, RotateCcw, Loader2, Download, History, ListFilter } from "lucide-react";
 import { useTopicsList } from "@/hooks/queries/use-topics";
 import { usePageTitle } from "@/lib/page-context";
 import { rpc } from "@/lib/rpc-client";
@@ -431,7 +431,7 @@ export default function BacklogDetailPage() {
                 ? "bg-accent text-accent-foreground border-accent-foreground/40"
                 : "text-muted-foreground hover:bg-muted"
           }`}>
-          <Target className="size-3.5"/>
+          <ListFilter className="size-3.5"/>
         </button>
         <Popover>
           <PopoverTrigger asChild>
@@ -687,8 +687,8 @@ export default function BacklogDetailPage() {
           items={visibleAllocated}
           layers={localLayers.map((l) => {
             const ms = localMilestones.filter((m) => m.layer_id === l.id);
-            const maxTarget = ms.reduce((acc, m) => Math.max(acc, m.target), 0);
-            return { ...l, progress: maxTarget > 0 ? { done: Math.min(doneCount, maxTarget), total: maxTarget } : null };
+            const maxListFilter = ms.reduce((acc, m) => Math.max(acc, m.target), 0);
+            return { ...l, progress: maxListFilter > 0 ? { done: Math.min(doneCount, maxListFilter), total: maxListFilter } : null };
           })}
           milestones={localMilestones}
           today={today}
@@ -710,8 +710,8 @@ export default function BacklogDetailPage() {
             setLocalMilestones((prev) => prev.map((m) => (m.id === id ? { ...m, layer_id: newLayerId } : m)))}
           onMilestoneLayerChange={readOnly ? undefined : (id, newLayerId) =>
             setLocalMilestones((prev) => prev.map((m) => (m.id === id ? { ...m, layer_id: newLayerId } : m)))}
-          onMilestoneTargetChange={readOnly ? undefined : (id, newTarget) =>
-            setLocalMilestones((prev) => prev.map((m) => (m.id === id ? { ...m, target: newTarget } : m)))}
+          onMilestoneListFilterChange={readOnly ? undefined : (id, newListFilter) =>
+            setLocalMilestones((prev) => prev.map((m) => (m.id === id ? { ...m, target: newListFilter } : m)))}
           onMilestoneRemove={readOnly ? undefined : (id) =>
             setLocalMilestones((prev) => prev.filter((m) => m.id !== id))}
           onMilestoneAddToLayer={readOnly ? undefined : (layerId, atDate) =>
