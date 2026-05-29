@@ -418,12 +418,6 @@ export default function BacklogDetailPage() {
         <div className="text-xs text-muted-foreground tabular-nums whitespace-nowrap">
           {doneCount} / {memberCount} ({progressPct} %)
         </div>
-        {daysToDeadline != null && (
-          <span className={`text-[10px] tabular-nums px-1.5 py-0.5 rounded border whitespace-nowrap ${daysToDeadline < 30 ? "border-red-500/50 text-red-500" : "text-muted-foreground"}`}
-            title={`Deadline: ${lastMs?.date}`}>
-            D{daysToDeadline >= 0 ? `-${daysToDeadline}` : `+${Math.abs(daysToDeadline)}`}
-          </span>
-        )}
         <Popover open={moreMenuOpen} onOpenChange={setMoreMenuOpen}>
           <PopoverTrigger asChild>
             <button type="button" title="More"
@@ -682,6 +676,17 @@ export default function BacklogDetailPage() {
                 <span className="text-[9px] uppercase tracking-wide text-muted-foreground">Weekly</span>
                 <span className="text-[11px] tabular-nums">{Math.round(weekdayWeights.reduce((s, w) => s + w * dailyMinutes, 0))} m</span>
               </div>
+              {lastMs && daysToDeadline != null && (
+                <div className="flex items-baseline justify-between">
+                  <span className="text-[9px] uppercase tracking-wide text-muted-foreground">Deadline</span>
+                  <span className="text-[11px] tabular-nums text-muted-foreground">
+                    {lastMs.date}
+                    <span className={`ml-1.5 ${daysToDeadline < 30 ? "text-destructive/80" : ""}`}>
+                      ({daysToDeadline >= 0 ? `D-${daysToDeadline}` : `D+${Math.abs(daysToDeadline)}`})
+                    </span>
+                  </span>
+                </div>
+              )}
               <div>
                 <Label className="text-[9px] uppercase tracking-wide text-muted-foreground block mb-1">Rate</Label>
                 <div className="space-y-0.5">
