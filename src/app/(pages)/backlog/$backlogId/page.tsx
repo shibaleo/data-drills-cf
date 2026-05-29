@@ -419,7 +419,7 @@ export default function BacklogDetailPage() {
             <button type="button" title="Members filter"
               disabled={readOnly}
               aria-pressed={filterDirty}
-              className={`ml-auto inline-flex items-center justify-center size-7 rounded-md border transition-colors disabled:opacity-50 ${filterDirty ? "bg-accent text-accent-foreground border-accent-foreground/40" : "text-muted-foreground hover:bg-muted"}`}>
+              className={`ml-auto inline-flex items-center justify-center size-7 rounded-md border transition-colors disabled:opacity-50 ${filterDirty ? "border-primary/50 text-primary" : "text-muted-foreground hover:bg-muted"}`}>
               <Target className="size-3.5"/>
             </button>
           </PopoverTrigger>
@@ -511,7 +511,7 @@ export default function BacklogDetailPage() {
       )}
 
       {filterDirty && !readOnly && (
-        <div className="rounded-md border bg-accent/30 px-3 py-2 text-xs space-y-1.5">
+        <div className="rounded-md border border-primary/40 bg-primary/5 px-3 py-2 text-xs space-y-1.5">
           <div className="flex items-center justify-between">
             <span className="font-medium">Members filter preview</span>
             <span className="text-muted-foreground tabular-nums">
@@ -522,9 +522,10 @@ export default function BacklogDetailPage() {
             <ul className="space-y-1">
               {milestoneImpacts.filter((i) => i.overflow || i.changed).map(({ ms, oldAnchor, newAnchor, overflow }) => (
                 <li key={ms.id} className="flex items-center gap-2">
-                  <span className={`px-1.5 rounded text-[9px] uppercase font-semibold border ${overflow ? "border-destructive/50 text-destructive" : "border-border text-muted-foreground"}`}>
-                    {overflow ? "Overflow" : "Anchor"}
-                  </span>
+                  <OpaqueTag
+                    name={overflow ? "Overflow" : "Anchor"}
+                    color={overflow ? "hsl(var(--destructive))" : "hsl(var(--primary))"}
+                  />
                   <span className="tabular-nums">target={ms.target}</span>
                   <span className="text-muted-foreground">
                     {overflow
