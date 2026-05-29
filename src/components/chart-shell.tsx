@@ -67,6 +67,7 @@ export const ChartShell = forwardRef<ChartShellHandle, ChartShellProps>(function
   scrollableExtra,
 }: ChartShellProps, ref) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const isDraggingRef = useRef(false);
   const didInitScrollRef = useRef(false);
 
   const cursorIdx = dates.indexOf(cursorDate);
@@ -91,15 +92,18 @@ export const ChartShell = forwardRef<ChartShellHandle, ChartShellProps>(function
     },
   }), [dates, cursorDate]);
 
-  // 初回 mount: cursor を 1/3 位置にスクロール。
-  // clientWidth が 0 のタイミング (= 初回 paint 前) を避けるため rAF で待つ。
+  // 初回 mount (= ページ遷移直後) のみ、cursor を 1/3 位置にスクロール。
+  // データロード完了を待つため dates.length が初期 padding (= 22) を超えてから init。
+  // 以降は scrollLeft を触らない (= ユーザーの scroll 操作を尊重)。
   useEffect(() => {
     if (!scrollRef.current || cursorIdx < 0 || didInitScrollRef.current) return;
+    if (isDraggingRef.current) return;
+    // 22 = today ±7 +14 の最小 dates 長。これより大きければ実データが反映されている
+    if (dates.length <= 22) return;
     const tryScroll = () => {
       const el = scrollRef.current;
       if (!el) return;
       if (el.clientWidth === 0) {
-        // 次フレームに再試行
         requestAnimationFrame(tryScroll);
         return;
       }
@@ -108,7 +112,7 @@ export const ChartShell = forwardRef<ChartShellHandle, ChartShellProps>(function
       el.scrollLeft = Math.max(0, cursorX - el.clientWidth / 3);
     };
     requestAnimationFrame(tryScroll);
-  }, [cursorIdx]);
+  }, [cursorIdx, dates.length]);
 
   return (
     <div className="flex">
@@ -140,6 +144,7 @@ export const ChartShell = forwardRef<ChartShellHandle, ChartShellProps>(function
             e.preventDefault();
             svg.setPointerCapture(e.pointerId);
             svg.style.cursor = "grabbing";
+            isDraggingRef.current = true;
             const move = (ev: PointerEvent) => {
               const px = ev.clientX - rect.left;
               const idx = Math.round((px - CELL / 2) / STEP);
@@ -149,6 +154,7 @@ export const ChartShell = forwardRef<ChartShellHandle, ChartShellProps>(function
             const up = (ev: PointerEvent) => {
               svg.releasePointerCapture(ev.pointerId);
               svg.style.cursor = "";
+              isDraggingRef.current = false;
               svg.removeEventListener("pointermove", move);
               svg.removeEventListener("pointerup", up);
             };
