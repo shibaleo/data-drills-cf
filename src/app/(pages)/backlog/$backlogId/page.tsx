@@ -241,6 +241,9 @@ export default function BacklogDetailPage() {
   const filterDirty = JSON.stringify(localFilter) !== JSON.stringify(data.backlog.filter ?? {});
   // dirty な間は editor を閉じられないようにする (preview を隠したくない)
   const membersOpen = membersEditorOpen || filterDirty;
+  // filter dirty 中は chart 上の milestone pin 編集 UI も自動的に展開
+  // (= ユーザーが overflow / anchor を直接調整できるようにする)
+  const milestonePinsVisible = showMilestonePins || filterDirty;
   const dirty = planDirty || layersDirty || milestonesDirty || filterDirty;
 
   // 全 milestone を target 昇順に sort、各 milestone の「target 番目の problem」を anchor とする
@@ -627,8 +630,8 @@ export default function BacklogDetailPage() {
               </>
             )}
             <button type="button"
-              title="マイルストーンのピンを表示/非表示" aria-pressed={showMilestonePins}
-              className={`inline-flex items-center justify-center size-[26px] rounded-md border transition-colors ${showMilestonePins ? "bg-accent text-accent-foreground border-accent-foreground/20" : "text-muted-foreground hover:bg-muted"}`}
+              title="Toggle milestone pins" aria-pressed={milestonePinsVisible}
+              className={`inline-flex items-center justify-center size-[26px] rounded-md border transition-colors ${milestonePinsVisible ? "bg-accent text-accent-foreground border-accent-foreground/20" : "text-muted-foreground hover:bg-muted"}`}
               onClick={() => setShowMilestonePins((p) => !p)}>
               <SlidersHorizontal className="size-3"/>
             </button>
@@ -692,7 +695,7 @@ export default function BacklogDetailPage() {
           selectedId={selectedId}
           onSelect={handleSelect}
           onOpen={openDetail}
-          showMilestonePins={showMilestonePins}
+          showMilestonePins={milestonePinsVisible}
           milestoneAnchors={milestoneAnchors}
           hiddenLayerIds={hiddenLayerIds}
           onHiddenLayersChange={setHiddenLayerIds}
