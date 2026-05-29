@@ -21,6 +21,9 @@ export function useProblemsList(projectId: string | undefined) {
       return json.data;
     },
     enabled: !!projectId,
+    // problems-list は 7 join で重い。ナビゲーションのたびに再 fetch しないよう
+    // staleTime を長め (5 分) に。mutation で invalidate されたら必ず再取得される。
+    staleTime: 5 * 60_000,
   });
 }
 

@@ -4,7 +4,6 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { useProject } from "@/hooks/use-project";
 import { useBacklogList } from "@/hooks/queries/use-backlog";
 import { useProblemsList } from "@/hooks/queries/use-problems";
-import { applyMemberFilter } from "@/lib/member-filter";
 import { usePageTitle } from "@/lib/page-context";
 import { Plus } from "lucide-react";
 
@@ -15,16 +14,22 @@ export default function BacklogPage() {
   const { data: backlogs = [], isLoading } = useBacklogList(currentProject?.id);
   const { data: allProblems = [] } = useProblemsList(currentProject?.id);
 
-  // 各 backlog の filter で members を絞り、進捗 (done / total) を出す
+  // 各 backlog の filter で members を絞り、進捗 (done / total) を出す。
+  // 中間 map 作成を避け、1パス per backlog で直接判定 (allocation 不要)
   const progressByBacklog = useMemo(() => {
     const m = new Map<string, { done: number; total: number }>();
     for (const b of backlogs) {
-      const members = applyMemberFilter(
-        allProblems.map((p) => ({ subjectId: p.subject_id || null, levelId: p.level_id || null, _p: p })),
-        b.filter,
-      ).map((x) => x._p);
-      const done = members.filter((p) => p.answers.length > 0).length;
-      m.set(b.id, { done, total: members.length });
+      const subjectSet = b.filter.subjectIds?.length ? new Set(b.filter.subjectIds) : null;
+      const levelSet = b.filter.levelIds?.length ? new Set(b.filter.levelIds) : null;
+      let total = 0;
+      let done = 0;
+      for (const p of allProblems) {
+        if (subjectSet && (!p.subject_id || !subjectSet.has(p.subject_id))) continue;
+        if (levelSet && (!p.level_id || !levelSet.has(p.level_id))) continue;
+        total++;
+        if (p.answers.length > 0) done++;
+      }
+      m.set(b.id, { done, total });
     }
     return m;
   }, [backlogs, allProblems]);

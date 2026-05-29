@@ -21,5 +21,8 @@ export function useReviewList(projectId: string | undefined, asOf?: string | nul
       return json.data;
     },
     enabled: !!projectId,
+    // review endpoint は全 problems の schedule を計算する重さ。sidebar badge も見るので
+    // ナビゲーションのたびに refetch しないよう長めに。
+    staleTime: 5 * 60_000,
   });
 }

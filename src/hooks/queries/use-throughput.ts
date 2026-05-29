@@ -21,5 +21,7 @@ export function useThroughputList(projectId: string | undefined, asOf?: string |
       return json.data;
     },
     enabled: !!projectId,
+    // 全 answer を返す重い endpoint。再 fetch を抑制
+    staleTime: 5 * 60_000,
   });
 }
