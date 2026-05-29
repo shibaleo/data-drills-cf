@@ -27,8 +27,12 @@ export async function withRequestDb<T>(fn: () => T | Promise<T>): Promise<T> {
   }
 }
 
-// Fallback for local dev (long-lived process, shared client is fine)
-let _fallbackDb: DB | null = null;
+// Fallback for local dev — globalThis にキャッシュして vite HMR で再生成されないようにする
+// (再生成されると古い postgres client がリークし、Supabase 接続上限 (pool_size: 15) を消費する)
+const globalForPg = globalThis as unknown as {
+  __pgFallbackClient?: ReturnType<typeof postgres>;
+  __pgFallbackDb?: DB;
+};
 
 function getOrCreateDb(): DB {
   const store = als.getStore();
@@ -47,17 +51,17 @@ function getOrCreateDb(): DB {
     return store.db;
   }
 
-  // Local dev: cached client
-  if (!_fallbackDb) {
-    const client = postgres(env.DATABASE_URL, {
-      max: 1,
+  // Local dev: globalThis-cached client (HMR-safe)
+  if (!globalForPg.__pgFallbackDb) {
+    globalForPg.__pgFallbackClient = postgres(env.DATABASE_URL, {
+      max: 5,
       idle_timeout: 20,
       connect_timeout: 10,
       ssl: "require",
     });
-    _fallbackDb = drizzle(client, { schema });
+    globalForPg.__pgFallbackDb = drizzle(globalForPg.__pgFallbackClient, { schema });
   }
-  return _fallbackDb;
+  return globalForPg.__pgFallbackDb;
 }
 
 // Lazy proxy: defers DB creation until first use
