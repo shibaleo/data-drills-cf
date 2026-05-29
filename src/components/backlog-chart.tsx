@@ -78,6 +78,8 @@ type BacklogChartProps = {
   /** 表示/非表示状態を呼び出し側で管理する (未指定なら内部 state)。 */
   hiddenLayerIds?: Set<string>;
   onHiddenLayersChange?: (next: Set<string>) => void;
+  /** today 線をドラッグして新しい今日 (YYYY-MM-DD) を返す。指定すると線が掴める。 */
+  onTodayDrag?: (newDate: string) => void;
 };
 
 
@@ -127,6 +129,7 @@ export const BacklogChart = forwardRef<BacklogChartHandle, BacklogChartProps>(fu
   milestoneAnchors,
   hiddenLayerIds,
   onHiddenLayersChange,
+  onTodayDrag,
 }: BacklogChartProps, ref) {
   const _showPins = showMilestonePins ?? true;
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -306,12 +309,45 @@ export const BacklogChart = forwardRef<BacklogChartHandle, BacklogChartProps>(fu
       </div>
 
       <div ref={scrollRef} className="overflow-x-auto pb-2 flex-1 min-w-0">
-        <svg ref={svgRef} width={chartWidth} height={chartHeight} className="block touch-none">
+        <svg ref={svgRef} width={chartWidth} height={chartHeight} className="block touch-none"
+          onPointerDown={(e) => {
+            if (!onTodayDrag) return;
+            const svg = e.currentTarget;
+            const rect = svg.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const todayX = todayIdx * STEP + CELL / 2;
+            if (Math.abs(x - todayX) > 8) return;
+            // 既存の milestone pin ドラッグ系と衝突しないように top 領域だけ反応
+            // (today 縦線は chart 全高だが、ハンドルは upper 部 = ピンより下) — シンプルに常に許可
+            e.preventDefault();
+            e.stopPropagation();
+            svg.setPointerCapture(e.pointerId);
+            const move = (ev: PointerEvent) => {
+              const px = ev.clientX - rect.left;
+              const idx = Math.round((px - CELL / 2) / STEP);
+              const clamped = Math.max(0, Math.min(dates.length - 1, idx));
+              onTodayDrag(dates[clamped]);
+            };
+            const up = (ev: PointerEvent) => {
+              svg.releasePointerCapture(ev.pointerId);
+              svg.removeEventListener("pointermove", move);
+              svg.removeEventListener("pointerup", up);
+            };
+            svg.addEventListener("pointermove", move);
+            svg.addEventListener("pointerup", up);
+          }}>
           {todayIdx >= 0 && (
-            <line x1={todayIdx * STEP + CELL / 2} y1={TOP_AXIS_H}
-              x2={todayIdx * STEP + CELL / 2} y2={chartHeight - BOTTOM_AXIS_H}
-              stroke="hsl(var(--foreground))" strokeWidth={1.5}
-              strokeDasharray="4 3" opacity={0.7}/>
+            <>
+              <line x1={todayIdx * STEP + CELL / 2} y1={TOP_AXIS_H}
+                x2={todayIdx * STEP + CELL / 2} y2={chartHeight - BOTTOM_AXIS_H}
+                stroke="hsl(var(--foreground))" strokeWidth={1.5}
+                strokeDasharray="4 3" opacity={0.7}/>
+              {onTodayDrag && (
+                <line x1={todayIdx * STEP + CELL / 2} y1={TOP_AXIS_H}
+                  x2={todayIdx * STEP + CELL / 2} y2={chartHeight - BOTTOM_AXIS_H}
+                  stroke="transparent" strokeWidth={14} style={{ cursor: "ew-resize" }}/>
+              )}
+            </>
           )}
 
           {/* グリッド + tetris ボックス */}

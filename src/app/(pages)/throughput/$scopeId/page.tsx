@@ -152,8 +152,8 @@ export default function ThroughputPage() {
     });
   }, []);
 
-  // today は常に現実の今日。asOf はチャートの answer フィルタにだけ使う。
-  const today = useMemo(() => todayJST(), []);
+  // today は asOf に追従 (再生中・ドラッグ中も today 線がそこに移動する)。
+  const today = useMemo(() => asOf ?? todayJST(), [asOf]);
 
   const { startDate, totalDays, columns, maxStack, renderCap, todayIdx } = useMemo(() => {
     const cols = new Map<string, ThroughputRow[]>();
@@ -512,13 +512,42 @@ export default function ThroughputPage() {
               ))}
             </svg>
             <div ref={scrollRef} className="overflow-x-auto pb-2 flex-1 min-w-0">
-              <svg width={chartWidth} height={chartHeight} className="block">
+              <svg width={chartWidth} height={chartHeight} className="block"
+                onPointerDown={(e) => {
+                  // today 線の周辺 (8px) を掴んだらドラッグ開始 → asOf を変える
+                  const svg = e.currentTarget;
+                  const rect = svg.getBoundingClientRect();
+                  const x = e.clientX - rect.left;
+                  const todayX = todayIdx * STEP + CELL / 2;
+                  if (Math.abs(x - todayX) > 8) return;
+                  e.preventDefault();
+                  svg.setPointerCapture(e.pointerId);
+                  const move = (ev: PointerEvent) => {
+                    const px = ev.clientX - rect.left;
+                    const idx = Math.round((px - CELL / 2) / STEP);
+                    const clamped = Math.max(0, Math.min(totalDays - 1, idx));
+                    setAsOf(addDays(startDate, clamped));
+                  };
+                  const up = (ev: PointerEvent) => {
+                    svg.releasePointerCapture(ev.pointerId);
+                    svg.removeEventListener("pointermove", move);
+                    svg.removeEventListener("pointerup", up);
+                  };
+                  svg.addEventListener("pointermove", move);
+                  svg.addEventListener("pointerup", up);
+                }}>
                 {/* Today vertical line */}
                 {todayIdx >= 0 && todayIdx < totalDays && (
-                  <line x1={todayIdx * STEP + CELL / 2} y1={TOP_AXIS_H}
-                    x2={todayIdx * STEP + CELL / 2} y2={chartHeight - BOTTOM_AXIS_H}
-                    stroke="hsl(var(--foreground))" strokeWidth={1.5}
-                    strokeDasharray="4 3" opacity={0.7}/>
+                  <>
+                    <line x1={todayIdx * STEP + CELL / 2} y1={TOP_AXIS_H}
+                      x2={todayIdx * STEP + CELL / 2} y2={chartHeight - BOTTOM_AXIS_H}
+                      stroke="hsl(var(--foreground))" strokeWidth={1.5}
+                      strokeDasharray="4 3" opacity={0.7}/>
+                    {/* invisible wide hit-area for drag */}
+                    <line x1={todayIdx * STEP + CELL / 2} y1={TOP_AXIS_H}
+                      x2={todayIdx * STEP + CELL / 2} y2={chartHeight - BOTTOM_AXIS_H}
+                      stroke="transparent" strokeWidth={14} style={{ cursor: "ew-resize" }}/>
+                  </>
                 )}
                 {Array.from({ length: totalDays }, (_, colIdx) => {
                   const date = addDays(startDate, colIdx);

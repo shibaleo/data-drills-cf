@@ -76,7 +76,7 @@ function addDays(dateStr: string, days: number): string {
 
 type ChartColorMode = "problem" | "status";
 
-function ScheduleChart({
+function ReviewChart({
   items,
   today,
   onSelect,
@@ -84,6 +84,7 @@ function ScheduleChart({
   selectedId,
   colorMode = "problem",
   statusOrderMap,
+  onTodayDrag,
 }: {
   items: ScheduleRow[];
   today: string;
@@ -92,6 +93,8 @@ function ScheduleChart({
   selectedId?: string | null;
   colorMode?: ChartColorMode;
   statusOrderMap: Map<string, number>;
+  /** today 線をドラッグしたときに新しい今日 (YYYY-MM-DD) を返す。指定すると線がドラッグ可能になる。 */
+  onTodayDrag?: (newDate: string) => void;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -167,9 +170,33 @@ function ScheduleChart({
         ))}
       </svg>
       <div ref={scrollRef} className="overflow-x-auto pb-2 flex-1 min-w-0">
-      <svg width={chartWidth} height={chartHeight} className="block">
+      <svg width={chartWidth} height={chartHeight} className="block"
+        onPointerDown={(e) => {
+          if (!onTodayDrag) return;
+          const svg = e.currentTarget;
+          const rect = svg.getBoundingClientRect();
+          const x = e.clientX - rect.left;
+          const todayX = todayIdx * STEP + CELL / 2;
+          if (Math.abs(x - todayX) > 8) return;
+          e.preventDefault();
+          svg.setPointerCapture(e.pointerId);
+          const move = (ev: PointerEvent) => {
+            const px = ev.clientX - rect.left;
+            const idx = Math.round((px - CELL / 2) / STEP);
+            const clamped = Math.max(0, Math.min(dates.length - 1, idx));
+            onTodayDrag(dates[clamped]);
+          };
+          const up = (ev: PointerEvent) => {
+            svg.releasePointerCapture(ev.pointerId);
+            svg.removeEventListener("pointermove", move);
+            svg.removeEventListener("pointerup", up);
+          };
+          svg.addEventListener("pointermove", move);
+          svg.addEventListener("pointerup", up);
+        }}>
         {/* Today vertical line */}
         {todayIdx >= 0 && (
+          <>
           <line
             x1={todayIdx * STEP + CELL / 2}
             y1={TOP_AXIS_H}
@@ -180,6 +207,13 @@ function ScheduleChart({
             strokeDasharray="4 3"
             opacity={0.7}
           />
+          {onTodayDrag && (
+            <line
+              x1={todayIdx * STEP + CELL / 2} y1={TOP_AXIS_H}
+              x2={todayIdx * STEP + CELL / 2} y2={chartHeight - BOTTOM_AXIS_H}
+              stroke="transparent" strokeWidth={14} style={{ cursor: "ew-resize" }}/>
+          )}
+          </>
         )}
         {dates.map((date, colIdx) => {
           const dayItems = grouped.get(date) ?? [];
@@ -557,8 +591,8 @@ export default function SchedulePage() {
             p.standard_time,
             latest.duration_sec,
           );
-          // daysUntil は現実の今日基準 (再生中も "今日まであと何日" は変わらない)
-          const daysUntil = -computeDaysOverdue(nextReview, toJSTDateString(new Date()));
+          // daysUntil は asOf 基準 (= today)
+          const daysUntil = -computeDaysOverdue(nextReview, asOf);
           const history = eligible.map((a) => {
             const st = a.status ? statusByName.get(a.status) : null;
             return {
@@ -697,8 +731,8 @@ export default function SchedulePage() {
   }, [filterSubjects, filterLevels, filterLastStatuses]);
 
   const now = useMemo(() => new Date(), []);
-  // today は常に現実の今日。asOf は answer の cutoff にだけ使う (chart の今日線・daysUntil は維持)。
-  const todayStr = useMemo(() => toJSTDateString(now), [now]);
+  // today は asOf に追従。
+  const todayStr = useMemo(() => asOf ?? toJSTDateString(now), [now, asOf]);
 
   // Apply overrides by proportionally scaling each row's (nextReview - lastDate)
   // by sliderStab / baseStab. The C_T adjustment server applies divides out.
@@ -1185,7 +1219,8 @@ export default function SchedulePage() {
                 />
               </div>
             )}
-            <ScheduleChart items={chartRows} today={todayStr} onSelect={handleSelect} onOpen={openDetail} selectedId={selectedId} colorMode="status" statusOrderMap={statusOrderMap} />
+            <ReviewChart items={chartRows} today={todayStr} onSelect={handleSelect} onOpen={openDetail} selectedId={selectedId} colorMode="status" statusOrderMap={statusOrderMap}
+              onTodayDrag={(d) => setAsOf(d === toJSTDateString(now) ? null : d)}/>
           </div>
 
           {/* Table */}

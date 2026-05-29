@@ -151,8 +151,8 @@ export default function BacklogDetailPage() {
     setLocalFilter(data.backlog.filter ?? {});
   }, [data]);
 
-  // today は常に現実の今日。asOf は member の first_answer_date フィルタにだけ使う。
-  const today = todayJST();
+  // today は asOf に追従 (再生中・ドラッグ中も today 線がそこに移動する)。
+  const today = asOf ?? todayJST();
 
   /**
    * filter が編集中なら useProblemsList + applyMemberFilter で再計算、
@@ -671,6 +671,7 @@ export default function BacklogDetailPage() {
         </div>
         <BacklogChart
           ref={chartRef}
+          onTodayDrag={(d) => setAsOf(d === todayJST() ? null : d)}
           rightPanelExtra={
             <div className="space-y-3 text-xs" style={{ width: 200 }}>
               <div className="grid grid-cols-2 gap-2">
