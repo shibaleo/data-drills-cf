@@ -1,7 +1,11 @@
-/** Backlog filter spec (subject/level) selector. Uses shared FilterSection layout. */
+/**
+ * Backlog filter spec (subject/level) selector — colored chip toggles.
+ * 各カテゴリを 1 行で並べ、entity の色を OpaqueTag で表示。
+ * 選択=不透明、非選択=半透明。デザイン言語は problem-card と統一。
+ */
 import { useSubjectsList } from "@/hooks/queries/use-subjects";
 import { useLevelsList } from "@/hooks/queries/use-levels";
-import { FilterSection } from "@/components/filter-section";
+import { OpaqueTag } from "@/components/problem-card";
 import type { BacklogFilterInput } from "@/lib/schemas/backlog";
 
 type Props = {
@@ -14,24 +18,61 @@ export function BacklogFilterPicker({ projectId, value, onChange }: Props) {
   const { data: subjects = [] } = useSubjectsList(projectId);
   const { data: levels = [] } = useLevelsList(projectId);
 
-  function apply(field: keyof BacklogFilterInput, next: Set<string>) {
-    onChange({ ...value, [field]: next.size ? [...next] : undefined });
+  function toggle(field: keyof BacklogFilterInput, id: string) {
+    const cur = value[field] ?? [];
+    const next = cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id];
+    onChange({ ...value, [field]: next.length ? next : undefined });
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3">
-      <FilterSection
-        label={`Subject (${value.subjectIds?.length || "all"})`}
-        items={subjects.map((s) => ({ value: s.id, label: s.name }))}
-        selected={new Set(value.subjectIds ?? [])}
-        onChange={(next) => apply("subjectIds", next)}
+    <div className="space-y-1.5">
+      <ChipRow
+        label="Subject"
+        items={subjects.map((s) => ({ id: s.id, name: s.name, color: s.color ?? null }))}
+        selectedIds={value.subjectIds ?? []}
+        onToggle={(id) => toggle("subjectIds", id)}
       />
-      <FilterSection
-        label={`Level (${value.levelIds?.length || "all"})`}
-        items={levels.map((l) => ({ value: l.id, label: l.name }))}
-        selected={new Set(value.levelIds ?? [])}
-        onChange={(next) => apply("levelIds", next)}
+      <ChipRow
+        label="Level"
+        items={levels.map((l) => ({ id: l.id, name: l.name, color: l.color ?? null }))}
+        selectedIds={value.levelIds ?? []}
+        onToggle={(id) => toggle("levelIds", id)}
       />
+    </div>
+  );
+}
+
+function ChipRow({
+  label, items, selectedIds, onToggle,
+}: {
+  label: string;
+  items: { id: string; name: string; color: string | null }[];
+  selectedIds: string[];
+  onToggle: (id: string) => void;
+}) {
+  const allSelected = selectedIds.length === 0;
+  return (
+    <div className="flex items-center gap-2 flex-wrap">
+      <span className="text-[10px] uppercase tracking-wide text-muted-foreground w-14 shrink-0">
+        {label}
+      </span>
+      {items.map((it) => {
+        const isOn = allSelected || selectedIds.includes(it.id);
+        return (
+          <button
+            key={it.id}
+            type="button"
+            onClick={() => onToggle(it.id)}
+            aria-pressed={!allSelected && selectedIds.includes(it.id)}
+            className={`transition-opacity ${isOn ? "opacity-100" : "opacity-30 hover:opacity-60"}`}
+          >
+            <OpaqueTag name={it.name} color={it.color} />
+          </button>
+        );
+      })}
+      <span className="text-[10px] text-muted-foreground/60 ml-1">
+        {allSelected ? "all" : `${selectedIds.length} selected`}
+      </span>
     </div>
   );
 }
