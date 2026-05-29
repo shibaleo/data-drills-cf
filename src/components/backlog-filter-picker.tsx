@@ -57,7 +57,7 @@ function ChipRow({
   const allSelected = selectedIds.length === 0;
   return (
     <div className="flex items-center gap-2 flex-wrap">
-      <span className="text-xs font-semibold uppercase tracking-wider text-foreground w-16 shrink-0">
+      <span className="text-xs font-semibold text-foreground w-16 shrink-0">
         {label}
       </span>
       {items.map((it) => {
