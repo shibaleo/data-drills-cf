@@ -15,7 +15,7 @@
  * Geometry constants (cell size, step, axes heights) follow `chart-constants.ts`.
  * For BacklogChart and the like with rich overlays, just pass complex children.
  */
-import { useEffect, useImperativeHandle, useRef, forwardRef } from "react";
+import { useEffect, useImperativeHandle, useRef, useState, forwardRef } from "react";
 import { CELL, STEP, Y_AXIS_W } from "@/lib/chart-constants";
 
 export const DEFAULT_TOP_AXIS_H = 16;
@@ -69,6 +69,7 @@ export const ChartShell = forwardRef<ChartShellHandle, ChartShellProps>(function
   const scrollRef = useRef<HTMLDivElement>(null);
   const isDraggingRef = useRef(false);
   const didInitScrollRef = useRef(false);
+  const [ready, setReady] = useState(false);
 
   const cursorIdx = dates.indexOf(cursorDate);
   const chartWidth = dates.length * STEP;
@@ -111,11 +112,16 @@ export const ChartShell = forwardRef<ChartShellHandle, ChartShellProps>(function
       }
       const cursorX = cursorIdx * STEP + CELL / 2;
       const inView = cursorX >= el.scrollLeft && cursorX <= el.scrollLeft + el.clientWidth;
-      // 初回: dates が確定 (>22) してから 1/3 位置にセット
+      // 初回: dates が確定 (>22) してから 1/3 位置にセット。
+      // dates が小さい (= 空 state) なら scroll 不要だが ready は立てて chart を表示する。
       if (!didInitScrollRef.current) {
-        if (dates.length <= 22) return;
+        if (dates.length <= 22) {
+          setReady(true);
+          return;
+        }
         didInitScrollRef.current = true;
         el.scrollLeft = Math.max(0, cursorX - el.clientWidth / 3);
+        setReady(true);
         return;
       }
       // 既に init 済 + cursor が viewport 外 → 1/3 位置に呼び戻す (= データ拡張で cursor が外れた場合)
@@ -128,7 +134,13 @@ export const ChartShell = forwardRef<ChartShellHandle, ChartShellProps>(function
   }, [cursorIdx, dates.length]);
 
   return (
-    <div className="flex">
+    <div className="flex relative" style={{ visibility: ready ? "visible" : "hidden" }}>
+      {!ready && (
+        <div className="absolute inset-0 flex items-center justify-center text-muted-foreground text-sm"
+          style={{ visibility: "visible" }}>
+          Loading…
+        </div>
+      )}
       {/* left: Y axis ticks OR custom HTML slot */}
       {leftSlot ? leftSlot : (
         yAxisLabels && yAxisLabels.length > 0 && (
