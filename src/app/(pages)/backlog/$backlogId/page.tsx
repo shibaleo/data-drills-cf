@@ -31,7 +31,7 @@ import { FilterSection } from "@/components/filter-section";
 import { useFilterPrefs, useSaveFilterPrefs } from "@/hooks/queries/use-filter-prefs";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Filter, SlidersHorizontal, ArrowLeft, Archive, Save, RotateCcw, Loader2, Download, History, ListFilter } from "lucide-react";
+import { Filter, SlidersHorizontal, ArrowLeft, Archive, Save, RotateCcw, Loader2, Download, History, ListFilter, MoreVertical, Check } from "lucide-react";
 import { useTopicsList } from "@/hooks/queries/use-topics";
 import { usePageTitle } from "@/lib/page-context";
 import { rpc } from "@/lib/rpc-client";
@@ -61,6 +61,8 @@ export default function BacklogDetailPage() {
   const [localMilestones, setLocalMilestones] = useState<LocalMilestone[]>([]);
   const [localFilter, setLocalFilter] = useState<BacklogFilterInput>({});
   const [membersEditorOpen, setMembersEditorOpen] = useState(false);
+  const [historyPanelOpen, setHistoryPanelOpen] = useState(false);
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showMilestonePins, setShowMilestonePins] = useState(false);
   const [hideFirst, setHideFirst] = useState(false);
@@ -241,6 +243,9 @@ export default function BacklogDetailPage() {
   const filterDirty = JSON.stringify(localFilter) !== JSON.stringify(data.backlog.filter ?? {});
   // dirty な間は editor を閉じられないようにする (preview を隠したくない)
   const membersOpen = membersEditorOpen || filterDirty;
+  // readOnly (= 過去 snapshot 表示中) なら history panel を自動展開
+  // (= 戻るためのトリガーを常時露出させる)
+  const historyOpen = historyPanelOpen || readOnly;
   // filter dirty 中は chart 上の milestone pin 編集 UI も自動的に展開
   // (= ユーザーが overflow / anchor を直接調整できるようにする)
   const milestonePinsVisible = showMilestonePins || filterDirty;
@@ -420,80 +425,93 @@ export default function BacklogDetailPage() {
             D{daysToDeadline >= 0 ? `-${daysToDeadline}` : `+${Math.abs(daysToDeadline)}`}
           </span>
         )}
-        <button type="button" title="Members filter"
-          disabled={readOnly}
-          aria-pressed={membersOpen}
-          onClick={() => setMembersEditorOpen((v) => !v)}
-          className={`ml-auto inline-flex items-center justify-center size-7 rounded-md border transition-colors disabled:opacity-50 ${
-            filterDirty
-              ? "border-primary/50 text-primary"
-              : membersOpen
-                ? "bg-accent text-accent-foreground border-accent-foreground/40"
-                : "text-muted-foreground hover:bg-muted"
-          }`}>
-          <ListFilter className="size-3.5"/>
-        </button>
-        <Popover>
+        <Popover open={moreMenuOpen} onOpenChange={setMoreMenuOpen}>
           <PopoverTrigger asChild>
-            <button type="button" title="Time travel"
-              aria-pressed={readOnly}
-              className={`inline-flex items-center justify-center size-7 rounded-md border transition-colors ${readOnly ? "bg-accent text-accent-foreground border-accent-foreground/40" : "text-muted-foreground hover:bg-muted"}`}>
-              <History className="size-3.5"/>
+            <button type="button" title="More"
+              aria-pressed={moreMenuOpen || membersOpen || historyOpen}
+              className={`ml-auto inline-flex items-center justify-center size-7 rounded-md border transition-colors ${
+                filterDirty
+                  ? "border-primary/50 text-primary"
+                  : (membersOpen || historyOpen || moreMenuOpen)
+                    ? "bg-accent text-accent-foreground border-accent-foreground/40"
+                    : "text-muted-foreground hover:bg-muted"
+              }`}>
+              <MoreVertical className="size-3.5"/>
             </button>
           </PopoverTrigger>
-          <PopoverContent className="w-80 p-3 space-y-3" align="end">
-            <div>
-              <div className="text-[10px] text-muted-foreground mb-1">Snapshot date</div>
-              <div className="flex items-center gap-2">
-                <Input type="date" value={asOf ?? ""} className="h-7 text-xs"
-                  onChange={(e) => setAsOf(e.target.value || null)}/>
-                <Button size="sm" variant="ghost" className="h-7 text-[10px] px-2"
-                  onClick={() => setAsOf(null)} disabled={!asOf}>Back to now</Button>
-              </div>
-            </div>
-            <div>
-              <div className="text-[10px] text-muted-foreground mb-1">Changelog (newest first)</div>
-              <div className="max-h-72 overflow-y-auto -mr-2 pr-2 space-y-0.5">
-                {(revisionsQuery.data ?? []).length === 0 && (
-                  <div className="text-[10px] text-muted-foreground italic py-2 text-center">No revisions yet</div>
-                )}
-                {(revisionsQuery.data ?? []).map((r) => {
-                  const ts = new Date(r.valid_from);
-                  const tsLabel = `${ts.getMonth() + 1}/${ts.getDate()} ${String(ts.getHours()).padStart(2, "0")}:${String(ts.getMinutes()).padStart(2, "0")}`;
-                  const isoDay = ts.toISOString().slice(0, 10);
-                  const isActiveAsOf = asOf === isoDay;
-                  const kindCls = r.kind === "backlog" ? "text-foreground/80" : r.kind === "layer" ? "text-violet-500" : "text-pink-500";
-                  return (
-                    <button key={`${r.kind}-${r.entity_id}-${r.revision}`}
-                      type="button"
-                      onClick={() => setAsOf(isoDay)}
-                      className={`w-full text-left flex items-baseline gap-2 px-2 py-1 rounded-sm transition-colors hover:bg-accent ${isActiveAsOf ? "bg-accent" : ""}`}>
-                      <span className="text-[10px] tabular-nums text-muted-foreground w-16 shrink-0">{tsLabel}</span>
-                      <span className={`text-[9px] uppercase font-semibold w-12 shrink-0 ${kindCls}`}>{r.kind}</span>
-                      <span className="text-[10px] flex-1 truncate">{r.summary}</span>
-                      <span className="text-[9px] text-muted-foreground">rev {r.revision}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
+          <PopoverContent className="w-44 p-1" align="end">
+            <MenuItem
+              icon={<ListFilter className="size-3.5"/>}
+              label="Members filter"
+              active={membersOpen}
+              disabled={readOnly}
+              onClick={() => { setMembersEditorOpen((v) => !v); setMoreMenuOpen(false); }}
+            />
+            <MenuItem
+              icon={<History className="size-3.5"/>}
+              label="View history"
+              active={historyOpen}
+              onClick={() => { setHistoryPanelOpen((v) => !v); setMoreMenuOpen(false); }}
+            />
+            <div className="h-px bg-border my-1"/>
+            <MenuItem
+              icon={<Archive className="size-3.5"/>}
+              label="Archive…"
+              destructive
+              disabled={readOnly}
+              onClick={() => { setMoreMenuOpen(false); onArchive(); }}
+            />
           </PopoverContent>
         </Popover>
-        <Button size="sm" variant="ghost" onClick={onArchive} disabled={readOnly}
-          className="text-muted-foreground hover:text-destructive" title="Archive">
-          <Archive className="size-3.5"/>
-        </Button>
       </div>
 
-      {readOnly && (
-        <div className="flex items-center justify-between gap-2 rounded-md border border-accent-foreground/40 bg-accent/30 px-3 py-1.5 text-xs">
-          <span className="text-foreground">
-            Viewing snapshot from <span className="font-semibold tabular-nums">{asOf}</span> — read only.
-          </span>
-          <button type="button" onClick={() => setAsOf(null)}
-            className="text-accent-foreground hover:text-foreground underline underline-offset-2">
-            Back to now
-          </button>
+      {historyOpen && (
+        <div className="rounded-md border px-3 py-2 text-xs space-y-2">
+          <div className="flex items-center gap-2">
+            <span className="font-semibold">History</span>
+            {readOnly && (
+              <>
+                <span className="text-muted-foreground">— viewing</span>
+                <span className="font-semibold tabular-nums">{asOf}</span>
+              </>
+            )}
+            <Input type="date" value={asOf ?? ""}
+              onChange={(e) => setAsOf(e.target.value || null)}
+              className="h-6 text-[10px] w-32 ml-2"/>
+            {asOf && (
+              <button type="button" onClick={() => setAsOf(null)}
+                className="text-[10px] text-muted-foreground hover:text-foreground">
+                Back to now
+              </button>
+            )}
+            <button type="button" onClick={() => setHistoryPanelOpen(false)} disabled={readOnly}
+              className="ml-auto text-[10px] text-muted-foreground hover:text-foreground disabled:opacity-40">
+              Close
+            </button>
+          </div>
+          <div className="max-h-56 overflow-y-auto pr-1 space-y-0.5 border-t pt-1.5">
+            {(revisionsQuery.data ?? []).length === 0 && (
+              <div className="text-[10px] text-muted-foreground italic py-2 text-center">No revisions yet</div>
+            )}
+            {(revisionsQuery.data ?? []).map((r) => {
+              const ts = new Date(r.valid_from);
+              const tsLabel = `${ts.getMonth() + 1}/${ts.getDate()} ${String(ts.getHours()).padStart(2, "0")}:${String(ts.getMinutes()).padStart(2, "0")}`;
+              const isoDay = ts.toISOString().slice(0, 10);
+              const isActiveAsOf = asOf === isoDay;
+              const kindCls = r.kind === "backlog" ? "text-foreground/80" : r.kind === "layer" ? "text-violet-500" : "text-pink-500";
+              return (
+                <button key={`${r.kind}-${r.entity_id}-${r.revision}`}
+                  type="button"
+                  onClick={() => setAsOf(isoDay)}
+                  className={`w-full text-left flex items-baseline gap-2 px-2 py-1 rounded-sm transition-colors hover:bg-accent ${isActiveAsOf ? "bg-accent" : ""}`}>
+                  <span className="text-[10px] tabular-nums text-muted-foreground w-16 shrink-0">{tsLabel}</span>
+                  <span className={`text-[9px] uppercase font-semibold w-12 shrink-0 ${kindCls}`}>{r.kind}</span>
+                  <span className="text-[10px] flex-1 truncate">{r.summary}</span>
+                  <span className="text-[9px] text-muted-foreground">rev {r.revision}</span>
+                </button>
+              );
+            })}
+          </div>
         </div>
       )}
 
@@ -852,6 +870,30 @@ function SummaryCard({ label, value, unit, tone, sub }: {
       </div>
       {sub && <div className="text-[10px] text-muted-foreground tabular-nums">{sub}</div>}
     </div>
+  );
+}
+
+function MenuItem({ icon, label, active, destructive, disabled, onClick }: {
+  icon: React.ReactNode;
+  label: string;
+  active?: boolean;
+  destructive?: boolean;
+  disabled?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className={`w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+        destructive ? "hover:bg-destructive/10 hover:text-destructive" : "hover:bg-accent"
+      } ${active ? "text-foreground" : "text-muted-foreground"}`}
+    >
+      <span className={active ? "text-primary" : ""}>{icon}</span>
+      <span className="flex-1 text-left">{label}</span>
+      {active && <Check className="size-3 text-primary"/>}
+    </button>
   );
 }
 
