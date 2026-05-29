@@ -60,6 +60,7 @@ export default function BacklogDetailPage() {
   const [localLayers, setLocalLayers] = useState<LocalLayer[]>([]);
   const [localMilestones, setLocalMilestones] = useState<LocalMilestone[]>([]);
   const [localFilter, setLocalFilter] = useState<BacklogFilterInput>({});
+  const [membersEditorOpen, setMembersEditorOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showMilestonePins, setShowMilestonePins] = useState(false);
   const [hideFirst, setHideFirst] = useState(false);
@@ -238,6 +239,8 @@ export default function BacklogDetailPage() {
   const layersDirty = JSON.stringify(localLayers) !== JSON.stringify(data.layers.map((l) => ({ id: l.id, name: l.name, color: l.color ?? null, opacity_pct: l.opacity_pct ?? null, line_style: (l.line_style as "solid" | "dashed" | "dotted" | null) ?? null, line_width: l.line_width ?? null })));
   const milestonesDirty = JSON.stringify(localMilestones) !== JSON.stringify(data.milestones.map((m) => ({ id: m.id, layer_id: m.layer_id, target: m.target, date: m.date })));
   const filterDirty = JSON.stringify(localFilter) !== JSON.stringify(data.backlog.filter ?? {});
+  // dirty な間は editor を閉じられないようにする (preview を隠したくない)
+  const membersOpen = membersEditorOpen || filterDirty;
   const dirty = planDirty || layersDirty || milestonesDirty || filterDirty;
 
   // 全 milestone を target 昇順に sort、各 milestone の「target 番目の problem」を anchor とする
@@ -414,38 +417,19 @@ export default function BacklogDetailPage() {
             D{daysToDeadline >= 0 ? `-${daysToDeadline}` : `+${Math.abs(daysToDeadline)}`}
           </span>
         )}
-        <Popover>
-          <PopoverTrigger asChild>
-            <button type="button" title="Members filter"
-              disabled={readOnly}
-              aria-pressed={filterDirty}
-              className={`ml-auto inline-flex items-center justify-center size-7 rounded-md border transition-colors disabled:opacity-50 ${filterDirty ? "border-primary/50 text-primary" : "text-muted-foreground hover:bg-muted"}`}>
-              <Target className="size-3.5"/>
-            </button>
-          </PopoverTrigger>
-          <PopoverContent className="w-[36rem] p-3 space-y-3" align="end">
-            <div className="flex items-center justify-between text-xs">
-              <span className="font-medium">Members filter</span>
-              <span className="text-muted-foreground tabular-nums">
-                {data.members.length}{filterDirty ? ` → ${effectiveMembers.length}` : ""} problems
-              </span>
-            </div>
-            {currentProject && (
-              <BacklogFilterPicker
-                projectId={currentProject.id}
-                value={localFilter}
-                onChange={setLocalFilter}
-              />
-            )}
-            {filterDirty && (
-              <button type="button"
-                className="text-[10px] text-muted-foreground hover:text-foreground w-full text-center pt-1"
-                onClick={() => setLocalFilter(data.backlog.filter ?? {})}>
-                Reset filter
-              </button>
-            )}
-          </PopoverContent>
-        </Popover>
+        <button type="button" title="Members filter"
+          disabled={readOnly}
+          aria-pressed={membersOpen}
+          onClick={() => setMembersEditorOpen((v) => !v)}
+          className={`ml-auto inline-flex items-center justify-center size-7 rounded-md border transition-colors disabled:opacity-50 ${
+            filterDirty
+              ? "border-primary/50 text-primary"
+              : membersOpen
+                ? "bg-accent text-accent-foreground border-accent-foreground/40"
+                : "text-muted-foreground hover:bg-muted"
+          }`}>
+          <Target className="size-3.5"/>
+        </button>
         <Popover>
           <PopoverTrigger asChild>
             <button type="button" title="Time travel"
@@ -510,33 +494,49 @@ export default function BacklogDetailPage() {
         </div>
       )}
 
-      {filterDirty && !readOnly && (
-        <div className="rounded-md border border-primary/40 bg-primary/5 px-3 py-2 text-xs space-y-1.5">
+      {membersOpen && !readOnly && currentProject && (
+        <div className={`rounded-md border ${filterDirty ? "border-primary/40 bg-primary/5" : ""} px-3 py-3 text-xs space-y-3`}>
           <div className="flex items-center justify-between">
-            <span className="font-medium">Members filter preview</span>
-            <span className="text-muted-foreground tabular-nums">
-              {data.members.length} → {effectiveMembers.length} problems
-            </span>
+            <span className="font-medium">Members filter</span>
+            <div className="flex items-center gap-3">
+              <span className="text-muted-foreground tabular-nums">
+                {data.members.length}{filterDirty ? ` → ${effectiveMembers.length}` : ""} problems
+              </span>
+              {filterDirty && (
+                <button type="button"
+                  className="text-[10px] text-muted-foreground hover:text-foreground"
+                  onClick={() => setLocalFilter(data.backlog.filter ?? {})}>
+                  Reset filter
+                </button>
+              )}
+            </div>
           </div>
-          {milestoneImpacts.some((i) => i.overflow || i.changed) ? (
-            <ul className="space-y-1">
-              {milestoneImpacts.filter((i) => i.overflow || i.changed).map(({ ms, oldAnchor, newAnchor, overflow }) => (
-                <li key={ms.id} className="flex items-center gap-2">
-                  <OpaqueTag
-                    name={overflow ? "Overflow" : "Anchor"}
-                    color={overflow ? "hsl(var(--destructive))" : "hsl(var(--primary))"}
-                  />
-                  <span className="tabular-nums">target={ms.target}</span>
-                  <span className="text-muted-foreground">
-                    {overflow
-                      ? `Exceeds new member count ${effectiveMembers.length} — adjust target before Save`
-                      : `${oldAnchor?.code ?? "—"} → ${newAnchor?.code ?? "—"}`}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <div className="text-muted-foreground">No milestone impact</div>
+          <BacklogFilterPicker
+            projectId={currentProject.id}
+            value={localFilter}
+            onChange={setLocalFilter}
+          />
+          {filterDirty && (
+            milestoneImpacts.some((i) => i.overflow || i.changed) ? (
+              <ul className="space-y-1 pt-1 border-t">
+                {milestoneImpacts.filter((i) => i.overflow || i.changed).map(({ ms, oldAnchor, newAnchor, overflow }) => (
+                  <li key={ms.id} className="flex items-center gap-2">
+                    <OpaqueTag
+                      name={overflow ? "Overflow" : "Anchor"}
+                      color={overflow ? "hsl(var(--destructive))" : "hsl(var(--primary))"}
+                    />
+                    <span className="tabular-nums">target={ms.target}</span>
+                    <span className="text-muted-foreground">
+                      {overflow
+                        ? `Exceeds new member count ${effectiveMembers.length} — adjust target before Save`
+                        : `${oldAnchor?.code ?? "—"} → ${newAnchor?.code ?? "—"}`}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className="text-muted-foreground pt-1 border-t">No milestone impact</div>
+            )
           )}
         </div>
       )}
