@@ -687,8 +687,8 @@ export default function BacklogDetailPage() {
           items={visibleAllocated}
           layers={localLayers.map((l) => {
             const ms = localMilestones.filter((m) => m.layer_id === l.id);
-            const maxListFilter = ms.reduce((acc, m) => Math.max(acc, m.target), 0);
-            return { ...l, progress: maxListFilter > 0 ? { done: Math.min(doneCount, maxListFilter), total: maxListFilter } : null };
+            const maxTarget = ms.reduce((acc, m) => Math.max(acc, m.target), 0);
+            return { ...l, progress: maxTarget > 0 ? { done: Math.min(doneCount, maxTarget), total: maxTarget } : null };
           })}
           milestones={localMilestones}
           today={today}
@@ -710,8 +710,8 @@ export default function BacklogDetailPage() {
             setLocalMilestones((prev) => prev.map((m) => (m.id === id ? { ...m, layer_id: newLayerId } : m)))}
           onMilestoneLayerChange={readOnly ? undefined : (id, newLayerId) =>
             setLocalMilestones((prev) => prev.map((m) => (m.id === id ? { ...m, layer_id: newLayerId } : m)))}
-          onMilestoneListFilterChange={readOnly ? undefined : (id, newListFilter) =>
-            setLocalMilestones((prev) => prev.map((m) => (m.id === id ? { ...m, target: newListFilter } : m)))}
+          onMilestoneTargetChange={readOnly ? undefined : (id, newTarget) =>
+            setLocalMilestones((prev) => prev.map((m) => (m.id === id ? { ...m, target: newTarget } : m)))}
           onMilestoneRemove={readOnly ? undefined : (id) =>
             setLocalMilestones((prev) => prev.filter((m) => m.id !== id))}
           onMilestoneAddToLayer={readOnly ? undefined : (layerId, atDate) =>
