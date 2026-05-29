@@ -135,6 +135,126 @@ export function StatusTransitionMatrix({ rows, statuses, period, setPeriod }: Pr
       <div className="text-[10px] text-muted-foreground">
         対角が太い = 同 status で停滞 / 右上 = 上達 / 左下 = decay
       </div>
+      <Hints matrix={matrix} rowTotals={rowTotals} statuses={statuses} />
+    </div>
+  );
+}
+
+/** matrix からパターンを検出してヒントを出す。
+ *  「stability_days を伸ばすべき」など、行動につながる文言だけ。 */
+function Hints({
+  matrix, rowTotals, statuses,
+}: {
+  matrix: Record<string, Record<string, number>>;
+  rowTotals: Record<string, number>;
+  statuses: Status[];
+}) {
+  type Hint = { tone: "good" | "warn" | "info"; text: string };
+  const hints: Hint[] = [];
+  const order = statuses.map((s) => s.name);
+
+  const pct = (from: string, to: string) => {
+    const total = rowTotals[from] ?? 0;
+    if (total === 0) return 0;
+    return (matrix[from]?.[to] ?? 0) / total;
+  };
+  const isHighStatus = (name: string) => {
+    const idx = order.indexOf(name);
+    return idx >= Math.floor(order.length * 0.6);  // 上位 40%
+  };
+
+  // 1. First → Miss/Rough が殆ど = 新規学習フェーズ
+  const firstTotal = rowTotals[FIRST_LABEL] ?? 0;
+  if (firstTotal >= 5 && order.length >= 2) {
+    const firstLowPct = (pct(FIRST_LABEL, order[0]) + pct(FIRST_LABEL, order[1]));
+    if (firstLowPct >= 0.85) {
+      hints.push({
+        tone: "info",
+        text: `初回の ${Math.round(firstLowPct * 100)}% が ${order[0]}/${order[1]} = 未習レベルの問題に取り組み中。教材の予習なしで問題集を叩いている可能性`,
+      });
+    }
+  }
+
+  // 2. 高位 status → 低位 が多い (decay)
+  for (const from of order) {
+    if (!isHighStatus(from)) continue;
+    const total = rowTotals[from] ?? 0;
+    if (total < 3) continue;  // 母数小は除外
+    let decay = 0;
+    const fromIdx = order.indexOf(from);
+    for (let i = 0; i < fromIdx; i++) {
+      decay += pct(from, order[i]);
+    }
+    if (decay >= 0.2) {
+      hints.push({
+        tone: "warn",
+        text: `${from} → 下位 status へ ${Math.round(decay * 100)}% (n=${total})。stability_days を短縮して再観測する価値あり`,
+      });
+    }
+  }
+
+  // 3. 対角ループ (= 停滞)
+  for (const from of order) {
+    const total = rowTotals[from] ?? 0;
+    if (total < 5) continue;
+    const selfPct = pct(from, from);
+    if (selfPct >= 0.45) {
+      hints.push({
+        tone: "warn",
+        text: `${from} → ${from} ループが ${Math.round(selfPct * 100)}% (n=${total})。闇雲な復習を止め、教材戻り/解説精読/類題に切替`,
+      });
+    }
+  }
+
+  // 4. 上達効率の総括 (positive)
+  let upCount = 0;
+  let totalNonFirst = 0;
+  for (const from of order) {
+    const total = rowTotals[from] ?? 0;
+    totalNonFirst += total;
+    const fromIdx = order.indexOf(from);
+    for (let i = fromIdx + 1; i < order.length; i++) {
+      upCount += matrix[from]?.[order[i]] ?? 0;
+    }
+  }
+  if (totalNonFirst >= 10) {
+    const upRate = upCount / totalNonFirst;
+    if (upRate >= 0.7) {
+      hints.push({
+        tone: "good",
+        text: `上達遷移 ${Math.round(upRate * 100)}% (${upCount}/${totalNonFirst})。復習サイクルがよく回っている`,
+      });
+    }
+  }
+
+  // 5. 小母数の警告 (高位 status だけ)
+  for (const from of order) {
+    if (!isHighStatus(from)) continue;
+    const total = rowTotals[from] ?? 0;
+    if (total > 0 && total < 5) {
+      hints.push({
+        tone: "info",
+        text: `${from} の遷移サンプル ${total} 件と少ない。傾向確定には観察期間を伸ばす`,
+      });
+    }
+  }
+
+  if (hints.length === 0) return null;
+
+  return (
+    <div className="border-t pt-2 space-y-1">
+      {hints.map((h, i) => (
+        <div key={i} className="flex items-start gap-2 text-[10px]">
+          <span className={`shrink-0 px-1 py-0 rounded-sm text-[9px] font-semibold uppercase ${
+            h.tone === "good" ? "text-green-600 bg-green-500/10"
+            : h.tone === "warn" ? "text-destructive bg-destructive/10"
+            : "text-muted-foreground bg-muted"
+          }`}>
+            {h.tone === "good" ? "ok" : h.tone === "warn" ? "warn" : "info"}
+          </span>
+          <span className="text-muted-foreground">{h.text}</span>
+        </div>
+      ))}
     </div>
   );
 }
