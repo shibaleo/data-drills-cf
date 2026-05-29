@@ -12,9 +12,11 @@ type Props = {
   projectId: string;
   value: BacklogFilterInput;
   onChange: (v: BacklogFilterInput) => void;
+  /** 最終行 (Level) の右端に並べる任意要素。count などを置く想定。 */
+  trailing?: React.ReactNode;
 };
 
-export function BacklogFilterPicker({ projectId, value, onChange }: Props) {
+export function BacklogFilterPicker({ projectId, value, onChange, trailing }: Props) {
   const { data: subjects = [] } = useSubjectsList(projectId);
   const { data: levels = [] } = useLevelsList(projectId);
 
@@ -37,18 +39,20 @@ export function BacklogFilterPicker({ projectId, value, onChange }: Props) {
         items={levels.map((l) => ({ id: l.id, name: l.name, color: l.color ?? null }))}
         selectedIds={value.levelIds ?? []}
         onToggle={(id) => toggle("levelIds", id)}
+        trailing={trailing}
       />
     </div>
   );
 }
 
 function ChipRow({
-  label, items, selectedIds, onToggle,
+  label, items, selectedIds, onToggle, trailing,
 }: {
   label: string;
   items: { id: string; name: string; color: string | null }[];
   selectedIds: string[];
   onToggle: (id: string) => void;
+  trailing?: React.ReactNode;
 }) {
   const allSelected = selectedIds.length === 0;
   return (
@@ -73,6 +77,7 @@ function ChipRow({
       <span className="text-[10px] text-muted-foreground/60 ml-1">
         {allSelected ? "all" : `${selectedIds.length} selected`}
       </span>
+      {trailing && <div className="ml-auto">{trailing}</div>}
     </div>
   );
 }

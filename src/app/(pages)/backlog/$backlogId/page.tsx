@@ -498,11 +498,25 @@ export default function BacklogDetailPage() {
       )}
 
       {membersOpen && !readOnly && currentProject && (
-        <div className={`relative rounded-md border ${filterDirty ? "border-primary/40 bg-primary/5" : ""} px-3 py-2 pr-32 text-xs space-y-2`}>
+        <div className={`rounded-md border ${filterDirty ? "border-primary/40 bg-primary/5" : ""} px-3 py-2 text-xs space-y-2`}>
           <BacklogFilterPicker
             projectId={currentProject.id}
             value={localFilter}
             onChange={setLocalFilter}
+            trailing={
+              <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
+                {filterDirty && (
+                  <button type="button"
+                    className="hover:text-foreground"
+                    onClick={() => setLocalFilter(data.backlog.filter ?? {})}>
+                    Reset
+                  </button>
+                )}
+                <span className="tabular-nums">
+                  {data.members.length}{filterDirty ? ` → ${effectiveMembers.length}` : ""} problems
+                </span>
+              </div>
+            }
           />
           {filterDirty && (
             milestoneImpacts.some((i) => i.overflow || i.changed) ? (
@@ -527,18 +541,6 @@ export default function BacklogDetailPage() {
               <div className="text-[10px] text-muted-foreground pt-1.5 border-t">No milestone impact</div>
             )
           )}
-          <div className="absolute bottom-1.5 right-3 flex items-center gap-3 text-[10px] text-muted-foreground">
-            {filterDirty && (
-              <button type="button"
-                className="hover:text-foreground"
-                onClick={() => setLocalFilter(data.backlog.filter ?? {})}>
-                Reset
-              </button>
-            )}
-            <span className="tabular-nums">
-              {data.members.length}{filterDirty ? ` → ${effectiveMembers.length}` : ""} problems
-            </span>
-          </div>
         </div>
       )}
 
