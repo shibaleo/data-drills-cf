@@ -418,11 +418,32 @@ export default function BacklogDetailPage() {
         <div className="text-xs text-muted-foreground tabular-nums whitespace-nowrap">
           {doneCount} / {memberCount} ({progressPct} %)
         </div>
+        {dirty && !readOnly && (
+          <div className="ml-auto flex items-center gap-2">
+            <button type="button"
+              onClick={() => {
+                setName(data.backlog.name); setDailyMinutes(data.backlog.daily_minutes);
+                setTimeMultiplier(data.backlog.time_multiplier_pct / 100);
+                setWeekdayWeights(data.backlog.weekday_weights);
+                setLocalLayers(data.layers.map((l) => ({ id: l.id, name: l.name, color: l.color ?? null, opacity_pct: l.opacity_pct ?? null, line_style: (l.line_style as "solid" | "dashed" | "dotted" | null) ?? null, line_width: l.line_width ?? null })));
+                setLocalMilestones(data.milestones.map((m) => ({ id: m.id, layer_id: m.layer_id, target: m.target, date: m.date })));
+                setLocalFilter(data.backlog.filter ?? {});
+              }}
+              disabled={batchSave.isPending}
+              className="inline-flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground disabled:opacity-50"
+              title="Discard changes"><RotateCcw className="size-3"/>Reset</button>
+            <Button size="sm" onClick={onConfirm} disabled={batchSave.isPending}
+              className="h-7 text-xs">
+              {batchSave.isPending ? <Loader2 className="size-3 mr-1 animate-spin"/> : <Save className="size-3 mr-1"/>}
+              {batchSave.isPending ? "Saving..." : "Save"}
+            </Button>
+          </div>
+        )}
         <Popover open={moreMenuOpen} onOpenChange={setMoreMenuOpen}>
           <PopoverTrigger asChild>
             <button type="button" title="More"
               aria-pressed={moreMenuOpen || membersOpen || historyOpen}
-              className={`ml-auto inline-flex items-center justify-center size-7 rounded-md border transition-colors ${
+              className={`${dirty && !readOnly ? "" : "ml-auto"} inline-flex items-center justify-center size-7 rounded-md border transition-colors ${
                 filterDirty
                   ? "border-primary/50 text-primary"
                   : (membersOpen || historyOpen || moreMenuOpen)
@@ -625,27 +646,6 @@ export default function BacklogDetailPage() {
             <span className="text-xs text-muted-foreground tabular-nums">{visibleMembers.length} / {memberCount}</span>
           </div>
           <div className="flex items-center gap-2">
-            {dirty && !readOnly && (
-              <>
-                <button type="button"
-                  onClick={() => {
-                    setName(data.backlog.name); setDailyMinutes(data.backlog.daily_minutes);
-                    setTimeMultiplier(data.backlog.time_multiplier_pct / 100);
-                    setWeekdayWeights(data.backlog.weekday_weights);
-                    setLocalLayers(data.layers.map((l) => ({ id: l.id, name: l.name, color: l.color ?? null, opacity_pct: l.opacity_pct ?? null, line_style: (l.line_style as "solid" | "dashed" | "dotted" | null) ?? null, line_width: l.line_width ?? null })));
-                    setLocalMilestones(data.milestones.map((m) => ({ id: m.id, layer_id: m.layer_id, target: m.target, date: m.date })));
-                    setLocalFilter(data.backlog.filter ?? {});
-                  }}
-                  disabled={batchSave.isPending}
-                  className="inline-flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground disabled:opacity-50"
-                  title="Discard changes"><RotateCcw className="size-3"/>Reset</button>
-                <Button size="sm" onClick={onConfirm} disabled={batchSave.isPending}
-                  className="h-7 text-xs">
-                  {batchSave.isPending ? <Loader2 className="size-3 mr-1 animate-spin"/> : <Save className="size-3 mr-1"/>}
-                  {batchSave.isPending ? "Saving..." : "Save"}
-                </Button>
-              </>
-            )}
             <button type="button"
               title="Toggle milestone pins" aria-pressed={milestonePinsVisible}
               className={`inline-flex items-center justify-center size-[26px] rounded-md border transition-colors ${milestonePinsVisible ? "bg-accent text-accent-foreground border-accent-foreground/20" : "text-muted-foreground hover:bg-muted"}`}
