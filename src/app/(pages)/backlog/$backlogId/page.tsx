@@ -534,6 +534,11 @@ export default function BacklogDetailPage() {
                 <span className="tabular-nums">
                   {data.members.length}{filterDirty ? ` → ${effectiveMembers.length}` : ""} problems
                 </span>
+                <button type="button" onClick={() => setMembersEditorOpen(false)} disabled={filterDirty}
+                  title="Close"
+                  className="inline-flex items-center justify-center size-5 rounded-sm hover:text-foreground hover:bg-accent disabled:opacity-40 disabled:cursor-not-allowed">
+                  <X className="size-3.5"/>
+                </button>
               </div>
             }
           />
