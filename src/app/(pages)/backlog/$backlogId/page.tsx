@@ -412,7 +412,6 @@ export default function BacklogDetailPage() {
         </button>
         <Input value={name} onChange={(e) => setName(e.target.value)} disabled={readOnly}
           className="h-7 text-xs max-w-xs"/>
-        <span className="text-[10px] tabular-nums px-1.5 py-0.5 rounded border text-muted-foreground">rev {data.backlog.revision}</span>
         <div className="flex-1 max-w-xs h-1.5 bg-muted rounded-full overflow-hidden">
           <div className="h-full bg-green-500 transition-all" style={{ width: `${progressPct}%` }}/>
         </div>
