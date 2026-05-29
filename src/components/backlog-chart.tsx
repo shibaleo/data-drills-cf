@@ -315,13 +315,12 @@ export const BacklogChart = forwardRef<BacklogChartHandle, BacklogChartProps>(fu
             const svg = e.currentTarget;
             const rect = svg.getBoundingClientRect();
             const x = e.clientX - rect.left;
-            const todayX = todayIdx * STEP + CELL / 2;
-            if (Math.abs(x - todayX) > 8) return;
-            // 既存の milestone pin ドラッグ系と衝突しないように top 領域だけ反応
-            // (today 縦線は chart 全高だが、ハンドルは upper 部 = ピンより下) — シンプルに常に許可
+            const cursorX = todayIdx * STEP + CELL / 2;
+            if (Math.abs(x - cursorX) > 8) return;
             e.preventDefault();
             e.stopPropagation();
             svg.setPointerCapture(e.pointerId);
+            svg.style.cursor = "grabbing";
             const move = (ev: PointerEvent) => {
               const px = ev.clientX - rect.left;
               const idx = Math.round((px - CELL / 2) / STEP);
@@ -330,6 +329,7 @@ export const BacklogChart = forwardRef<BacklogChartHandle, BacklogChartProps>(fu
             };
             const up = (ev: PointerEvent) => {
               svg.releasePointerCapture(ev.pointerId);
+              svg.style.cursor = "";
               svg.removeEventListener("pointermove", move);
               svg.removeEventListener("pointerup", up);
             };
@@ -345,7 +345,7 @@ export const BacklogChart = forwardRef<BacklogChartHandle, BacklogChartProps>(fu
               {onTodayDrag && (
                 <line x1={todayIdx * STEP + CELL / 2} y1={TOP_AXIS_H}
                   x2={todayIdx * STEP + CELL / 2} y2={chartHeight - BOTTOM_AXIS_H}
-                  stroke="transparent" strokeWidth={14} style={{ cursor: "ew-resize" }}/>
+                  stroke="transparent" strokeWidth={14} style={{ cursor: "grab" }}/>
               )}
             </>
           )}

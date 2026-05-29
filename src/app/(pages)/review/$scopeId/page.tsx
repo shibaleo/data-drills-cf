@@ -176,10 +176,11 @@ function ReviewChart({
           const svg = e.currentTarget;
           const rect = svg.getBoundingClientRect();
           const x = e.clientX - rect.left;
-          const todayX = todayIdx * STEP + CELL / 2;
-          if (Math.abs(x - todayX) > 8) return;
+          const cursorX = todayIdx * STEP + CELL / 2;
+          if (Math.abs(x - cursorX) > 8) return;
           e.preventDefault();
           svg.setPointerCapture(e.pointerId);
+          svg.style.cursor = "grabbing";
           const move = (ev: PointerEvent) => {
             const px = ev.clientX - rect.left;
             const idx = Math.round((px - CELL / 2) / STEP);
@@ -188,6 +189,7 @@ function ReviewChart({
           };
           const up = (ev: PointerEvent) => {
             svg.releasePointerCapture(ev.pointerId);
+            svg.style.cursor = "";
             svg.removeEventListener("pointermove", move);
             svg.removeEventListener("pointerup", up);
           };
@@ -591,7 +593,7 @@ export default function SchedulePage() {
             p.standard_time,
             latest.duration_sec,
           );
-          // daysUntil は asOf 基準 (= today)
+          // daysUntil は asOf 基準 (= cursor 位置)
           const daysUntil = -computeDaysOverdue(nextReview, asOf);
           const history = eligible.map((a) => {
             const st = a.status ? statusByName.get(a.status) : null;
@@ -731,7 +733,7 @@ export default function SchedulePage() {
   }, [filterSubjects, filterLevels, filterLastStatuses]);
 
   const now = useMemo(() => new Date(), []);
-  // today は asOf に追従。
+  // today は asOf に追従 (drag/再生で動く)。
   const todayStr = useMemo(() => asOf ?? toJSTDateString(now), [now, asOf]);
 
   // Apply overrides by proportionally scaling each row's (nextReview - lastDate)

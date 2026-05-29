@@ -151,7 +151,7 @@ export default function BacklogDetailPage() {
     setLocalFilter(data.backlog.filter ?? {});
   }, [data]);
 
-  // today は asOf に追従 (再生中・ドラッグ中も today 線がそこに移動する)。
+  // today は asOf に追従 (drag/再生で動く)。
   const today = asOf ?? todayJST();
 
   /**
