@@ -9,8 +9,8 @@ import { formatRelDay } from "@/lib/relative-day";
 import { usePageTitle } from "@/lib/page-context";
 import { rpc } from "@/lib/rpc-client";
 import { toast } from "sonner";
-import { Filter, Download, Loader2, SlidersHorizontal, History, X } from "lucide-react";
-import { Input } from "@/components/ui/input";
+import { Filter, Download, Loader2, SlidersHorizontal, History } from "lucide-react";
+import { AsOfControls } from "@/components/as-of-controls";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
@@ -42,7 +42,12 @@ export default function ThroughputPage() {
   const subjectMap = useMemo(() => new Map(subjects.map((s) => [s.id, s])), [subjects]);
   const levelMap = useMemo(() => new Map(levels.map((l) => [l.id, l])), [levels]);
   const [asOf, setAsOf] = useState<string | null>(null);
-  const { data: rows = [], isLoading } = useThroughputList(currentProject?.id, asOf);
+  // 常に全データを fetch、asOf によるフィルタはクライアントで適用 (= アニメーション再生に必要)。
+  const { data: rawRows = [], isLoading } = useThroughputList(currentProject?.id);
+  const rows = useMemo(() => {
+    if (!asOf) return rawRows;
+    return rawRows.filter((r) => r.date <= asOf);
+  }, [rawRows, asOf]);
   const allProblems = useProblemsList(currentProject?.id).data ?? [];
   const { openDetail, renderDialogs } = useProblemDialogs({ allProblems, onDataChanged: () => {} });
   const tableRef = useRef<HTMLDivElement>(null);
@@ -298,18 +303,13 @@ export default function ThroughputPage() {
         </div>
 
         {asOf != null && (
-          <div className="rounded-md border px-3 py-1.5 text-xs flex items-center gap-2">
-            <History className="size-3.5 text-muted-foreground"/>
-            <span className="text-muted-foreground">As of</span>
-            <Input type="date" value={asOf}
-              onChange={(e) => setAsOf(e.target.value || todayJST())}
-              className="h-6 text-[10px] w-32"/>
-            <span className="text-muted-foreground">— ignoring answers after this date.</span>
-            <button type="button" onClick={() => setAsOf(null)}
-              title="Back to now"
-              className="ml-auto inline-flex items-center justify-center size-5 rounded-sm text-muted-foreground hover:text-foreground hover:bg-accent">
-              <X className="size-3.5"/>
-            </button>
+          <div className="rounded-md border px-3 py-1.5">
+            <AsOfControls
+              asOf={asOf}
+              setAsOf={setAsOf}
+              earliest={rawRows[0]?.date}
+              latest={todayJST()}
+            />
           </div>
         )}
 

@@ -7,7 +7,10 @@ import { Download, Filter, Loader2, RotateCcw, Save, SlidersHorizontal, ArrowLef
 import { useReviewScope, useReviewScopeRevisions, useUpdateReviewScope, useArchiveReviewScope } from "@/hooks/queries/use-review-scopes";
 import { applyMemberFilter } from "@/lib/member-filter";
 import { MemberFilterPicker } from "@/components/member-filter-picker";
+import { AsOfControls } from "@/components/as-of-controls";
 import { Input } from "@/components/ui/input";
+import { computeNextReview, computeDaysOverdue } from "@/lib/review-scoring";
+import { problemColor } from "@/lib/problem-color";
 import type { MemberFilterInput } from "@/lib/schemas/member-filter";
 import { ResizableTableShell } from "@/components/resizable-table-shell";
 import {
@@ -521,9 +524,71 @@ export default function SchedulePage() {
 
   const qc = useQueryClient();
 
+  // /problems-list — full problem + answer data (for client-side asOf recomputation)
+  const dialogProblemsQuery = useProblemsList(currentProject?.id);
+  const allProblems = dialogProblemsQuery.data ?? [];
+
   // Fast path: /api/v1/review (driven by TanStack Query)
-  const scheduleQuery = useReviewList(currentProject?.id, asOf);
+  // 注: asOf を渡さない。asOf 適用はクライアント計算で行い、アニメーション再生時の
+  // サーバ往復を回避する。
+  const scheduleQuery = useReviewList(currentProject?.id);
   const serverRows = useMemo<ScheduleRow[]>(() => {
+    // asOf 指定中: クライアントで全 problems + answers から再計算する。
+    if (asOf && allProblems.length > 0) {
+      const defaultStatus = statuses[0];
+      const statusByName = new Map(statuses.map((s) => [s.name, s]));
+      const filtered = allProblems
+        .filter((p) => {
+          // scope の member filter で絞り込み
+          if (localFilter.subjectIds?.length && (!p.subject_id || !localFilter.subjectIds.includes(p.subject_id))) return false;
+          if (localFilter.levelIds?.length && (!p.level_id || !localFilter.levelIds.includes(p.level_id))) return false;
+          return true;
+        })
+        .map((p) => {
+          const eligible = p.answers.filter((a) => a.date <= asOf);
+          if (eligible.length === 0) return null;
+          const latest = eligible[eligible.length - 1];
+          const statusName = latest.status ?? defaultStatus?.name ?? "";
+          const statusRow = statusByName.get(statusName) ?? defaultStatus;
+          const nextReview = computeNextReview(
+            latest.date,
+            statusRow?.stabilityDays ?? 0,
+            p.standard_time,
+            latest.duration_sec,
+          );
+          const daysUntil = -computeDaysOverdue(nextReview, asOf);
+          const history = eligible.map((a) => {
+            const st = a.status ? statusByName.get(a.status) : null;
+            return {
+              date: a.date,
+              color: st?.color ?? defaultStatus?.color ?? "#888",
+              status: st?.name ?? defaultStatus?.name ?? "",
+            };
+          });
+          return {
+            problemId: p.id,
+            code: p.code,
+            name: p.name,
+            subjectId: p.subject_id || null,
+            subjectName: p.subjectName ?? "",
+            subjectColor: p.subjectColor ?? null,
+            levelId: p.level_id || null,
+            levelName: p.levelName ?? "",
+            levelColor: p.levelColor ?? null,
+            color: p.color ?? problemColor(p.code, p.name ?? "", p.subjectColor ?? null),
+            lastStatus: statusRow?.name ?? "",
+            statusColor: statusRow?.color ?? "#888",
+            nextReview,
+            daysUntil,
+            reviewCount: eligible.length,
+            standardTime: p.standard_time,
+            answerHistory: history,
+          } satisfies ScheduleRow;
+        })
+        .filter((r): r is ScheduleRow => r !== null);
+      return filtered;
+    }
+    // 通常: サーバ計算結果を使う
     const rows: ScheduleRow[] = (scheduleQuery.data ?? []).map((r) => ({
       problemId: r.problemId,
       code: r.code,
@@ -543,12 +608,11 @@ export default function SchedulePage() {
       standardTime: r.standardTime,
       answerHistory: r.answerHistory,
     }));
-    // scope の member filter で絞り込み (backlog と同じパターン)
     return applyMemberFilter(
       rows.map((r) => ({ subjectId: r.subjectId, levelId: r.levelId, _r: r })),
       localFilter,
     ).map(({ _r }) => _r);
-  }, [scheduleQuery.data, localFilter]);
+  }, [scheduleQuery.data, localFilter, asOf, allProblems, statuses]);
   const loading = scheduleQuery.isLoading;
 
   // Client-side stability overrides (preview until saved via explicit button)
@@ -587,9 +651,6 @@ export default function SchedulePage() {
     return Math.ceil((peak * 2) / 10) * 10;
   }, [statuses]);
 
-  // Background: /problems-list for dialogs (shared with other pages)
-  const dialogProblemsQuery = useProblemsList(currentProject?.id);
-  const allProblems = dialogProblemsQuery.data ?? [];
 
   // UI state
   const [sorting, setSorting] = useState<SortingState>([
@@ -898,29 +959,25 @@ export default function SchedulePage() {
       {/* History panel */}
       {historyOpen && (
         <div className="rounded-md border px-3 py-2 text-xs space-y-2">
+          {asOf ? (
+            <AsOfControls
+              asOf={asOf}
+              setAsOf={setAsOf}
+              latest={toJSTDateString(now)}
+            />
+          ) : (
           <div className="flex items-center gap-2">
             <span className="font-semibold">History</span>
-            {readOnly && (
-              <>
-                <span className="text-muted-foreground">— viewing</span>
-                <span className="font-semibold tabular-nums">{asOf}</span>
-              </>
-            )}
-            <Input type="date" value={asOf ?? ""}
+            <Input type="date" value=""
               onChange={(e) => setAsOf(e.target.value || null)}
               className="h-6 text-[10px] w-32 ml-2"/>
-            {asOf && (
-              <button type="button" onClick={() => setAsOf(null)}
-                className="text-[10px] text-muted-foreground hover:text-foreground">
-                Back to now
-              </button>
-            )}
             <button type="button" onClick={() => setHistoryPanelOpen(false)} disabled={readOnly}
               title="Close"
               className="ml-auto inline-flex items-center justify-center size-5 rounded-sm text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-40 disabled:cursor-not-allowed">
               <X className="size-3.5"/>
             </button>
           </div>
+          )}
           <div className="max-h-56 overflow-y-auto pr-1 space-y-0.5 border-t pt-1.5">
             {(revisionsQuery.data ?? []).length === 0 && (
               <div className="text-[10px] text-muted-foreground italic py-2 text-center">No revisions yet</div>

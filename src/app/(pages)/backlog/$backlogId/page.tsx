@@ -33,6 +33,7 @@ import { useFilterPrefs, useSaveFilterPrefs } from "@/hooks/queries/use-filter-p
 import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Filter, SlidersHorizontal, ArrowLeft, Archive, Save, RotateCcw, Loader2, Download, History, ListFilter, MoreVertical, Check, X } from "lucide-react";
+import { AsOfControls } from "@/components/as-of-controls";
 import { useTopicsList } from "@/hooks/queries/use-topics";
 import { usePageTitle } from "@/lib/page-context";
 import { rpc } from "@/lib/rpc-client";
@@ -157,7 +158,9 @@ export default function BacklogDetailPage() {
   const effectiveMembers = useMemo<BacklogMember[]>(() => {
     if (!data) return [];
     const sameFilter = JSON.stringify(data.backlog.filter ?? {}) === JSON.stringify(localFilter);
-    if (sameFilter) return data.members;
+    // asOf 指定中はその日以前の answer のみで first_answer_date を再計算する必要があるので、
+    // サーバ値 data.members は使わず allProblems から都度クライアント計算する。
+    if (sameFilter && !asOf) return data.members;
     if (allProblems.length === 0) return data.members;
     const filtered = applyMemberFilter(
       allProblems.map((p) => ({
@@ -168,18 +171,25 @@ export default function BacklogDetailPage() {
       localFilter,
     );
     return filtered
-      .map(({ _orig: p }) => ({
-        id: p.id,
-        code: p.code,
-        name: p.name || null,
-        standard_time: p.standard_time,
-        subject_id: p.subject_id || null,
-        level_id: p.level_id || null,
-        topic_id: p.topic_id,
-        first_answer_date: p.answers[0]?.date ?? null,
-      }))
+      .map(({ _orig: p }) => {
+        // asOf 適用: その日以前の answer 中の最古を first_answer_date とする
+        // (answers は date ASC でサーバから返ってきている)。
+        const firstAns = asOf
+          ? p.answers.find((a) => a.date <= asOf)?.date ?? null
+          : p.answers[0]?.date ?? null;
+        return {
+          id: p.id,
+          code: p.code,
+          name: p.name || null,
+          standard_time: p.standard_time,
+          subject_id: p.subject_id || null,
+          level_id: p.level_id || null,
+          topic_id: p.topic_id,
+          first_answer_date: firstAns,
+        };
+      })
       .sort((a, b) => a.code === b.code ? a.id.localeCompare(b.id) : a.code.localeCompare(b.code));
-  }, [data, localFilter, allProblems]);
+  }, [data, localFilter, allProblems, asOf]);
 
   const allocated = useMemo(() => {
     if (!data) return [];
@@ -483,29 +493,25 @@ export default function BacklogDetailPage() {
 
       {historyOpen && (
         <div className="rounded-md border px-3 py-2 text-xs space-y-2">
-          <div className="flex items-center gap-2">
-            <span className="font-semibold">History</span>
-            {readOnly && (
-              <>
-                <span className="text-muted-foreground">— viewing</span>
-                <span className="font-semibold tabular-nums">{asOf}</span>
-              </>
-            )}
-            <Input type="date" value={asOf ?? ""}
-              onChange={(e) => setAsOf(e.target.value || null)}
-              className="h-6 text-[10px] w-32 ml-2"/>
-            {asOf && (
-              <button type="button" onClick={() => setAsOf(null)}
-                className="text-[10px] text-muted-foreground hover:text-foreground">
-                Back to now
+          {asOf ? (
+            <AsOfControls
+              asOf={asOf}
+              setAsOf={setAsOf}
+              latest={todayJST()}
+            />
+          ) : (
+            <div className="flex items-center gap-2">
+              <span className="font-semibold">History</span>
+              <Input type="date" value=""
+                onChange={(e) => setAsOf(e.target.value || null)}
+                className="h-6 text-[10px] w-32 ml-2"/>
+              <button type="button" onClick={() => setHistoryPanelOpen(false)} disabled={readOnly}
+                title="Close"
+                className="ml-auto inline-flex items-center justify-center size-5 rounded-sm text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-40 disabled:cursor-not-allowed">
+                <X className="size-3.5"/>
               </button>
-            )}
-            <button type="button" onClick={() => setHistoryPanelOpen(false)} disabled={readOnly}
-              title="Close"
-              className="ml-auto inline-flex items-center justify-center size-5 rounded-sm text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-40 disabled:cursor-not-allowed">
-              <X className="size-3.5"/>
-            </button>
-          </div>
+            </div>
+          )}
           <div className="max-h-56 overflow-y-auto pr-1 space-y-0.5 border-t pt-1.5">
             {(revisionsQuery.data ?? []).length === 0 && (
               <div className="text-[10px] text-muted-foreground italic py-2 text-center">No revisions yet</div>
