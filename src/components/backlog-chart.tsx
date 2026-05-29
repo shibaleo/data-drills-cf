@@ -80,6 +80,8 @@ type BacklogChartProps = {
   onHiddenLayersChange?: (next: Set<string>) => void;
   /** today 線をドラッグして新しい今日 (YYYY-MM-DD) を返す。指定すると線が掴める。 */
   onTodayDrag?: (newDate: string) => void;
+  /** 日付軸ラベル基準 (M/D・relDay)。未指定なら today。 */
+  realToday?: string;
 };
 
 
@@ -130,7 +132,9 @@ export const BacklogChart = forwardRef<BacklogChartHandle, BacklogChartProps>(fu
   hiddenLayerIds,
   onHiddenLayersChange,
   onTodayDrag,
+  realToday,
 }: BacklogChartProps, ref) {
+  const axisToday = realToday ?? today;
   const _showPins = showMilestonePins ?? true;
   const scrollRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
@@ -197,6 +201,7 @@ export const BacklogChart = forwardRef<BacklogChartHandle, BacklogChartProps>(fu
     while (d <= rangeEnd) { ds.push(d); d = addDays(d, 1); }
     return { dates: ds, todayIdx: ds.indexOf(today) };
   }, [items, milestones, today]);
+  const axisIdx = dates.indexOf(axisToday);
 
   const didInitScroll = useRef(false);
   useEffect(() => {
@@ -354,7 +359,7 @@ export const BacklogChart = forwardRef<BacklogChartHandle, BacklogChartProps>(fu
           {dates.map((date, colIdx) => {
             const dayItems = grouped.get(date) ?? [];
             const x = colIdx * STEP;
-            const isToday = date === today;
+            const isToday = date === axisToday;  // 軸ラベルハイライト基準は現実の今日
             return (
               <g key={date}>
                 {isToday && (
@@ -429,7 +434,7 @@ export const BacklogChart = forwardRef<BacklogChartHandle, BacklogChartProps>(fu
                   });
                 })()}
                 {(() => {
-                  const diff = todayIdx >= 0 ? colIdx - todayIdx : 0;
+                  const diff = axisIdx >= 0 ? colIdx - axisIdx : 0;
                   if (diff % 7 !== 0) return null;
                   const d = new Date(`${date}T12:00:00`);
                   return (
@@ -439,7 +444,7 @@ export const BacklogChart = forwardRef<BacklogChartHandle, BacklogChartProps>(fu
                   );
                 })()}
                 {(() => {
-                  const diff = todayIdx >= 0 ? colIdx - todayIdx : 0;
+                  const diff = axisIdx >= 0 ? colIdx - axisIdx : 0;
                   if (diff % 7 !== 0) return null;
                   const label = formatRelDay(diff);
                   return (

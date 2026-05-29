@@ -80,6 +80,7 @@ type ChartColorMode = "problem" | "status";
 function ReviewChart({
   items,
   today,
+  realToday,
   onSelect,
   onOpen,
   selectedId,
@@ -88,15 +89,18 @@ function ReviewChart({
   onTodayDrag,
 }: {
   items: ScheduleRow[];
+  /** cursor 線位置 (asOf ?? realToday)。 */
   today: string;
+  /** 日付軸ラベル基準。デフォルトは today */
+  realToday?: string;
   onSelect?: (problemId: string) => void;
   onOpen?: (problemId: string) => void;
   selectedId?: string | null;
   colorMode?: ChartColorMode;
   statusOrderMap: Map<string, number>;
-  /** today 線をドラッグしたときに新しい今日 (YYYY-MM-DD) を返す。指定すると線がドラッグ可能になる。 */
   onTodayDrag?: (newDate: string) => void;
 }) {
+  const axisToday = realToday ?? today;
   // Group items by nextReview date
   const grouped = useMemo(() => {
     const map = new Map<string, ScheduleRow[]>();
@@ -131,6 +135,7 @@ function ReviewChart({
   }, [items, today]);
 
   const todayIdx = dates.indexOf(today);
+  const axisIdx = dates.indexOf(axisToday);
   const maxCount = Math.max(0, ...dates.map((d) => (grouped.get(d) ?? []).length));
   const maxStack = Math.max(MIN_ROWS, maxCount + 2);
   const TOP_AXIS_H = DEFAULT_TOP_AXIS_H;
@@ -154,7 +159,8 @@ function ReviewChart({
       {dates.map((date, colIdx) => {
           const dayItems = grouped.get(date) ?? [];
           const x = colIdx * STEP;
-          const isToday = date === today;
+          // 軸ハイライト・日付ラベルは現実の今日 (axisToday) 基準
+          const isToday = date === axisToday;
 
           return (
             <g key={date}>
@@ -224,9 +230,9 @@ function ReviewChart({
                   </g>
                 );
               })}
-              {/* Top axis: absolute dates */}
+              {/* Top axis: absolute dates (現実の今日基準) */}
               {(() => {
-                const diff = todayIdx >= 0 ? colIdx - todayIdx : 0;
+                const diff = axisIdx >= 0 ? colIdx - axisIdx : 0;
                 if (diff % 7 !== 0) return null;
                 return (
                   <text
@@ -241,9 +247,9 @@ function ReviewChart({
                   </text>
                 );
               })()}
-              {/* Bottom axis: relative days */}
+              {/* Bottom axis: relative days (現実の今日基準) */}
               {(() => {
-                const diff = todayIdx >= 0 ? colIdx - todayIdx : 0;
+                const diff = axisIdx >= 0 ? colIdx - axisIdx : 0;
                 if (diff % 7 !== 0) return null;
                 const label = formatRelDay(diff);
                 return (
@@ -1153,7 +1159,7 @@ export default function SchedulePage() {
                 />
               </div>
             )}
-            <ReviewChart items={chartRows} today={todayStr} onSelect={handleSelect} onOpen={openDetail} selectedId={selectedId} colorMode="status" statusOrderMap={statusOrderMap}
+            <ReviewChart items={chartRows} today={todayStr} realToday={toJSTDateString(now)} onSelect={handleSelect} onOpen={openDetail} selectedId={selectedId} colorMode="status" statusOrderMap={statusOrderMap}
               onTodayDrag={(d) => setAsOf(d === toJSTDateString(now) ? null : d)}/>
           </div>
 

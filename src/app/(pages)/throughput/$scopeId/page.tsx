@@ -498,12 +498,16 @@ export default function ThroughputPage() {
             yAxisLabels={yTicks}
             onCursorDrag={(d) => setAsOf(d === todayJST() ? null : d)}
           >
-                {Array.from({ length: totalDays }, (_, colIdx) => {
+                {(() => {
+                  const realToday = todayJST();
+                  const realTodayIdx = diffDays(startDate, realToday);
+                  return Array.from({ length: totalDays }, (_, colIdx) => {
                   const date = addDays(startDate, colIdx);
                   const x = colIdx * STEP;
-                  const isToday = date === today;
+                  const isToday = date === realToday;  // 軸ハイライト基準は現実の今日
                   const dayItems = columns.get(date) ?? [];
-                  const diff = colIdx - todayIdx;
+                  // 日付軸ラベルは現実の今日基準 (asOf でずらさない)
+                  const diff = colIdx - realTodayIdx;
                   const showAxis = diff % 7 === 0;
                   return (
                     <g key={date}>
@@ -558,7 +562,8 @@ export default function ThroughputPage() {
                       )}
                     </g>
                   );
-                })}
+                  });
+                })()}
           </ChartShell>
         )}
 

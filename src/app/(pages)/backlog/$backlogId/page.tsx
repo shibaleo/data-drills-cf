@@ -671,6 +671,7 @@ export default function BacklogDetailPage() {
         </div>
         <BacklogChart
           ref={chartRef}
+          realToday={todayJST()}
           onTodayDrag={(d) => setAsOf(d === todayJST() ? null : d)}
           rightPanelExtra={
             <div className="space-y-3 text-xs" style={{ width: 200 }}>
