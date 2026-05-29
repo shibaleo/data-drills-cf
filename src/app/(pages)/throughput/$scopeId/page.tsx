@@ -29,7 +29,6 @@ import { useFilterPrefs, useSaveFilterPrefs } from "@/hooks/queries/use-filter-p
 
 import { CELL, STEP, MIN_ROWS } from "@/lib/chart-constants";
 import { ChartShell } from "@/components/chart-shell";
-import { StatusTransitionMatrix } from "@/components/status-transition-matrix";
 import { todayJST } from "@/lib/date-utils";
 
 const TOP_AXIS_H = 16;
@@ -97,7 +96,6 @@ export default function ThroughputPage() {
   const [filterSubjects, setFilterSubjects] = useState<Set<string>>(new Set());
   const [filterLevels, setFilterLevels] = useState<Set<string>>(new Set());
   const [filterPrevStatuses, setFilterPrevStatuses] = useState<Set<string>>(new Set());
-  const [matrixPeriod, setMatrixPeriod] = useState<"7d" | "30d" | "all">("30d");
   const [maxRowsCap, setMaxRowsCap] = useState<number | null>(10);  // null = auto
   const [exportSelected, setExportSelected] = useState<Set<string>>(new Set());
   const [exporting, setExporting] = useState(false);
@@ -390,16 +388,6 @@ export default function ThroughputPage() {
             }
           />
         </div>
-      )}
-
-      {/* Status transition matrix (= 復習効果のメタ指標) */}
-      {statuses.length > 0 && rawRows.length > 0 && (
-        <StatusTransitionMatrix
-          rows={filtered}
-          statuses={statuses.map((s) => ({ id: s.id, name: s.name, color: s.color ?? null, sortOrder: s.sortOrder }))}
-          period={matrixPeriod}
-          setPeriod={setMatrixPeriod}
-        />
       )}
 
       <div className="rounded-md border p-3 space-y-2">

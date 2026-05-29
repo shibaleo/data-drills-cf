@@ -14,6 +14,9 @@ import { AuthenticateWithRedirectCallback } from "@clerk/react";
 /* ── Lazy page imports ── */
 
 const ReviewPage = lazy(() => import("./app/(pages)/review/page"));
+const StatsPage = lazy(() => import("./app/(pages)/stats/page"));
+const StatsNewPage = lazy(() => import("./app/(pages)/stats/new/page"));
+const StatsDetailPage = lazy(() => import("./app/(pages)/stats/$scopeId/page"));
 const ThroughputPage = lazy(() => import("./app/(pages)/throughput/page"));
 const FlashcardsPage = lazy(() => import("./app/(pages)/flashcards/page"));
 const TagsPage = lazy(() => import("./app/(pages)/tags/page"));
@@ -89,6 +92,17 @@ const throughputDetailRoute = createRoute({
   ),
 });
 const throughputRoute = lazyRoute("/throughput", ThroughputPage);
+const statsRoute = lazyRoute("/stats", StatsPage);
+const statsNewRoute = lazyRoute("/stats/new", StatsNewPage);
+const statsDetailRoute = createRoute({
+  getParentRoute: () => authLayout,
+  path: "/stats/$scopeId",
+  component: () => (
+    <Suspense>
+      <StatsDetailPage />
+    </Suspense>
+  ),
+});
 const flashcardsRoute = lazyRoute("/flashcards", FlashcardsPage);
 const tagsRoute = lazyRoute("/tags", TagsPage);
 const subjectsRoute = lazyRoute("/subjects", SubjectsPage);
@@ -148,6 +162,9 @@ const routeTree = rootRoute.addChildren([
     throughputRoute,
     throughputNewRoute,
     throughputDetailRoute,
+    statsRoute,
+    statsNewRoute,
+    statsDetailRoute,
   ]),
   indexRoute,
   ssoCallbackRoute,

@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { Link, usePathname } from "@/lib/router";
 import { SITE_NAME } from "@/lib/site";
 import {
+  BarChart2,
   History,
   Info,
   Inbox,
@@ -86,7 +87,8 @@ function BacklogBadge() {
 const navItems: NavItem[] = [
   { href: "/review", label: "Review", icon: Repeat, Badge: OverdueBadge },
   { href: "/backlog", label: "Backlog", icon: Inbox, Badge: BacklogBadge },
-  { href: "/throughput", label: "Throughput", icon: History, dividerAfter: true },
+  { href: "/throughput", label: "Throughput", icon: History },
+  { href: "/stats", label: "Stats", icon: BarChart2, dividerAfter: true },
   { href: "/flashcards", label: "Flashcards", icon: Layers },
   { href: "/tags", label: "Tags", icon: Tag, dividerAfter: true },
   { href: "/masters", label: "Masters", icon: LayoutGrid },
