@@ -27,12 +27,14 @@ export async function withRequestDb<T>(fn: () => T | Promise<T>): Promise<T> {
   }
 }
 
-// Fallback for local dev — globalThis にキャッシュして vite HMR で再生成されないようにする
+// Fallback for local dev — process にキャッシュして vite SSR の再評価で再生成されないようにする
 // (再生成されると古い postgres client がリークし、Supabase 接続上限 (pool_size: 15) を消費する)
-const globalForPg = globalThis as unknown as {
-  __pgFallbackClient?: ReturnType<typeof postgres>;
-  __pgFallbackDb?: DB;
-};
+// 注意: globalThis は vite SSR sandbox によって module 評価ごとに別オブジェクトに見えるケースがあるため、
+//      Node プロセス global の `process` に key を生やして確実に共有する。
+type CachedPg = { client?: ReturnType<typeof postgres>; db?: DB };
+const PG_CACHE_KEY = Symbol.for("data-drills.pgFallback");
+const procGlobal = process as unknown as { [k: symbol]: CachedPg };
+const cachedPg: CachedPg = (procGlobal[PG_CACHE_KEY] ??= {});
 
 function getOrCreateDb(): DB {
   const store = als.getStore();
@@ -59,18 +61,18 @@ function getOrCreateDb(): DB {
     return store.db;
   }
 
-  // Local dev: globalThis-cached client (HMR-safe)
-  if (!globalForPg.__pgFallbackDb) {
-    globalForPg.__pgFallbackClient = postgres(env.DATABASE_URL, {
+  // Local dev: process-cached client (HMR / vite SSR 再評価で重複生成しない)
+  if (!cachedPg.db) {
+    cachedPg.client = postgres(env.DATABASE_URL, {
       max: 3,                  // 同時 query は最大 3 (= Supabase 15 上限から余裕を持つ)
       idle_timeout: 5,         // 5 秒 idle で接続クローズ
       max_lifetime: 60,        // 60 秒で接続強制リサイクル
       connect_timeout: 10,
       ssl: "require",
     });
-    globalForPg.__pgFallbackDb = drizzle(globalForPg.__pgFallbackClient, { schema });
+    cachedPg.db = drizzle(cachedPg.client, { schema });
   }
-  return globalForPg.__pgFallbackDb;
+  return cachedPg.db;
 }
 
 // Lazy proxy: defers DB creation until first use
