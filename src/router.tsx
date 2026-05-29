@@ -30,6 +30,8 @@ const BacklogNewPage = lazy(() => import("./app/(pages)/backlog/new/page"));
 const BacklogDetailPage = lazy(() => import("./app/(pages)/backlog/$backlogId/page"));
 const ReviewNewPage = lazy(() => import("./app/(pages)/review/new/page"));
 const ReviewDetailPage = lazy(() => import("./app/(pages)/review/$scopeId/page"));
+const ThroughputNewPage = lazy(() => import("./app/(pages)/throughput/new/page"));
+const ThroughputDetailPage = lazy(() => import("./app/(pages)/throughput/$scopeId/page"));
 
 /* ── Route tree ── */
 
@@ -73,6 +75,16 @@ const reviewDetailRoute = createRoute({
   component: () => (
     <Suspense>
       <ReviewDetailPage />
+    </Suspense>
+  ),
+});
+const throughputNewRoute = lazyRoute("/throughput/new", ThroughputNewPage);
+const throughputDetailRoute = createRoute({
+  getParentRoute: () => authLayout,
+  path: "/throughput/$scopeId",
+  component: () => (
+    <Suspense>
+      <ThroughputDetailPage />
     </Suspense>
   ),
 });
@@ -134,6 +146,8 @@ const routeTree = rootRoute.addChildren([
     backlogNewRoute,
     backlogDetailRoute,
     throughputRoute,
+    throughputNewRoute,
+    throughputDetailRoute,
   ]),
   indexRoute,
   ssoCallbackRoute,

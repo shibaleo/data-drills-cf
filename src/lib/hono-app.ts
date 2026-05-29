@@ -22,6 +22,7 @@ import throughput from "@/routes/throughput";
 import pdfExport from "@/routes/pdf-export";
 import backlog from "@/routes/backlog";
 import reviewScopes from "@/routes/review-scopes";
+import throughputScopes from "@/routes/throughput-scopes";
 import filterPrefs from "@/routes/filter-prefs";
 import googleAuth from "@/routes/google-auth";
 import drive from "@/routes/drive";
@@ -70,6 +71,7 @@ const v1 = new Hono<Env>()
   .route("/pdf-export", pdfExport)
   .route("/backlog", backlog)
   .route("/review-scopes", reviewScopes)
+  .route("/throughput-scopes", throughputScopes)
   .route("/filter-prefs", filterPrefs)
   // /me endpoint — return authenticated user info
   .get("/me", (c) => {

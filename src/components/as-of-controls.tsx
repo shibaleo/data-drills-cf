@@ -5,7 +5,7 @@
  * asOf=null は "now" を意味する。Play 押下時は earliest (= latest-30d 既定) から再生開始。
  */
 import { useEffect, useRef, useState } from "react";
-import { Pause, Play, X, History } from "lucide-react";
+import { Pause, Play, X, History, Repeat } from "lucide-react";
 import { Input } from "@/components/ui/input";
 
 type Props = {
@@ -34,18 +34,26 @@ const SPEEDS = [
 
 export function AsOfControls({ asOf, setAsOf, earliest, latest, onClose }: Props) {
   const [playing, setPlaying] = useState(false);
+  const [looping, setLooping] = useState(false);
   const [speedIdx, setSpeedIdx] = useState(1);  // 1x default
   const start = earliest ?? addDays(latest, -30);
   const effectiveAsOf = asOf ?? latest;  // null は today 同義
 
   const asOfRef = useRef(effectiveAsOf);
   asOfRef.current = effectiveAsOf;
+  const loopingRef = useRef(looping);
+  loopingRef.current = looping;
 
   useEffect(() => {
     if (!playing) return;
     const tick = () => {
       const cur = asOfRef.current;
       if (cur >= latest) {
+        if (loopingRef.current) {
+          // loop: 先頭に戻ってそのまま再生継続
+          setAsOf(start);
+          return;
+        }
         setPlaying(false);
         return;
       }
@@ -53,7 +61,7 @@ export function AsOfControls({ asOf, setAsOf, earliest, latest, onClose }: Props
     };
     const interval = setInterval(tick, SPEEDS[speedIdx].ms);
     return () => clearInterval(interval);
-  }, [playing, speedIdx, latest, setAsOf]);
+  }, [playing, speedIdx, latest, start, setAsOf]);
 
   return (
     <div className="flex items-center gap-2 flex-wrap text-xs">
@@ -63,6 +71,13 @@ export function AsOfControls({ asOf, setAsOf, earliest, latest, onClose }: Props
         placeholder="now"
         onChange={(e) => { setPlaying(false); setAsOf(e.target.value || null); }}
         className="h-6 text-[10px] w-32"/>
+      <button type="button"
+        onClick={() => setLooping((v) => !v)}
+        aria-pressed={looping}
+        title={looping ? "Loop on" : "Loop off"}
+        className={`inline-flex items-center justify-center size-5 rounded-sm transition-colors ${looping ? "text-primary" : "text-muted-foreground hover:text-foreground hover:bg-accent"}`}>
+        <Repeat className="size-3.5"/>
+      </button>
       <button type="button"
         onClick={() => {
           if (playing) { setPlaying(false); return; }

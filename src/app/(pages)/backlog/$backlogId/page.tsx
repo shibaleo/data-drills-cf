@@ -26,6 +26,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { ResizableTableShell } from "@/components/resizable-table-shell";
+import { SimpleSortHeader, applySort, type SortState } from "@/components/simple-sort-header";
 import { OpaqueTag } from "@/components/problem-card";
 import { BlockLegend } from "@/components/block-legend";
 import { FilterSection } from "@/components/filter-section";
@@ -65,6 +66,7 @@ export default function BacklogDetailPage() {
   const [localMilestones, setLocalMilestones] = useState<LocalMilestone[]>([]);
   const [localFilter, setLocalFilter] = useState<MemberFilterInput>({});
   const [membersEditorOpen, setMembersEditorOpen] = useState(false);
+  const [sortState, setSortState] = useState<SortState>(null);
   const [historyPanelOpen, setHistoryPanelOpen] = useState(false);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -149,8 +151,8 @@ export default function BacklogDetailPage() {
     setLocalFilter(data.backlog.filter ?? {});
   }, [data]);
 
-  // asOf 指定中はその日を "今日" として扱う (allocate 起点 + chart の今日線)。
-  const today = asOf ?? todayJST();
+  // today は常に現実の今日。asOf は member の first_answer_date フィルタにだけ使う。
+  const today = todayJST();
 
   /**
    * filter が編集中なら useProblemsList + applyMemberFilter で再計算、
@@ -247,14 +249,18 @@ export default function BacklogDetailPage() {
   const progressPct = memberCount > 0 ? Math.round((doneCount * 100) / memberCount) : 0;
 
   const multPct = Math.round(timeMultiplier * 100);
-  const planDirty =
+  // local 状態がまだサーバ値と同期していない (初回読み込み直後) は dirty=false で抑える
+  // → ナビゲーション時に Save ボタンが一瞬光るのを防ぐ。
+  const synced = lastSyncRevRef.current === data.backlog.revision;
+  const planDirty = synced && (
     name !== data.backlog.name ||
     dailyMinutes !== data.backlog.daily_minutes ||
     multPct !== data.backlog.time_multiplier_pct ||
-    JSON.stringify(weekdayWeights) !== JSON.stringify(data.backlog.weekday_weights);
-  const layersDirty = JSON.stringify(localLayers) !== JSON.stringify(data.layers.map((l) => ({ id: l.id, name: l.name, color: l.color ?? null, opacity_pct: l.opacity_pct ?? null, line_style: (l.line_style as "solid" | "dashed" | "dotted" | null) ?? null, line_width: l.line_width ?? null })));
-  const milestonesDirty = JSON.stringify(localMilestones) !== JSON.stringify(data.milestones.map((m) => ({ id: m.id, layer_id: m.layer_id, target: m.target, date: m.date })));
-  const filterDirty = JSON.stringify(localFilter) !== JSON.stringify(data.backlog.filter ?? {});
+    JSON.stringify(weekdayWeights) !== JSON.stringify(data.backlog.weekday_weights)
+  );
+  const layersDirty = synced && JSON.stringify(localLayers) !== JSON.stringify(data.layers.map((l) => ({ id: l.id, name: l.name, color: l.color ?? null, opacity_pct: l.opacity_pct ?? null, line_style: (l.line_style as "solid" | "dashed" | "dotted" | null) ?? null, line_width: l.line_width ?? null })));
+  const milestonesDirty = synced && JSON.stringify(localMilestones) !== JSON.stringify(data.milestones.map((m) => ({ id: m.id, layer_id: m.layer_id, target: m.target, date: m.date })));
+  const filterDirty = synced && JSON.stringify(localFilter) !== JSON.stringify(data.backlog.filter ?? {});
   // dirty な間は editor を閉じられないようにする (preview を隠したくない)
   const membersOpen = membersEditorOpen || filterDirty;
   // readOnly (= 過去 snapshot 表示中) なら history panel を自動展開
@@ -315,7 +321,19 @@ export default function BacklogDetailPage() {
     if (overflowOnly && !allocByProblemId.get(m.id)?.overflow) return false;
     return true;
   }
-  const visibleMembers = effectiveMembers.filter(passesDisplayFilter);
+  const visibleMembers = applySort(
+    effectiveMembers.filter(passesDisplayFilter),
+    sortState,
+    {
+      subject: (m) => m.subject_id ? subjectMap.get(m.subject_id)?.name ?? "" : "",
+      level: (m) => m.level_id ? levelMap.get(m.level_id)?.name ?? "" : "",
+      code: (m) => m.code,
+      name: (m) => m.name ?? "",
+      std: (m) => m.standard_time ?? 0,
+      first: (m) => m.first_answer_date ?? "",
+      plan: (m) => allocByProblemId.get(m.id)?.date ?? "",
+    },
+  );
   const visibleIds = new Set(visibleMembers.map((m) => m.id));
   const visibleAllocated = allocated.filter((a) => visibleIds.has(a.problemId));
 
@@ -783,13 +801,13 @@ export default function BacklogDetailPage() {
                   />
                 </div>
               </TableHead>
-              <TableHead className="sticky top-0 z-10 bg-muted/80 backdrop-blur" style={{ width: 70 }}>Subject</TableHead>
-              <TableHead className="sticky top-0 z-10 bg-muted/80 backdrop-blur" style={{ width: 70 }}>Level</TableHead>
-              <TableHead className="sticky top-0 z-10 bg-muted/80 backdrop-blur" style={{ width: 64 }}>Code</TableHead>
-              <TableHead className="sticky top-0 z-10 bg-muted/80 backdrop-blur" style={{ width: 240 }}>Name</TableHead>
-              <TableHead className="sticky top-0 z-10 bg-muted/80 backdrop-blur" style={{ width: 64 }}>Std</TableHead>
-              <TableHead className="sticky top-0 z-10 bg-muted/80 backdrop-blur" style={{ width: 100 }}>First</TableHead>
-              <TableHead className="sticky top-0 z-10 bg-muted/80 backdrop-blur" style={{ width: 100 }}>Plan</TableHead>
+              <TableHead className="sticky top-0 z-10 bg-muted/80 backdrop-blur" style={{ width: 70 }}><SimpleSortHeader label="Subject" sortKey="subject" state={sortState} setState={setSortState}/></TableHead>
+              <TableHead className="sticky top-0 z-10 bg-muted/80 backdrop-blur" style={{ width: 70 }}><SimpleSortHeader label="Level" sortKey="level" state={sortState} setState={setSortState}/></TableHead>
+              <TableHead className="sticky top-0 z-10 bg-muted/80 backdrop-blur" style={{ width: 64 }}><SimpleSortHeader label="Code" sortKey="code" state={sortState} setState={setSortState}/></TableHead>
+              <TableHead className="sticky top-0 z-10 bg-muted/80 backdrop-blur" style={{ width: 240 }}><SimpleSortHeader label="Name" sortKey="name" state={sortState} setState={setSortState}/></TableHead>
+              <TableHead className="sticky top-0 z-10 bg-muted/80 backdrop-blur" style={{ width: 64 }}><SimpleSortHeader label="Std" sortKey="std" state={sortState} setState={setSortState}/></TableHead>
+              <TableHead className="sticky top-0 z-10 bg-muted/80 backdrop-blur" style={{ width: 100 }}><SimpleSortHeader label="First" sortKey="first" state={sortState} setState={setSortState}/></TableHead>
+              <TableHead className="sticky top-0 z-10 bg-muted/80 backdrop-blur" style={{ width: 100 }}><SimpleSortHeader label="Plan" sortKey="plan" state={sortState} setState={setSortState}/></TableHead>
               <TableHead className="sticky top-0 z-10 bg-muted/80 backdrop-blur" style={{ width: 70 }}>Δ</TableHead>
             </TableRow>
           </TableHeader>

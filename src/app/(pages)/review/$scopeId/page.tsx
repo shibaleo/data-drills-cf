@@ -557,7 +557,8 @@ export default function SchedulePage() {
             p.standard_time,
             latest.duration_sec,
           );
-          const daysUntil = -computeDaysOverdue(nextReview, asOf);
+          // daysUntil は現実の今日基準 (再生中も "今日まであと何日" は変わらない)
+          const daysUntil = -computeDaysOverdue(nextReview, toJSTDateString(new Date()));
           const history = eligible.map((a) => {
             const st = a.status ? statusByName.get(a.status) : null;
             return {
@@ -696,8 +697,8 @@ export default function SchedulePage() {
   }, [filterSubjects, filterLevels, filterLastStatuses]);
 
   const now = useMemo(() => new Date(), []);
-  // asOf 指定中はその日を "今日" として扱う (chart の今日線、daysUntil の起点)。
-  const todayStr = useMemo(() => asOf ?? toJSTDateString(now), [now, asOf]);
+  // today は常に現実の今日。asOf は answer の cutoff にだけ使う (chart の今日線・daysUntil は維持)。
+  const todayStr = useMemo(() => toJSTDateString(now), [now]);
 
   // Apply overrides by proportionally scaling each row's (nextReview - lastDate)
   // by sliderStab / baseStab. The C_T adjustment server applies divides out.
@@ -856,8 +857,11 @@ export default function SchedulePage() {
 
   // Dirty state for scope edit
   const scope = scopeQuery.data?.scope;
-  const filterDirty = scope ? JSON.stringify(localFilter) !== JSON.stringify(scope.filter ?? {}) : false;
-  const nameDirty = scope ? localName !== scope.name : false;
+  // local 状態がまだサーバ値と同期していない (初回読み込み直後) は dirty=false で抑える
+  // → ナビゲーション時に Save ボタンが一瞬光るのを防ぐ。
+  const synced = !!scope && lastSyncRevRef.current === scope.revision;
+  const filterDirty = synced && JSON.stringify(localFilter) !== JSON.stringify(scope!.filter ?? {});
+  const nameDirty = synced && localName !== scope!.name;
   const dirty = filterDirty || nameDirty;
   const membersOpen = membersEditorOpen || filterDirty;
   const historyOpen = historyPanelOpen || readOnly;
