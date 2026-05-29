@@ -5,7 +5,6 @@ import { z } from "zod";
 export const backlogFilterSchema = z.object({
   subjectIds: z.array(z.string().uuid()).optional(),
   levelIds: z.array(z.string().uuid()).optional(),
-  topicIds: z.array(z.string().uuid()).optional(),
 });
 export type BacklogFilterInput = z.infer<typeof backlogFilterSchema>;
 

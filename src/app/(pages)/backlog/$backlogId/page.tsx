@@ -158,7 +158,6 @@ export default function BacklogDetailPage() {
       allProblems.map((p) => ({
         subjectId: p.subject_id || null,
         levelId: p.level_id || null,
-        topicId: p.topic_id,
         _orig: p,
       })),
       localFilter,
@@ -419,7 +418,8 @@ export default function BacklogDetailPage() {
           <PopoverTrigger asChild>
             <button type="button" title="Members filter"
               disabled={readOnly}
-              className={`ml-auto inline-flex items-center justify-center size-7 rounded-md border transition-colors disabled:opacity-50 ${filterDirty ? "border-amber-500/50 text-amber-500" : "text-muted-foreground hover:bg-muted"}`}>
+              aria-pressed={filterDirty}
+              className={`ml-auto inline-flex items-center justify-center size-7 rounded-md border transition-colors disabled:opacity-50 ${filterDirty ? "bg-accent text-accent-foreground border-accent-foreground/40" : "text-muted-foreground hover:bg-muted"}`}>
               <Target className="size-3.5"/>
             </button>
           </PopoverTrigger>
@@ -511,9 +511,9 @@ export default function BacklogDetailPage() {
       )}
 
       {filterDirty && !readOnly && (
-        <div className="rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-2 text-xs space-y-1.5">
+        <div className="rounded-md border bg-accent/30 px-3 py-2 text-xs space-y-1.5">
           <div className="flex items-center justify-between">
-            <span className="font-medium">Members filter 変更プレビュー</span>
+            <span className="font-medium">Members filter preview</span>
             <span className="text-muted-foreground tabular-nums">
               {data.members.length} → {effectiveMembers.length} problems
             </span>
@@ -522,20 +522,20 @@ export default function BacklogDetailPage() {
             <ul className="space-y-1">
               {milestoneImpacts.filter((i) => i.overflow || i.changed).map(({ ms, oldAnchor, newAnchor, overflow }) => (
                 <li key={ms.id} className="flex items-center gap-2">
-                  <span className={`px-1.5 rounded text-[9px] uppercase font-semibold border ${overflow ? "border-red-500/50 text-red-500" : "border-amber-500/50 text-amber-500"}`}>
-                    {overflow ? "超過" : "問題が変わる"}
+                  <span className={`px-1.5 rounded text-[9px] uppercase font-semibold border ${overflow ? "border-destructive/50 text-destructive" : "border-border text-muted-foreground"}`}>
+                    {overflow ? "Overflow" : "Anchor"}
                   </span>
                   <span className="tabular-nums">target={ms.target}</span>
                   <span className="text-muted-foreground">
                     {overflow
-                      ? `新メンバー数 ${effectiveMembers.length} を超過。Confirm 前に target を調整してください`
+                      ? `Exceeds new member count ${effectiveMembers.length} — adjust target before Save`
                       : `${oldAnchor?.code ?? "—"} → ${newAnchor?.code ?? "—"}`}
                   </span>
                 </li>
               ))}
             </ul>
           ) : (
-            <div className="text-muted-foreground">既存マイルストーンへの影響なし</div>
+            <div className="text-muted-foreground">No milestone impact</div>
           )}
         </div>
       )}
