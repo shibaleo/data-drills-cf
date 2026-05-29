@@ -25,7 +25,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { rpc } from "@/lib/rpc-client";
 import { useProject } from "@/hooks/use-project";
 import { useFilterPrefs, useSaveFilterPrefs } from "@/hooks/queries/use-filter-prefs";
-import { usePageTitle, useHeaderSlot } from "@/lib/page-context";
+import { usePageTitle, useHeaderSlot, usePageBack } from "@/lib/page-context";
 import { OpaqueTag } from "@/components/problem-card";
 import { useProblemDialogs } from "@/hooks/use-problem-dialogs";
 import { useReviewList, reviewKeys } from "@/hooks/queries/use-review";
@@ -464,6 +464,7 @@ export default function SchedulePage() {
   const renderHeaderSlot = useHeaderSlot();
   const { scopeId } = useParams({ strict: false }) as { scopeId: string };
   const navigate = useNavigate();
+  usePageBack(useCallback(() => navigate({ to: "/review" as string }), [navigate]));
   const { currentProject, subjects, levels, statuses } = useProject();
 
   const [asOf, setAsOf] = useState<string | null>(null);
@@ -509,7 +510,8 @@ export default function SchedulePage() {
   // サーバ往復を回避する。
   const scheduleQuery = useReviewList(currentProject?.id);
   const serverRows = useMemo<ScheduleRow[]>(() => {
-    // asOf 指定中: クライアントで全 problems + answers から再計算する。
+    // Review は forecast view: cursor (asOf) を過去にすると「その時点で
+    // 知っていた answer だけで再計算した schedule」を見せる。
     if (asOf && allProblems.length > 0) {
       const defaultStatus = statuses[0];
       const statusByName = new Map(statuses.map((s) => [s.name, s]));
@@ -872,10 +874,6 @@ export default function SchedulePage() {
     <div className="p-3 md:p-4 flex flex-col gap-2">
       {renderHeaderSlot(
       <>
-        <button onClick={() => navigate({ to: "/review" as string })}
-          className="text-muted-foreground hover:text-foreground transition-colors" title="Back to list">
-          <ArrowLeft className="size-4"/>
-        </button>
         <Input value={localName} onChange={(e) => setLocalName(e.target.value)} disabled={readOnly}
           className="h-7 text-xs max-w-xs"/>
         {dirty && !readOnly && (

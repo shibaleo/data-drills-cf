@@ -6,7 +6,7 @@ import { useProblemsList } from "@/hooks/queries/use-problems";
 import { useProblemDialogs } from "@/hooks/use-problem-dialogs";
 import { blockColor, COLOR_FIRST_ATTEMPT } from "@/lib/block-color";
 import { formatRelDay } from "@/lib/relative-day";
-import { usePageTitle, useHeaderSlot } from "@/lib/page-context";
+import { usePageTitle, useHeaderSlot, usePageBack } from "@/lib/page-context";
 import { rpc } from "@/lib/rpc-client";
 import { toast } from "sonner";
 import { useParams, useNavigate } from "@tanstack/react-router";
@@ -49,6 +49,7 @@ export default function ThroughputPage() {
   const renderHeaderSlot = useHeaderSlot();
   const { scopeId } = useParams({ strict: false }) as { scopeId: string };
   const navigate = useNavigate();
+  usePageBack(useCallback(() => navigate({ to: "/throughput" as string }), [navigate]));
   const { currentProject, subjects, levels, statuses } = useProject();
   const subjectMap = useMemo(() => new Map(subjects.map((s) => [s.id, s])), [subjects]);
   const levelMap = useMemo(() => new Map(levels.map((l) => [l.id, l])), [levels]);
@@ -277,10 +278,6 @@ export default function ThroughputPage() {
     <div className="p-3 md:p-4 flex flex-col gap-2">
       {renderHeaderSlot(
       <>
-        <button onClick={() => navigate({ to: "/throughput" as string })}
-          className="text-muted-foreground hover:text-foreground transition-colors" title="Back to list">
-          <ArrowLeft className="size-4"/>
-        </button>
         <Input value={localName} onChange={(e) => setLocalName(e.target.value)}
           className="h-7 text-xs max-w-xs"/>
         {dirty && (

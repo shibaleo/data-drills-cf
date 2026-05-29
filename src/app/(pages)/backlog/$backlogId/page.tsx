@@ -36,7 +36,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Filter, SlidersHorizontal, ArrowLeft, Archive, Save, RotateCcw, Loader2, Download, History, ListFilter, MoreVertical, Check, X } from "lucide-react";
 import { AsOfControls } from "@/components/as-of-controls";
 import { useTopicsList } from "@/hooks/queries/use-topics";
-import { usePageTitle, useHeaderSlot } from "@/lib/page-context";
+import { usePageTitle, useHeaderSlot, usePageBack } from "@/lib/page-context";
 import { rpc } from "@/lib/rpc-client";
 import { toast } from "sonner";
 
@@ -162,10 +162,10 @@ export default function BacklogDetailPage() {
   const effectiveMembers = useMemo<BacklogMember[]>(() => {
     if (!data) return [];
     const sameFilter = JSON.stringify(data.backlog.filter ?? {}) === JSON.stringify(localFilter);
-    // asOf 指定中はその日以前の answer のみで first_answer_date を再計算する必要があるので、
-    // サーバ値 data.members は使わず allProblems から都度クライアント計算する。
-    if (sameFilter && !asOf) return data.members;
+    if (sameFilter) return data.members;
     if (allProblems.length === 0) return data.members;
+    // 注: first_answer_date は **実績** なので asOf に依らない (cursor を動かしても
+    // 過去ブロックは動かない)。asOf は allocate(today=asOf) で未来配分のみ動かす。
     const filtered = applyMemberFilter(
       allProblems.map((p) => ({
         subjectId: p.subject_id || null,
@@ -175,25 +175,18 @@ export default function BacklogDetailPage() {
       localFilter,
     );
     return filtered
-      .map(({ _orig: p }) => {
-        // asOf 適用: その日以前の answer 中の最古を first_answer_date とする
-        // (answers は date ASC でサーバから返ってきている)。
-        const firstAns = asOf
-          ? p.answers.find((a) => a.date <= asOf)?.date ?? null
-          : p.answers[0]?.date ?? null;
-        return {
-          id: p.id,
-          code: p.code,
-          name: p.name || null,
-          standard_time: p.standard_time,
-          subject_id: p.subject_id || null,
-          level_id: p.level_id || null,
-          topic_id: p.topic_id,
-          first_answer_date: firstAns,
-        };
-      })
+      .map(({ _orig: p }) => ({
+        id: p.id,
+        code: p.code,
+        name: p.name || null,
+        standard_time: p.standard_time,
+        subject_id: p.subject_id || null,
+        level_id: p.level_id || null,
+        topic_id: p.topic_id,
+        first_answer_date: p.answers[0]?.date ?? null,
+      }))
       .sort((a, b) => a.code === b.code ? a.id.localeCompare(b.id) : a.code.localeCompare(b.code));
-  }, [data, localFilter, allProblems, asOf]);
+  }, [data, localFilter, allProblems]);
 
   const allocated = useMemo(() => {
     if (!data) return [];
@@ -206,6 +199,7 @@ export default function BacklogDetailPage() {
 
   usePageTitle("Backlog");
   const renderHeaderSlot = useHeaderSlot();
+  usePageBack(useCallback(() => navigate({ to: "/backlog" as string }), [navigate]));
 
   const handleExport = useCallback(async () => {
     if (exportSelected.size === 0) return;
@@ -440,10 +434,6 @@ export default function BacklogDetailPage() {
     <div className="p-3 md:p-4 flex flex-col gap-2">
       {renderHeaderSlot(
       <>
-        <button onClick={() => navigate({ to: "/backlog" as string })}
-          className="text-muted-foreground hover:text-foreground transition-colors" title="Back to list">
-          <ArrowLeft className="size-4"/>
-        </button>
         <Input value={name} onChange={(e) => setName(e.target.value)} disabled={readOnly}
           className="h-7 text-xs max-w-xs"/>
         {dirty && !readOnly && (

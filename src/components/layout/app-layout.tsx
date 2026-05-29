@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Menu } from "lucide-react";
+import { Menu, ArrowLeft } from "lucide-react";
 import { SITE_NAME } from "@/lib/site";
 import { Sidebar, SidebarNav } from "./sidebar";
 import { Sheet, SheetTrigger, SheetContent } from "@/components/ui/sheet";
@@ -12,7 +12,7 @@ import { PageProvider, usePageContext } from "@/lib/page-context";
 function LayoutInner({ children }: { children: React.ReactNode }) {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
-  const { title, subtitle, headerSlot, scrollingDown, setHeaderSlotNode } = usePageContext();
+  const { title, subtitle, headerSlot, scrollingDown, setHeaderSlotNode, onBack } = usePageContext();
   useEffect(() => setMounted(true), []);
 
   return (
@@ -65,6 +65,13 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
           className={`hidden md:flex items-center gap-2 px-4 transition-all duration-200 overflow-hidden ${
             scrollingDown ? "max-h-0 opacity-0" : "max-h-16 opacity-100"
           }`}>
+          {onBack && (
+            <button type="button" onClick={onBack}
+              title="Back"
+              className="shrink-0 text-muted-foreground hover:text-foreground transition-colors">
+              <ArrowLeft className="size-4"/>
+            </button>
+          )}
           {title && (
             <h1 className="text-lg font-semibold truncate shrink-0">{title}</h1>
           )}

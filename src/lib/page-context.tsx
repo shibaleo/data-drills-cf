@@ -12,6 +12,9 @@ interface PageContextValue {
   setHeaderSlot: (node: React.ReactNode) => void;
   headerSlotNode: HTMLElement | null;
   setHeaderSlotNode: (el: HTMLElement | null) => void;
+  /** title の左に表示する戻るボタンの onClick (= 設定すると戻るアイコンを描画) */
+  onBack: (() => void) | null;
+  setOnBack: (fn: (() => void) | null) => void;
   scrollingDown: boolean;
   setScrollingDown: (v: boolean) => void;
 }
@@ -25,6 +28,8 @@ const PageContext = createContext<PageContextValue>({
   setHeaderSlot: () => {},
   headerSlotNode: null,
   setHeaderSlotNode: () => {},
+  onBack: null,
+  setOnBack: () => {},
   scrollingDown: false,
   setScrollingDown: () => {},
 });
@@ -34,6 +39,7 @@ export function PageProvider({ children }: { children: React.ReactNode }) {
   const [subtitle, setSubtitle] = useState("");
   const [headerSlot, setHeaderSlot] = useState<React.ReactNode>(null);
   const [headerSlotNode, setHeaderSlotNode] = useState<HTMLElement | null>(null);
+  const [onBack, setOnBack] = useState<(() => void) | null>(null);
   const [scrollingDown, setScrollingDown] = useState(false);
   const lastScrollY = useRef(0);
   const cooldown = useRef(false);
@@ -64,7 +70,7 @@ export function PageProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <PageContext.Provider value={{ title, setTitle, subtitle, setSubtitle, headerSlot, setHeaderSlot, headerSlotNode, setHeaderSlotNode, scrollingDown, setScrollingDown }}>
+    <PageContext.Provider value={{ title, setTitle, subtitle, setSubtitle, headerSlot, setHeaderSlot, headerSlotNode, setHeaderSlotNode, onBack, setOnBack, scrollingDown, setScrollingDown }}>
       {children}
     </PageContext.Provider>
   );
@@ -103,4 +109,18 @@ export function useHeaderSlot() {
   const { headerSlotNode } = usePageContext();
   return (children: React.ReactNode) =>
     headerSlotNode ? createPortal(children, headerSlotNode) : null;
+}
+
+/**
+ * title の左に戻るボタンを描画する。
+ * detail page の mount 中だけ表示 (unmount で自動解除)。
+ * mobile header では描画しない (= タイトルのみ表示の方針)。
+ */
+export function usePageBack(onBack: () => void) {
+  const { setOnBack } = usePageContext();
+  useEffect(() => {
+    // 関数を直接 set すると React が "lazy initializer" と誤認するので wrap
+    setOnBack(() => onBack);
+    return () => setOnBack(null);
+  }, [onBack, setOnBack]);
 }
