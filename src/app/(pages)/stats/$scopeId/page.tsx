@@ -13,6 +13,8 @@ import { TimeBottleneckList } from "@/components/time-bottleneck-list";
 import { CycleTimeStats } from "@/components/cycle-time-stats";
 import { StaleDoneList } from "@/components/stale-done-list";
 import { ActivityHeatmap } from "@/components/activity-heatmap";
+import { HourPattern } from "@/components/hour-pattern";
+import { SameDayRepeatStats } from "@/components/same-day-repeat-stats";
 import { MemberFilterPicker } from "@/components/member-filter-picker";
 import { applyMemberFilter } from "@/lib/member-filter";
 import { Input } from "@/components/ui/input";
@@ -184,6 +186,11 @@ export default function StatsDetailPage() {
         setPeriod={setMatrixPeriod}
       />
 
+      <HourPattern
+        rows={rows}
+        statuses={statuses.map((s) => ({ id: s.id, name: s.name, color: s.color ?? null, sortOrder: s.sortOrder }))}
+      />
+
       <CycleTimeStats
         problems={filteredProblems}
         statuses={statuses.map((s) => ({ id: s.id, name: s.name, color: s.color ?? null, sortOrder: s.sortOrder }))}
@@ -193,6 +200,11 @@ export default function StatsDetailPage() {
         problems={filteredProblems}
         statuses={statuses.map((s) => ({ id: s.id, name: s.name, color: s.color ?? null, sortOrder: s.sortOrder }))}
         onOpenProblem={openDetail}
+      />
+
+      <SameDayRepeatStats
+        problems={filteredProblems}
+        statuses={statuses.map((s) => ({ id: s.id, name: s.name, color: s.color ?? null, sortOrder: s.sortOrder }))}
       />
 
       <StaleDoneList
