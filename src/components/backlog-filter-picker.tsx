@@ -1,8 +1,7 @@
-/** Backlog filter spec (subject/level/topic/tag) selector. Multi-select per category. */
+/** Backlog filter spec (subject/level/topic) selector. Multi-select per category. */
 import { useSubjectsList } from "@/hooks/queries/use-subjects";
 import { useLevelsList } from "@/hooks/queries/use-levels";
 import { useTopicsList } from "@/hooks/queries/use-topics";
-import { useTags } from "@/hooks/queries/use-tags";
 import { Checkbox } from "@/components/ui/checkbox";
 import type { BacklogFilterInput } from "@/lib/schemas/backlog";
 
@@ -16,7 +15,6 @@ export function BacklogFilterPicker({ projectId, value, onChange }: Props) {
   const { data: subjects = [] } = useSubjectsList(projectId);
   const { data: levels = [] } = useLevelsList(projectId);
   const { data: topics = [] } = useTopicsList(projectId);
-  const { data: tags = [] } = useTags();
 
   function toggle(field: keyof BacklogFilterInput, id: string) {
     const cur = value[field] ?? [];
@@ -25,11 +23,10 @@ export function BacklogFilterPicker({ projectId, value, onChange }: Props) {
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
       <Group title="Subject" items={subjects} selected={value.subjectIds ?? []} onToggle={(id) => toggle("subjectIds", id)} />
       <Group title="Level" items={levels} selected={value.levelIds ?? []} onToggle={(id) => toggle("levelIds", id)} />
       <Group title="Topic" items={topics} selected={value.topicIds ?? []} onToggle={(id) => toggle("topicIds", id)} />
-      <Group title="Tag" items={tags} selected={value.tagIds ?? []} onToggle={(id) => toggle("tagIds", id)} />
     </div>
   );
 }

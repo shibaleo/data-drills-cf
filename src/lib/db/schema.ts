@@ -335,7 +335,6 @@ export type BacklogFilter = {
   subjectIds?: string[];
   levelIds?: string[];
   topicIds?: string[];
-  tagIds?: string[];
 };
 
 export const backlog = pgTable("backlog", {

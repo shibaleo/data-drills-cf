@@ -7,7 +7,9 @@ import {
   useBacklogRevisions,
   type BacklogMember,
 } from "@/hooks/queries/use-backlog";
-import type { BacklogBatchInput } from "@/lib/schemas/backlog";
+import type { BacklogBatchInput, BacklogFilterInput, BacklogUpdateInput } from "@/lib/schemas/backlog";
+import { applyBacklogFilter } from "@/lib/backlog-filter";
+import { BacklogFilterPicker } from "@/components/backlog-filter-picker";
 import { useProject } from "@/hooks/use-project";
 import { useProblemsList } from "@/hooks/queries/use-problems";
 import { useProblemDialogs } from "@/hooks/use-problem-dialogs";
@@ -29,7 +31,7 @@ import { FilterSection } from "@/components/filter-section";
 import { useFilterPrefs, useSaveFilterPrefs } from "@/hooks/queries/use-filter-prefs";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Filter, SlidersHorizontal, ArrowLeft, Archive, Save, RotateCcw, Loader2, Download, History } from "lucide-react";
+import { Filter, SlidersHorizontal, ArrowLeft, Archive, Save, RotateCcw, Loader2, Download, History, Target } from "lucide-react";
 import { useTopicsList } from "@/hooks/queries/use-topics";
 import { usePageTitle } from "@/lib/page-context";
 import { rpc } from "@/lib/rpc-client";
@@ -57,6 +59,7 @@ export default function BacklogDetailPage() {
   type LocalMilestone = { id: string; layer_id: string; target: number; date: string };
   const [localLayers, setLocalLayers] = useState<LocalLayer[]>([]);
   const [localMilestones, setLocalMilestones] = useState<LocalMilestone[]>([]);
+  const [localFilter, setLocalFilter] = useState<BacklogFilterInput>({});
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showMilestonePins, setShowMilestonePins] = useState(false);
   const [hideFirst, setHideFirst] = useState(false);
@@ -136,18 +139,52 @@ export default function BacklogDetailPage() {
     setName(data.backlog.name);
     setLocalLayers(data.layers.map((l) => ({ id: l.id, name: l.name, color: l.color ?? null, opacity_pct: l.opacity_pct ?? null, line_style: (l.line_style as "solid" | "dashed" | "dotted" | null) ?? null, line_width: l.line_width ?? null })));
     setLocalMilestones(data.milestones.map((m) => ({ id: m.id, layer_id: m.layer_id, target: m.target, date: m.date })));
+    setLocalFilter(data.backlog.filter ?? {});
   }, [data]);
 
   const today = todayJST();
 
+  /**
+   * filter が編集中なら useProblemsList + applyBacklogFilter で再計算、
+   * 未編集ならサーバ計算済 data.members を流用 (= 余計な再計算なし)。
+   * セマンティクスはサーバ側 fetchMembers と同一 (両者とも applyBacklogFilter 経由)。
+   */
+  const effectiveMembers = useMemo<BacklogMember[]>(() => {
+    if (!data) return [];
+    const sameFilter = JSON.stringify(data.backlog.filter ?? {}) === JSON.stringify(localFilter);
+    if (sameFilter) return data.members;
+    if (allProblems.length === 0) return data.members;
+    const filtered = applyBacklogFilter(
+      allProblems.map((p) => ({
+        subjectId: p.subject_id || null,
+        levelId: p.level_id || null,
+        topicId: p.topic_id,
+        _orig: p,
+      })),
+      localFilter,
+    );
+    return filtered
+      .map(({ _orig: p }) => ({
+        id: p.id,
+        code: p.code,
+        name: p.name || null,
+        standard_time: p.standard_time,
+        subject_id: p.subject_id || null,
+        level_id: p.level_id || null,
+        topic_id: p.topic_id,
+        first_answer_date: p.answers[0]?.date ?? null,
+      }))
+      .sort((a, b) => a.code === b.code ? a.id.localeCompare(b.id) : a.code.localeCompare(b.code));
+  }, [data, localFilter, allProblems]);
+
   const allocated = useMemo(() => {
     if (!data) return [];
-    const members: MemberInput[] = data.members.map((m) => ({
+    const members: MemberInput[] = effectiveMembers.map((m) => ({
       id: m.id, code: m.code, name: m.name,
       standardTimeSec: m.standard_time, firstAnswerDate: m.first_answer_date,
     }));
     return allocate(members, localMilestones, dailyMinutes, today, Math.round(timeMultiplier * 100), weekdayWeights);
-  }, [data, localMilestones, dailyMinutes, timeMultiplier, weekdayWeights, today]);
+  }, [data, effectiveMembers, localMilestones, dailyMinutes, timeMultiplier, weekdayWeights, today]);
 
   usePageTitle("Backlog");
 
@@ -189,8 +226,8 @@ export default function BacklogDetailPage() {
   if (isLoading) return <div className="p-6">Loading...</div>;
   if (!data) return <div className="p-6">Not found</div>;
 
-  const memberCount = data.members.length;
-  const doneCount = data.members.filter((m) => m.first_answer_date).length;
+  const memberCount = effectiveMembers.length;
+  const doneCount = effectiveMembers.filter((m) => m.first_answer_date).length;
   const progressPct = memberCount > 0 ? Math.round((doneCount * 100) / memberCount) : 0;
 
   const multPct = Math.round(timeMultiplier * 100);
@@ -201,10 +238,11 @@ export default function BacklogDetailPage() {
     JSON.stringify(weekdayWeights) !== JSON.stringify(data.backlog.weekday_weights);
   const layersDirty = JSON.stringify(localLayers) !== JSON.stringify(data.layers.map((l) => ({ id: l.id, name: l.name, color: l.color ?? null, opacity_pct: l.opacity_pct ?? null, line_style: (l.line_style as "solid" | "dashed" | "dotted" | null) ?? null, line_width: l.line_width ?? null })));
   const milestonesDirty = JSON.stringify(localMilestones) !== JSON.stringify(data.milestones.map((m) => ({ id: m.id, layer_id: m.layer_id, target: m.target, date: m.date })));
-  const dirty = planDirty || layersDirty || milestonesDirty;
+  const filterDirty = JSON.stringify(localFilter) !== JSON.stringify(data.backlog.filter ?? {});
+  const dirty = planDirty || layersDirty || milestonesDirty || filterDirty;
 
   // 全 milestone を target 昇順に sort、各 milestone の「target 番目の problem」を anchor とする
-  const orderedMembers = [...data.members].sort((a, b) =>
+  const orderedMembers = [...effectiveMembers].sort((a, b) =>
     a.code === b.code ? a.id.localeCompare(b.id) : a.code.localeCompare(b.code)
   );
   const milestoneAnchors = localMilestones.map((ms) => ({
@@ -212,6 +250,18 @@ export default function BacklogDetailPage() {
     layer_id: ms.layer_id,
     problemId: orderedMembers[ms.target - 1]?.id ?? null,
   }));
+
+  // filter 変更時の milestone 影響: 旧/新 anchor を比較して overflow / changed を判定
+  const oldOrderedMembers = [...data.members].sort((a, b) =>
+    a.code === b.code ? a.id.localeCompare(b.id) : a.code.localeCompare(b.code),
+  );
+  const milestoneImpacts = localMilestones.map((ms) => {
+    const oldAnchor = oldOrderedMembers[ms.target - 1] ?? null;
+    const newAnchor = orderedMembers[ms.target - 1] ?? null;
+    const overflow = ms.target > orderedMembers.length;
+    const changed = !overflow && filterDirty && oldAnchor?.id !== newAnchor?.id;
+    return { ms, oldAnchor, newAnchor, overflow, changed };
+  });
 
   const allocByProblemId = new Map<string, { date: string; side: "past" | "future"; overflow: boolean }>();
   for (const a of allocated) {
@@ -241,7 +291,7 @@ export default function BacklogDetailPage() {
     if (overflowOnly && !allocByProblemId.get(m.id)?.overflow) return false;
     return true;
   }
-  const visibleMembers = data.members.filter(passesDisplayFilter);
+  const visibleMembers = effectiveMembers.filter(passesDisplayFilter);
   const visibleIds = new Set(visibleMembers.map((m) => m.id));
   const visibleAllocated = allocated.filter((a) => visibleIds.has(a.problemId));
 
@@ -262,10 +312,18 @@ export default function BacklogDetailPage() {
       layer_deletes: [], layer_creates: [], layer_updates: [],
       milestone_deletes: [], milestone_creates: [], milestone_updates: [],
     };
-    if (planDirty) {
-      payload.backlog_update = {
-        name, daily_minutes: dailyMinutes, time_multiplier_pct: multPct, weekday_weights: weekdayWeights,
-      };
+    if (planDirty || filterDirty) {
+      const upd: BacklogUpdateInput = {};
+      if (planDirty) {
+        upd.name = name;
+        upd.daily_minutes = dailyMinutes;
+        upd.time_multiplier_pct = multPct;
+        upd.weekday_weights = weekdayWeights;
+      }
+      if (filterDirty) {
+        upd.filter = localFilter;
+      }
+      payload.backlog_update = upd;
     }
     // layer
     const localLayerIds = new Set(localLayers.map((l) => l.id));
@@ -359,9 +417,40 @@ export default function BacklogDetailPage() {
         )}
         <Popover>
           <PopoverTrigger asChild>
+            <button type="button" title="Members filter"
+              disabled={readOnly}
+              className={`ml-auto inline-flex items-center justify-center size-7 rounded-md border transition-colors disabled:opacity-50 ${filterDirty ? "border-amber-500/50 text-amber-500" : "text-muted-foreground hover:bg-muted"}`}>
+              <Target className="size-3.5"/>
+            </button>
+          </PopoverTrigger>
+          <PopoverContent className="w-[36rem] p-3 space-y-3" align="end">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-medium">Members filter</span>
+              <span className="text-muted-foreground tabular-nums">
+                {data.members.length}{filterDirty ? ` → ${effectiveMembers.length}` : ""} problems
+              </span>
+            </div>
+            {currentProject && (
+              <BacklogFilterPicker
+                projectId={currentProject.id}
+                value={localFilter}
+                onChange={setLocalFilter}
+              />
+            )}
+            {filterDirty && (
+              <button type="button"
+                className="text-[10px] text-muted-foreground hover:text-foreground w-full text-center pt-1"
+                onClick={() => setLocalFilter(data.backlog.filter ?? {})}>
+                Reset filter
+              </button>
+            )}
+          </PopoverContent>
+        </Popover>
+        <Popover>
+          <PopoverTrigger asChild>
             <button type="button" title="Time travel"
               aria-pressed={readOnly}
-              className={`ml-auto inline-flex items-center justify-center size-7 rounded-md border transition-colors ${readOnly ? "bg-accent text-accent-foreground border-accent-foreground/40" : "text-muted-foreground hover:bg-muted"}`}>
+              className={`inline-flex items-center justify-center size-7 rounded-md border transition-colors ${readOnly ? "bg-accent text-accent-foreground border-accent-foreground/40" : "text-muted-foreground hover:bg-muted"}`}>
               <History className="size-3.5"/>
             </button>
           </PopoverTrigger>
@@ -418,6 +507,36 @@ export default function BacklogDetailPage() {
             className="text-accent-foreground hover:text-foreground underline underline-offset-2">
             Back to now
           </button>
+        </div>
+      )}
+
+      {filterDirty && !readOnly && (
+        <div className="rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-2 text-xs space-y-1.5">
+          <div className="flex items-center justify-between">
+            <span className="font-medium">Members filter 変更プレビュー</span>
+            <span className="text-muted-foreground tabular-nums">
+              {data.members.length} → {effectiveMembers.length} problems
+            </span>
+          </div>
+          {milestoneImpacts.some((i) => i.overflow || i.changed) ? (
+            <ul className="space-y-1">
+              {milestoneImpacts.filter((i) => i.overflow || i.changed).map(({ ms, oldAnchor, newAnchor, overflow }) => (
+                <li key={ms.id} className="flex items-center gap-2">
+                  <span className={`px-1.5 rounded text-[9px] uppercase font-semibold border ${overflow ? "border-red-500/50 text-red-500" : "border-amber-500/50 text-amber-500"}`}>
+                    {overflow ? "超過" : "問題が変わる"}
+                  </span>
+                  <span className="tabular-nums">target={ms.target}</span>
+                  <span className="text-muted-foreground">
+                    {overflow
+                      ? `新メンバー数 ${effectiveMembers.length} を超過。Confirm 前に target を調整してください`
+                      : `${oldAnchor?.code ?? "—"} → ${newAnchor?.code ?? "—"}`}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <div className="text-muted-foreground">既存マイルストーンへの影響なし</div>
+          )}
         </div>
       )}
 
@@ -494,6 +613,7 @@ export default function BacklogDetailPage() {
                     setWeekdayWeights(data.backlog.weekday_weights);
                     setLocalLayers(data.layers.map((l) => ({ id: l.id, name: l.name, color: l.color ?? null, opacity_pct: l.opacity_pct ?? null, line_style: (l.line_style as "solid" | "dashed" | "dotted" | null) ?? null, line_width: l.line_width ?? null })));
                     setLocalMilestones(data.milestones.map((m) => ({ id: m.id, layer_id: m.layer_id, target: m.target, date: m.date })));
+                    setLocalFilter(data.backlog.filter ?? {});
                   }}
                   disabled={batchSave.isPending}
                   className="inline-flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground disabled:opacity-50"

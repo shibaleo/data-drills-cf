@@ -97,6 +97,11 @@ CF Pages (React + Vite SPA, TanStack Router)
 - TypeScript の generic narrowing 制限を回避するための cast
 - `isErrorBody` ガードで runtime 保証済み、意図的な妥協として維持
 
+#### 9. `tag` / `reviewTag` → `review_kind` リネーム
+- 現状の `tag` テーブルは事実上 review 評価種別 (Miss/Rough/Fair/Fluent 等) の用途にしか使われていない (`reviewTag` 経由)
+- `problem` に直接 tag を付ける UI は存在せず、`problemTag` 経由のフローは廃止済 (backlog filter からも tagIds 削除済)
+- 将来 `tag` → `review_kind` にリネーム or 専用 enum 化を検討
+
 ## Conventions
 
 - Language: TypeScript

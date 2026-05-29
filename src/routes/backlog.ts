@@ -2,8 +2,9 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { zValidator } from "@hono/zod-validator";
 import { db } from "@/lib/db";
-import { backlog, goalLayer, goalMilestone, problem, problemTag, type BacklogFilter } from "@/lib/db/schema";
+import { backlog, goalLayer, goalMilestone, problem, type BacklogFilter } from "@/lib/db/schema";
 import { and, asc, desc, eq, gt, inArray, isNull, lte, or, sql } from "drizzle-orm";
+import { applyBacklogFilter } from "@/lib/backlog-filter";
 import { randomUUID } from "node:crypto";
 import {
   backlogCreateInputSchema,
@@ -36,12 +37,9 @@ function invalidateTodayCount() {
 /* ── helpers ──────────────────────────────────────────────────── */
 
 async function fetchMembers(projectId: string, filter: BacklogFilter) {
-  const conds = [eq(problem.projectId, projectId)];
-  if (filter.subjectIds?.length) conds.push(inArray(problem.subjectId, filter.subjectIds));
-  if (filter.levelIds?.length) conds.push(inArray(problem.levelId, filter.levelIds));
-  if (filter.topicIds?.length) conds.push(inArray(problem.topicId, filter.topicIds));
-
-  let rows = await db.select({
+  // project の全問題を取得 → pure function でフィルタ。
+  // セマンティクスは src/lib/backlog-filter.ts の applyBacklogFilter に統一。
+  const rows = await db.select({
     id: problem.id,
     code: problem.code,
     name: problem.name,
@@ -49,16 +47,9 @@ async function fetchMembers(projectId: string, filter: BacklogFilter) {
     subjectId: problem.subjectId,
     levelId: problem.levelId,
     topicId: problem.topicId,
-  }).from(problem).where(and(...conds)).orderBy(asc(problem.code), asc(problem.id));
-
-  if (filter.tagIds?.length) {
-    const tagged = await db.select({ problemId: problemTag.problemId })
-      .from(problemTag)
-      .where(inArray(problemTag.tagId, filter.tagIds));
-    const taggedSet = new Set(tagged.map((t) => t.problemId));
-    rows = rows.filter((r) => taggedSet.has(r.id));
-  }
-  return rows;
+  }).from(problem).where(eq(problem.projectId, projectId))
+    .orderBy(asc(problem.code), asc(problem.id));
+  return applyBacklogFilter(rows, filter);
 }
 
 async function fetchFirstAnswers(problemIds: string[]) {
