@@ -3,7 +3,7 @@ import { zValidator } from "@hono/zod-validator";
 import { db } from "@/lib/db";
 import { problem, answer, answerStatus, subject, level } from "@/lib/db/schema";
 import { eq, inArray } from "drizzle-orm";
-import { computeNextReview, computeDaysOverdue } from "@/lib/fsrs";
+import { computeNextReview, computeDaysOverdue } from "@/lib/review-scoring";
 import { toJSTDateString } from "@/lib/date-utils";
 import { problemColor } from "@/lib/problem-color";
 import { projectIdQuerySchema } from "@/lib/schemas/common";

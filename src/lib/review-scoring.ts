@@ -1,9 +1,9 @@
 /**
- * FSRS-based scoring utilities.
+ * Review scoring + next-review-date computation.
  *
- * Retention (power-law):
- *   R(t, S) = (1 + F * t / S) ^ C
- *   F = 19/81, C = -0.5
+ * Next review date:
+ *   nextReview = lastAnswerDate + stabilityDays × C_T^k
+ *   (stabilityDays はユーザーが answer_status.stability で設定した日数を直接使う)
  *
  * Score:
  *   Score = P_i × C_T
@@ -15,9 +15,6 @@
  */
 
 /* ── Constants ── */
-
-const F = 19 / 81
-const C = -0.5
 
 /** Stevens' Power Law exponent for evaluation points */
 const GAMMA = 0.5
@@ -38,15 +35,6 @@ const TIME_COEFF_K = 2
 export function computeEvalPoint(stabilityDays: number, maxStability: number): number {
   if (maxStability <= 0 || stabilityDays <= 0) return 0
   return Math.pow(stabilityDays / maxStability, GAMMA) * 100
-}
-
-/**
- * FSRS power-law retention.
- * Returns 0–1.
- */
-export function fsrsRetention(elapsedDays: number, stability: number): number {
-  if (stability <= 0 || elapsedDays < 0) return 0
-  return Math.pow(1 + F * elapsedDays / stability, C)
 }
 
 /**
