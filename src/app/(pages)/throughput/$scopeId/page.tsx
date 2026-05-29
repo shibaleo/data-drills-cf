@@ -27,7 +27,8 @@ import { BlockLegend, type LegendEntry } from "@/components/block-legend";
 import { FilterSection } from "@/components/filter-section";
 import { useFilterPrefs, useSaveFilterPrefs } from "@/hooks/queries/use-filter-prefs";
 
-import { CELL, STEP, Y_AXIS_W, MIN_ROWS } from "@/lib/chart-constants";
+import { CELL, STEP, MIN_ROWS } from "@/lib/chart-constants";
+import { ChartShell } from "@/components/chart-shell";
 import { todayJST } from "@/lib/date-utils";
 
 const TOP_AXIS_H = 16;
@@ -98,7 +99,6 @@ export default function ThroughputPage() {
   const [exporting, setExporting] = useState(false);
   const [exportPhase, setExportPhase] = useState<"waking" | "generating" | "downloading" | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const scrollRef = useRef<HTMLDivElement>(null);
   const [sortState, setSortState] = useState<SortState>({ key: "date", dir: "desc" });
 
   // Filter prefs persistence
@@ -183,7 +183,6 @@ export default function ThroughputPage() {
     };
   }, [filtered, today, maxRowsCap]);
 
-  const chartWidth = totalDays * STEP;
   const chartHeight = maxStack * STEP + TOP_AXIS_H + BOTTOM_AXIS_H;
 
   const yTicks = useMemo(() => {
@@ -191,14 +190,6 @@ export default function ThroughputPage() {
     for (let i = 5; i <= maxStack; i += 5) ticks.push(i);
     return ticks;
   }, [maxStack]);
-
-  // 初回マウント: 右端寄りにスクロール (= today を 1/3 位置に)
-  useEffect(() => {
-    if (!scrollRef.current) return;
-    const todayX = todayIdx * STEP;
-    const containerW = scrollRef.current.clientWidth;
-    scrollRef.current.scrollLeft = Math.max(0, todayX - containerW / 3);
-  }, [todayIdx]);
 
   const todayStr = today;
   const handleExport = useCallback(async () => {
@@ -500,57 +491,13 @@ export default function ThroughputPage() {
         ) : filtered.length === 0 ? (
           <div className="text-sm text-muted-foreground py-8 text-center">No data</div>
         ) : (
-          <div className="flex">
-            <svg width={Y_AXIS_W} height={chartHeight} className="block shrink-0">
-              {yTicks.map((n) => (
-                <text key={n} x={Y_AXIS_W - 4}
-                  y={chartHeight - BOTTOM_AXIS_H - n * STEP + CELL / 2}
-                  textAnchor="end" dominantBaseline="central"
-                  className="fill-muted-foreground" fontSize={9}>
-                  {n}
-                </text>
-              ))}
-            </svg>
-            <div ref={scrollRef} className="overflow-x-auto pb-2 flex-1 min-w-0">
-              <svg width={chartWidth} height={chartHeight} className="block"
-                onPointerDown={(e) => {
-                  const svg = e.currentTarget;
-                  const rect = svg.getBoundingClientRect();
-                  const x = e.clientX - rect.left;
-                  const cursorX = todayIdx * STEP + CELL / 2;
-                  if (Math.abs(x - cursorX) > 8) return;
-                  e.preventDefault();
-                  svg.setPointerCapture(e.pointerId);
-                  svg.style.cursor = "grabbing";
-                  const move = (ev: PointerEvent) => {
-                    const px = ev.clientX - rect.left;
-                    const idx = Math.round((px - CELL / 2) / STEP);
-                    const clamped = Math.max(0, Math.min(totalDays - 1, idx));
-                    const newDate = addDays(startDate, clamped);
-                    setAsOf(newDate === todayJST() ? null : newDate);
-                  };
-                  const up = (ev: PointerEvent) => {
-                    svg.releasePointerCapture(ev.pointerId);
-                    svg.style.cursor = "";
-                    svg.removeEventListener("pointermove", move);
-                    svg.removeEventListener("pointerup", up);
-                  };
-                  svg.addEventListener("pointermove", move);
-                  svg.addEventListener("pointerup", up);
-                }}>
-                {/* Cursor line (defaults to today) */}
-                {todayIdx >= 0 && todayIdx < totalDays && (
-                  <>
-                    <line x1={todayIdx * STEP + CELL / 2} y1={TOP_AXIS_H}
-                      x2={todayIdx * STEP + CELL / 2} y2={chartHeight - BOTTOM_AXIS_H}
-                      stroke="hsl(var(--foreground))" strokeWidth={1.5}
-                      strokeDasharray="4 3" opacity={0.7}/>
-                    {/* drag handle: wider invisible line + grab cursor */}
-                    <line x1={todayIdx * STEP + CELL / 2} y1={TOP_AXIS_H}
-                      x2={todayIdx * STEP + CELL / 2} y2={chartHeight - BOTTOM_AXIS_H}
-                      stroke="transparent" strokeWidth={14} style={{ cursor: "grab" }}/>
-                  </>
-                )}
+          <ChartShell
+            dates={Array.from({ length: totalDays }, (_, i) => addDays(startDate, i))}
+            cursorDate={today}
+            maxStack={maxStack}
+            yAxisLabels={yTicks}
+            onCursorDrag={(d) => setAsOf(d === todayJST() ? null : d)}
+          >
                 {Array.from({ length: totalDays }, (_, colIdx) => {
                   const date = addDays(startDate, colIdx);
                   const x = colIdx * STEP;
@@ -612,9 +559,7 @@ export default function ThroughputPage() {
                     </g>
                   );
                 })}
-              </svg>
-            </div>
-          </div>
+          </ChartShell>
         )}
 
       </div>

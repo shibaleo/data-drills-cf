@@ -34,7 +34,8 @@ import { useUpdateStatus } from "@/hooks/queries/use-statuses";
 import { SortHeader } from "@/components/sort-header";
 import { BlockLegend, type LegendEntry } from "@/components/block-legend";
 import { FilterSection } from "@/components/filter-section";
-import { CELL, STEP, Y_AXIS_W, MIN_ROWS } from "@/lib/chart-constants";
+import { CELL, STEP, MIN_ROWS } from "@/lib/chart-constants";
+import { ChartShell, DEFAULT_TOP_AXIS_H, DEFAULT_BOTTOM_AXIS_H } from "@/components/chart-shell";
 import { toJSTDateString } from "@/lib/date-utils";
 import { StatusTag } from "@/components/color-tags";
 import { Button } from "@/components/ui/button";
@@ -96,8 +97,6 @@ function ReviewChart({
   /** today 線をドラッグしたときに新しい今日 (YYYY-MM-DD) を返す。指定すると線がドラッグ可能になる。 */
   onTodayDrag?: (newDate: string) => void;
 }) {
-  const scrollRef = useRef<HTMLDivElement>(null);
-
   // Group items by nextReview date
   const grouped = useMemo(() => {
     const map = new Map<string, ScheduleRow[]>();
@@ -113,7 +112,7 @@ function ReviewChart({
   }, [items]);
 
   // Date range: cover all data with padding
-  const { dates, todayIdx } = useMemo(() => {
+  const dates = useMemo(() => {
     const reviewDates = items.map((i) => i.nextReview);
     const allDates = [today, ...reviewDates];
     const minDate = allDates.reduce((a, b) => (a < b ? a : b));
@@ -128,22 +127,14 @@ function ReviewChart({
       ds.push(d);
       d = addDays(d, 1);
     }
-    return { dates: ds, todayIdx: ds.indexOf(today) };
+    return ds;
   }, [items, today]);
 
-  // Scroll to position today at ~1/3 from left
-  useEffect(() => {
-    if (!scrollRef.current || todayIdx < 0) return;
-    const todayX = todayIdx * STEP;
-    const containerW = scrollRef.current.clientWidth;
-    scrollRef.current.scrollLeft = todayX - containerW / 3;
-  }, [todayIdx]);
-
+  const todayIdx = dates.indexOf(today);
   const maxCount = Math.max(0, ...dates.map((d) => (grouped.get(d) ?? []).length));
   const maxStack = Math.max(MIN_ROWS, maxCount + 2);
-  const TOP_AXIS_H = 16;
-  const BOTTOM_AXIS_H = 20;
-  const chartWidth = dates.length * STEP;
+  const TOP_AXIS_H = DEFAULT_TOP_AXIS_H;
+  const BOTTOM_AXIS_H = DEFAULT_BOTTOM_AXIS_H;
   const chartHeight = maxStack * STEP + TOP_AXIS_H + BOTTOM_AXIS_H;
 
   const yTicks = useMemo(() => {
@@ -153,71 +144,14 @@ function ReviewChart({
   }, [maxStack]);
 
   return (
-    <div className="flex">
-      <svg width={Y_AXIS_W} height={chartHeight} className="block shrink-0">
-        {yTicks.map((n) => (
-          <text
-            key={n}
-            x={Y_AXIS_W - 4}
-            y={chartHeight - BOTTOM_AXIS_H - n * STEP + CELL / 2}
-            textAnchor="end"
-            dominantBaseline="central"
-            className="fill-muted-foreground"
-            fontSize={9}
-          >
-            {n}
-          </text>
-        ))}
-      </svg>
-      <div ref={scrollRef} className="overflow-x-auto pb-2 flex-1 min-w-0">
-      <svg width={chartWidth} height={chartHeight} className="block"
-        onPointerDown={(e) => {
-          if (!onTodayDrag) return;
-          const svg = e.currentTarget;
-          const rect = svg.getBoundingClientRect();
-          const x = e.clientX - rect.left;
-          const cursorX = todayIdx * STEP + CELL / 2;
-          if (Math.abs(x - cursorX) > 8) return;
-          e.preventDefault();
-          svg.setPointerCapture(e.pointerId);
-          svg.style.cursor = "grabbing";
-          const move = (ev: PointerEvent) => {
-            const px = ev.clientX - rect.left;
-            const idx = Math.round((px - CELL / 2) / STEP);
-            const clamped = Math.max(0, Math.min(dates.length - 1, idx));
-            onTodayDrag(dates[clamped]);
-          };
-          const up = (ev: PointerEvent) => {
-            svg.releasePointerCapture(ev.pointerId);
-            svg.style.cursor = "";
-            svg.removeEventListener("pointermove", move);
-            svg.removeEventListener("pointerup", up);
-          };
-          svg.addEventListener("pointermove", move);
-          svg.addEventListener("pointerup", up);
-        }}>
-        {/* Today vertical line */}
-        {todayIdx >= 0 && (
-          <>
-          <line
-            x1={todayIdx * STEP + CELL / 2}
-            y1={TOP_AXIS_H}
-            x2={todayIdx * STEP + CELL / 2}
-            y2={chartHeight - BOTTOM_AXIS_H}
-            stroke="hsl(var(--foreground))"
-            strokeWidth={1.5}
-            strokeDasharray="4 3"
-            opacity={0.7}
-          />
-          {onTodayDrag && (
-            <line
-              x1={todayIdx * STEP + CELL / 2} y1={TOP_AXIS_H}
-              x2={todayIdx * STEP + CELL / 2} y2={chartHeight - BOTTOM_AXIS_H}
-              stroke="transparent" strokeWidth={14} style={{ cursor: "ew-resize" }}/>
-          )}
-          </>
-        )}
-        {dates.map((date, colIdx) => {
+    <ChartShell
+      dates={dates}
+      cursorDate={today}
+      maxStack={maxStack}
+      yAxisLabels={yTicks}
+      onCursorDrag={onTodayDrag}
+    >
+      {dates.map((date, colIdx) => {
           const dayItems = grouped.get(date) ?? [];
           const x = colIdx * STEP;
           const isToday = date === today;
@@ -328,9 +262,7 @@ function ReviewChart({
             </g>
           );
         })}
-      </svg>
-      </div>
-    </div>
+    </ChartShell>
   );
 }
 
