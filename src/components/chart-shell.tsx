@@ -95,12 +95,16 @@ export const ChartShell = forwardRef<ChartShellHandle, ChartShellProps>(function
   // 初回 mount (= ページ遷移直後) のみ、cursor を 1/3 位置にスクロール。
   // データロード完了を待つため dates.length が初期 padding (= 22) を超えてから init。
   // 以降は scrollLeft を触らない (= ユーザーの scroll 操作を尊重)。
+  //
+  // 注意: 複数 effect 起動で rAF が並走すると stale な cursorIdx で繰り返し scroll
+  //       するため、cleanup で前回の rAF をキャンセルする。
   useEffect(() => {
     if (!scrollRef.current || cursorIdx < 0 || didInitScrollRef.current) return;
     if (isDraggingRef.current) return;
-    // 22 = today ±7 +14 の最小 dates 長。これより大きければ実データが反映されている
     if (dates.length <= 22) return;
+    let cancelled = false;
     const tryScroll = () => {
+      if (cancelled || didInitScrollRef.current) return;
       const el = scrollRef.current;
       if (!el) return;
       if (el.clientWidth === 0) {
@@ -112,6 +116,7 @@ export const ChartShell = forwardRef<ChartShellHandle, ChartShellProps>(function
       el.scrollLeft = Math.max(0, cursorX - el.clientWidth / 3);
     };
     requestAnimationFrame(tryScroll);
+    return () => { cancelled = true; };
   }, [cursorIdx, dates.length]);
 
   return (
