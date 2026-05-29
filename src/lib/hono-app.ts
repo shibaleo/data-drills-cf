@@ -40,6 +40,11 @@ const v1 = new Hono<Env>()
     console.error(err);
     const causeMsg = err.cause instanceof Error ? err.cause.message : "";
     const msg = causeMsg ? `${err.message} - ${causeMsg}` : (err.message || "Internal Server Error");
+    // CF Workers + Hyperdrive で間欠的に発生する postgres.js の接続断は entry 層で
+    // 1 回 retry するため、ここで catch せずに throw する。
+    if (causeMsg.includes("Network connection lost") || (err.message ?? "").includes("Network connection lost")) {
+      throw err;
+    }
     return c.json({ error: msg }, 500);
   })
   // Public routes (before auth middleware)
