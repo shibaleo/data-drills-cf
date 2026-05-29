@@ -517,7 +517,12 @@ export default function BacklogDetailPage() {
       )}
 
       {membersOpen && !readOnly && currentProject && (
-        <div className={`rounded-md border ${filterDirty ? "border-primary/40 bg-primary/5" : ""} px-3 py-2 text-xs space-y-2`}>
+        <div className={`relative rounded-md border ${filterDirty ? "border-primary/40 bg-primary/5" : ""} px-3 py-2 text-xs space-y-2`}>
+          <button type="button" onClick={() => setMembersEditorOpen(false)} disabled={filterDirty}
+            title="Close"
+            className="absolute top-1.5 right-1.5 inline-flex items-center justify-center size-5 rounded-sm text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-40 disabled:cursor-not-allowed">
+            <X className="size-3.5"/>
+          </button>
           <BacklogFilterPicker
             projectId={currentProject.id}
             value={localFilter}
@@ -534,11 +539,6 @@ export default function BacklogDetailPage() {
                 <span className="tabular-nums">
                   {data.members.length}{filterDirty ? ` → ${effectiveMembers.length}` : ""} problems
                 </span>
-                <button type="button" onClick={() => setMembersEditorOpen(false)} disabled={filterDirty}
-                  title="Close"
-                  className="inline-flex items-center justify-center size-5 rounded-sm hover:text-foreground hover:bg-accent disabled:opacity-40 disabled:cursor-not-allowed">
-                  <X className="size-3.5"/>
-                </button>
               </div>
             }
           />
