@@ -47,7 +47,9 @@ export default function BacklogDetailPage() {
   const navigate = useNavigate();
   const [asOf, setAsOf] = useState<string | null>(null);  // null = 現在モード
   const readOnly = asOf != null;
-  const { data, isLoading } = useBacklog(backlogId, asOf);
+  // 注: asOf はチャート側の client-side フィルタ専用にし、エンティティ取得は常に最新を引く。
+  // (asOf がエンティティ作成より古い場合に server 側の bitemporal WHERE で 404 になる問題回避)
+  const { data, isLoading } = useBacklog(backlogId);
   const revisionsQuery = useBacklogRevisions(backlogId);
   const archive = useArchiveBacklog(currentProject?.id);
   const batchSave = useBacklogBatchSave(backlogId, currentProject?.id);

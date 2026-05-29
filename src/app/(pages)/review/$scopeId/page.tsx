@@ -493,7 +493,8 @@ export default function SchedulePage() {
 
   const [asOf, setAsOf] = useState<string | null>(null);
   const readOnly = asOf != null;
-  const scopeQuery = useReviewScope(scopeId, asOf);
+  // 注: asOf はチャート側の client-side フィルタ専用にし、エンティティ取得は常に最新を引く。
+  const scopeQuery = useReviewScope(scopeId);
   const revisionsQuery = useReviewScopeRevisions(scopeId);
   const updateScope = useUpdateReviewScope(scopeId, currentProject?.id);
   const archiveScope = useArchiveReviewScope(currentProject?.id);
