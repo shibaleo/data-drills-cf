@@ -12,6 +12,7 @@ import { StatusTransitionMatrix } from "@/components/status-transition-matrix";
 import { TimeBottleneckList } from "@/components/time-bottleneck-list";
 import { CycleTimeStats } from "@/components/cycle-time-stats";
 import { StaleDoneList } from "@/components/stale-done-list";
+import { ActivityHeatmap } from "@/components/activity-heatmap";
 import { MemberFilterPicker } from "@/components/member-filter-picker";
 import { applyMemberFilter } from "@/lib/member-filter";
 import { Input } from "@/components/ui/input";
@@ -173,6 +174,8 @@ export default function StatsDetailPage() {
           />
         </div>
       )}
+
+      <ActivityHeatmap rows={rows} days={90}/>
 
       <StatusTransitionMatrix
         rows={rows}
