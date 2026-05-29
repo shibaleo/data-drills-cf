@@ -499,21 +499,6 @@ export default function BacklogDetailPage() {
 
       {membersOpen && !readOnly && currentProject && (
         <div className={`rounded-md border ${filterDirty ? "border-primary/40 bg-primary/5" : ""} px-3 py-3 text-xs space-y-3`}>
-          <div className="flex items-center justify-between">
-            <span className="font-medium">Members filter</span>
-            <div className="flex items-center gap-3">
-              <span className="text-muted-foreground tabular-nums">
-                {data.members.length}{filterDirty ? ` → ${effectiveMembers.length}` : ""} problems
-              </span>
-              {filterDirty && (
-                <button type="button"
-                  className="text-[10px] text-muted-foreground hover:text-foreground"
-                  onClick={() => setLocalFilter(data.backlog.filter ?? {})}>
-                  Reset filter
-                </button>
-              )}
-            </div>
-          </div>
           <BacklogFilterPicker
             projectId={currentProject.id}
             value={localFilter}
@@ -521,7 +506,7 @@ export default function BacklogDetailPage() {
           />
           {filterDirty && (
             milestoneImpacts.some((i) => i.overflow || i.changed) ? (
-              <ul className="space-y-1 pt-1 border-t">
+              <ul className="space-y-1 pt-2 border-t">
                 {milestoneImpacts.filter((i) => i.overflow || i.changed).map(({ ms, oldAnchor, newAnchor, overflow }) => (
                   <li key={ms.id} className="flex items-center gap-2">
                     <OpaqueTag
@@ -537,10 +522,23 @@ export default function BacklogDetailPage() {
                   </li>
                 ))}
               </ul>
-            ) : (
-              <div className="text-muted-foreground pt-1 border-t">No milestone impact</div>
+            )
+            : (
+              <div className="text-[10px] text-muted-foreground pt-2 border-t">No milestone impact</div>
             )
           )}
+          <div className="flex items-center justify-end gap-3 text-[10px] text-muted-foreground">
+            {filterDirty && (
+              <button type="button"
+                className="hover:text-foreground"
+                onClick={() => setLocalFilter(data.backlog.filter ?? {})}>
+                Reset filter
+              </button>
+            )}
+            <span className="tabular-nums">
+              {data.members.length}{filterDirty ? ` → ${effectiveMembers.length}` : ""} problems
+            </span>
+          </div>
         </div>
       )}
 
