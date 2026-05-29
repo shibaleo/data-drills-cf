@@ -41,7 +41,9 @@ function getOrCreateDb(): DB {
     // CF Workers: per-request client
     if (!store.db) {
       store.client = postgres(env.DATABASE_URL, {
-        max: 1,
+        // Hyperdrive 越しに複数 connection を並列で握れるので max を上げる。
+        // ハンドラ内 Promise.all([...]) が実際に並列に走り、合計レイテンシが縮む。
+        max: 5,
         idle_timeout: 20,
         connect_timeout: 10,
         ssl: false, // Hyperdrive handles SSL

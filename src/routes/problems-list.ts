@@ -11,13 +11,13 @@ import {
   answerStatus,
   subject,
   level,
+  project,
 } from "@/lib/db/schema";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { problemColor } from "@/lib/problem-color";
 import { secondsToHmsNullable } from "@/lib/duration";
 import { toJSTDateString } from "@/lib/date-utils";
 import { projectIdQuerySchema } from "@/lib/schemas/common";
-import { ownsProject } from "@/lib/ownership";
 import type { ReviewType } from "@/lib/types";
 import type { AuthResult } from "@/lib/auth";
 
@@ -33,36 +33,37 @@ const app = new Hono<Env>()
   .get("/", zValidator("query", projectIdQuerySchema), async (c) => {
     const userId = c.get("authResult").userId;
     const { project_id: projectId } = c.req.valid("query");
-    if (!(await ownsProject(projectId, userId))) return c.json({ data: [], next_cursor: null });
+    if (!userId) return c.json({ data: [], next_cursor: null });
 
-    const problems = await db.select().from(problem)
-      .where(eq(problem.projectId, projectId))
+    // ownership 確認は別 RTT せず problems 取得時に JOIN で 1 発で済ませる
+    const problemRows = await db.select({ p: problem })
+      .from(problem)
+      .innerJoin(project, eq(problem.projectId, project.id))
+      .where(and(eq(problem.projectId, projectId), eq(project.userId, userId)))
       .orderBy(problem.createdAt);
+    const problems = problemRows.map((r) => r.p);
+    if (problems.length === 0) return c.json({ data: [], next_cursor: null });
 
     const problemIds = problems.map((p) => p.id);
 
-    const [answers, statuses, subjects, levels, tags, files] =
-      problemIds.length === 0
-        ? [[], [], [], [], [], []] as const
-        : await Promise.all([
-            db.select().from(answer)
-              .where(inArray(answer.problemId, problemIds))
-              .orderBy(answer.date, answer.createdAt),
-            db.select().from(answerStatus).where(eq(answerStatus.userId, userId)),
-            db.select().from(subject).where(eq(subject.projectId, projectId)),
-            db.select().from(level).where(eq(level.projectId, projectId)),
-            db.select().from(tag).where(eq(tag.userId, userId)),
-            db.select().from(problemFile).where(inArray(problemFile.problemId, problemIds)),
-          ]);
-
-    const answerIds = answers.map((a) => a.id);
-    const reviews = answerIds.length > 0
-      ? await db.select().from(review).where(inArray(review.answerId, answerIds))
-      : [];
-    const reviewIds = reviews.map((r) => r.id);
-    const reviewTags = reviewIds.length > 0
-      ? await db.select().from(reviewTag).where(inArray(reviewTag.reviewId, reviewIds))
-      : [];
+    // 全部並列。reviews / reviewTags は answer/review id を待たず subquery で IN を書く。
+    // これで master 系 (statuses/subjects/...) と nested (reviews/reviewTags) が
+    // 全て 1 wave で fan-out できる (max>1 のおかげ)。
+    const answerIdSubq = db.select({ id: answer.id }).from(answer).where(inArray(answer.problemId, problemIds));
+    const reviewIdSubq = db.select({ id: review.id }).from(review)
+      .where(inArray(review.answerId, answerIdSubq));
+    const [answers, statuses, subjects, levels, tags, files, reviews, reviewTags] = await Promise.all([
+      db.select().from(answer)
+        .where(inArray(answer.problemId, problemIds))
+        .orderBy(answer.date, answer.createdAt),
+      db.select().from(answerStatus).where(eq(answerStatus.userId, userId)),
+      db.select().from(subject).where(eq(subject.projectId, projectId)),
+      db.select().from(level).where(eq(level.projectId, projectId)),
+      db.select().from(tag).where(eq(tag.userId, userId)),
+      db.select().from(problemFile).where(inArray(problemFile.problemId, problemIds)),
+      db.select().from(review).where(inArray(review.answerId, answerIdSubq)),
+      db.select().from(reviewTag).where(inArray(reviewTag.reviewId, reviewIdSubq)),
+    ]);
 
     // Lookups
     const statusNameMap = new Map(statuses.map((s) => [s.id, s.name]));
