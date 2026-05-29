@@ -31,7 +31,7 @@ import { FilterSection } from "@/components/filter-section";
 import { useFilterPrefs, useSaveFilterPrefs } from "@/hooks/queries/use-filter-prefs";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Filter, SlidersHorizontal, ArrowLeft, Archive, Save, RotateCcw, Loader2, Download, History, ListFilter, MoreVertical, Check } from "lucide-react";
+import { Filter, SlidersHorizontal, ArrowLeft, Archive, Save, RotateCcw, Loader2, Download, History, ListFilter, MoreVertical, Check, X } from "lucide-react";
 import { useTopicsList } from "@/hooks/queries/use-topics";
 import { usePageTitle } from "@/lib/page-context";
 import { rpc } from "@/lib/rpc-client";
@@ -485,8 +485,9 @@ export default function BacklogDetailPage() {
               </button>
             )}
             <button type="button" onClick={() => setHistoryPanelOpen(false)} disabled={readOnly}
-              className="ml-auto text-[10px] text-muted-foreground hover:text-foreground disabled:opacity-40">
-              Close
+              title="Close"
+              className="ml-auto inline-flex items-center justify-center size-5 rounded-sm text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-40 disabled:cursor-not-allowed">
+              <X className="size-3.5"/>
             </button>
           </div>
           <div className="max-h-56 overflow-y-auto pr-1 space-y-0.5 border-t pt-1.5">
