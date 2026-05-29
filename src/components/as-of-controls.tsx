@@ -5,7 +5,7 @@
  * asOf=null は "now" を意味する。Play 押下時は earliest (= latest-30d 既定) から再生開始。
  */
 import { useEffect, useRef, useState } from "react";
-import { Pause, Play, X, History, Repeat } from "lucide-react";
+import { Pause, Play, X, History, Repeat, ChevronLeft, ChevronRight } from "lucide-react";
 import { Input } from "@/components/ui/input";
 
 type Props = {
@@ -80,6 +80,18 @@ export function AsOfControls({ asOf, setAsOf, earliest, latest, onClose }: Props
       </button>
       <button type="button"
         onClick={() => {
+          setPlaying(false);
+          const cur = asOf ?? latest;
+          const next = addDays(cur, -1);
+          setAsOf(next < start ? start : next);
+        }}
+        disabled={effectiveAsOf <= start}
+        title="Step back 1 day"
+        className="inline-flex items-center justify-center size-5 rounded-sm text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-40 disabled:cursor-not-allowed">
+        <ChevronLeft className="size-3.5"/>
+      </button>
+      <button type="button"
+        onClick={() => {
           if (playing) { setPlaying(false); return; }
           // 再生開始: asOf が "now" または latest 以上なら start に巻き戻す
           if (!asOf || asOf >= latest) setAsOf(start);
@@ -88,6 +100,19 @@ export function AsOfControls({ asOf, setAsOf, earliest, latest, onClose }: Props
         title={playing ? "Pause" : "Play from start"}
         className="inline-flex items-center justify-center size-5 rounded-sm text-muted-foreground hover:text-foreground hover:bg-accent">
         {playing ? <Pause className="size-3.5"/> : <Play className="size-3.5"/>}
+      </button>
+      <button type="button"
+        onClick={() => {
+          setPlaying(false);
+          const cur = asOf ?? latest;
+          const next = addDays(cur, 1);
+          if (next >= latest) setAsOf(null);  // 現実の今日を超えたら通常モード
+          else setAsOf(next);
+        }}
+        disabled={effectiveAsOf >= latest}
+        title="Step forward 1 day"
+        className="inline-flex items-center justify-center size-5 rounded-sm text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-40 disabled:cursor-not-allowed">
+        <ChevronRight className="size-3.5"/>
       </button>
       <div className="inline-flex rounded-md border text-[10px] overflow-hidden">
         {SPEEDS.map((s, i) => (
