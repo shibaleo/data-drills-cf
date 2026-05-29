@@ -3,11 +3,11 @@ import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useProject } from "@/hooks/use-project";
 import { useCreateBacklog } from "@/hooks/queries/use-backlog";
-import { BacklogFilterPicker } from "@/components/backlog-filter-picker";
+import { MemberFilterPicker } from "@/components/member-filter-picker";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import type { BacklogFilterInput } from "@/lib/schemas/backlog";
+import type { MemberFilterInput } from "@/lib/schemas/member-filter";
 
 export default function BacklogNewPage() {
   const { currentProject } = useProject();
@@ -17,7 +17,7 @@ export default function BacklogNewPage() {
   const [name, setName] = useState("");
   const [dailyMinutes, setDailyMinutes] = useState(60);
   const [timeMultiplier, setTimeMultiplier] = useState(1.0);
-  const [filter, setFilter] = useState<BacklogFilterInput>({});
+  const [filter, setFilter] = useState<MemberFilterInput>({});
 
   if (!currentProject) return <div className="p-6 text-muted-foreground">Please select a project</div>;
 
@@ -57,7 +57,7 @@ export default function BacklogNewPage() {
 
       <div className="space-y-2">
         <Label>Member filter (empty category = all)</Label>
-        <BacklogFilterPicker projectId={currentProject.id} value={filter} onChange={setFilter} />
+        <MemberFilterPicker projectId={currentProject.id} value={filter} onChange={setFilter} />
       </div>
 
       <div className="text-xs text-muted-foreground italic">

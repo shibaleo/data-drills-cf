@@ -2,9 +2,9 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { zValidator } from "@hono/zod-validator";
 import { db } from "@/lib/db";
-import { backlog, goalLayer, goalMilestone, problem, type BacklogFilter } from "@/lib/db/schema";
+import { backlog, goalLayer, goalMilestone, problem, type MemberFilter } from "@/lib/db/schema";
 import { and, asc, desc, eq, gt, inArray, isNull, lte, or, sql } from "drizzle-orm";
-import { applyBacklogFilter } from "@/lib/backlog-filter";
+import { applyMemberFilter } from "@/lib/member-filter";
 import { randomUUID } from "node:crypto";
 import {
   backlogCreateInputSchema,
@@ -36,9 +36,9 @@ function invalidateTodayCount() {
 
 /* ── helpers ──────────────────────────────────────────────────── */
 
-async function fetchMembers(projectId: string, filter: BacklogFilter) {
+async function fetchMembers(projectId: string, filter: MemberFilter) {
   // project の全問題を取得 → pure function でフィルタ。
-  // セマンティクスは src/lib/backlog-filter.ts の applyBacklogFilter に統一。
+  // セマンティクスは src/lib/backlog-filter.ts の applyMemberFilter に統一。
   const rows = await db.select({
     id: problem.id,
     code: problem.code,
@@ -49,7 +49,7 @@ async function fetchMembers(projectId: string, filter: BacklogFilter) {
     topicId: problem.topicId,
   }).from(problem).where(eq(problem.projectId, projectId))
     .orderBy(asc(problem.code), asc(problem.id));
-  return applyBacklogFilter(rows, filter);
+  return applyMemberFilter(rows, filter);
 }
 
 async function fetchFirstAnswers(problemIds: string[]) {

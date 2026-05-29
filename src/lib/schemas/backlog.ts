@@ -1,12 +1,7 @@
 import { z } from "zod";
+import { memberFilterSchema } from "@/lib/schemas/member-filter";
 
 /* ── Backlog (strategy numbers) ──────────────────────────────── */
-
-export const backlogFilterSchema = z.object({
-  subjectIds: z.array(z.string().uuid()).optional(),
-  levelIds: z.array(z.string().uuid()).optional(),
-});
-export type BacklogFilterInput = z.infer<typeof backlogFilterSchema>;
 
 export const weekdayWeightsSchema = z.array(z.number().nonnegative()).length(7);
 
@@ -16,7 +11,7 @@ export const backlogCreateInputSchema = z.object({
   daily_minutes: z.number().int().positive(),
   time_multiplier_pct: z.number().int().positive().default(100),
   weekday_weights: weekdayWeightsSchema.default([1, 1, 1, 1, 1, 1, 1]),
-  filter: backlogFilterSchema.default({}),
+  filter: memberFilterSchema.default({}),
 });
 export type BacklogCreateInput = z.infer<typeof backlogCreateInputSchema>;
 
@@ -25,7 +20,7 @@ export const backlogUpdateInputSchema = z.object({
   daily_minutes: z.number().int().positive().optional(),
   time_multiplier_pct: z.number().int().positive().optional(),
   weekday_weights: weekdayWeightsSchema.optional(),
-  filter: backlogFilterSchema.optional(),
+  filter: memberFilterSchema.optional(),
 });
 export type BacklogUpdateInput = z.infer<typeof backlogUpdateInputSchema>;
 

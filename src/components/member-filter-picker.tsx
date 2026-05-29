@@ -1,26 +1,27 @@
 /**
- * Backlog filter spec (subject/level) selector — colored chip toggles.
+ * Member filter (subject/level) selector — colored chip toggles.
  * 各カテゴリを 1 行で並べ、entity の色を OpaqueTag で表示。
  * 選択=不透明、非選択=半透明。デザイン言語は problem-card と統一。
+ * backlog / review_scope の両方から利用される。
  */
 import { useSubjectsList } from "@/hooks/queries/use-subjects";
 import { useLevelsList } from "@/hooks/queries/use-levels";
 import { OpaqueTag } from "@/components/problem-card";
-import type { BacklogFilterInput } from "@/lib/schemas/backlog";
+import type { MemberFilterInput } from "@/lib/schemas/member-filter";
 
 type Props = {
   projectId: string;
-  value: BacklogFilterInput;
-  onChange: (v: BacklogFilterInput) => void;
+  value: MemberFilterInput;
+  onChange: (v: MemberFilterInput) => void;
   /** 最終行 (Level) の右端に並べる任意要素。count などを置く想定。 */
   trailing?: React.ReactNode;
 };
 
-export function BacklogFilterPicker({ projectId, value, onChange, trailing }: Props) {
+export function MemberFilterPicker({ projectId, value, onChange, trailing }: Props) {
   const { data: subjects = [] } = useSubjectsList(projectId);
   const { data: levels = [] } = useLevelsList(projectId);
 
-  function toggle(field: keyof BacklogFilterInput, id: string) {
+  function toggle(field: keyof MemberFilterInput, id: string) {
     const cur = value[field] ?? [];
     const next = cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id];
     onChange({ ...value, [field]: next.length ? next : undefined });

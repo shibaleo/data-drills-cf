@@ -331,7 +331,7 @@ export const filterPref = pgTable("filter_pref", {
 // メンバー問題は filter から導出する。
 // =============================================================================
 
-export type BacklogFilter = {
+export type MemberFilter = {
   subjectIds?: string[];
   levelIds?: string[];
 };
@@ -344,7 +344,7 @@ export const backlog = pgTable("backlog", {
   dailyMinutes: integer("daily_minutes").notNull(),
   timeMultiplierPct: integer("time_multiplier_pct").notNull().default(100),
   weekdayWeights: jsonb("weekday_weights").$type<number[]>().notNull().default([1, 1, 1, 1, 1, 1, 1]),
-  filter: jsonb("filter").$type<BacklogFilter>().notNull().default({}),
+  filter: jsonb("filter").$type<MemberFilter>().notNull().default({}),
   isActive: boolean("is_active").notNull().default(true),
   validFrom: timestamp("valid_from", { withTimezone: true }).notNull().defaultNow(),
   validTo: timestamp("valid_to", { withTimezone: true }),
@@ -399,4 +399,28 @@ export const goalMilestone = pgTable("goal_milestone", {
   index("goal_milestone_current_idx").on(t.id, t.revision.desc()),
   index("goal_milestone_backlog_idx").on(t.backlogId, t.isActive, t.validTo),
   index("goal_milestone_layer_idx").on(t.layerId),
+]);
+
+// =============================================================================
+// 27. ReviewScope (bitemporal append-only)
+//
+// Review チャートの対象問題集合を定義するエンティティ。
+// (id, revision) PK。filter 変更 = revision+1 INSERT + 旧 valid_to 塗り。
+// archive は is_active=false の新 revision を INSERT。
+// =============================================================================
+
+export const reviewScope = pgTable("review_scope", {
+  id: uuid("id").notNull(),
+  revision: integer("revision").notNull(),
+  projectId: uuid("project_id").notNull().references(() => project.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  filter: jsonb("filter").$type<MemberFilter>().notNull().default({}),
+  isActive: boolean("is_active").notNull().default(true),
+  validFrom: timestamp("valid_from", { withTimezone: true }).notNull().defaultNow(),
+  validTo: timestamp("valid_to", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  primaryKey({ columns: [t.id, t.revision] }),
+  index("review_scope_current_idx").on(t.id, t.revision.desc()),
+  index("review_scope_project_active_idx").on(t.projectId, t.isActive, t.validTo),
 ]);

@@ -1,20 +1,21 @@
 /**
- * Backlog membership filter — pure function shared by server (fetchMembers)
- * and client (edit page preview).
+ * Member filter — pure function shared by:
+ *   - server-side fetchMembers (backlog, review_scope)
+ *   - client-side preview editors
  *
  * セマンティクスは「指定されたカテゴリを **すべて** 通過した問題」。
  * 各カテゴリ (subject/level) 内は OR、カテゴリ間は AND。
  * 空配列 / 未指定のカテゴリは「制約なし」。
  */
 
-import type { BacklogFilter } from "@/lib/db/schema";
+import type { MemberFilter } from "@/lib/db/schema";
 
 export type ProblemForFilter = {
   subjectId: string | null;
   levelId: string | null;
 };
 
-export function matchesBacklogFilter(p: ProblemForFilter, filter: BacklogFilter): boolean {
+export function matchesMemberFilter(p: ProblemForFilter, filter: MemberFilter): boolean {
   if (filter.subjectIds?.length) {
     if (!p.subjectId || !filter.subjectIds.includes(p.subjectId)) return false;
   }
@@ -24,9 +25,9 @@ export function matchesBacklogFilter(p: ProblemForFilter, filter: BacklogFilter)
   return true;
 }
 
-export function applyBacklogFilter<T extends ProblemForFilter>(
+export function applyMemberFilter<T extends ProblemForFilter>(
   problems: T[],
-  filter: BacklogFilter,
+  filter: MemberFilter,
 ): T[] {
-  return problems.filter((p) => matchesBacklogFilter(p, filter));
+  return problems.filter((p) => matchesMemberFilter(p, filter));
 }

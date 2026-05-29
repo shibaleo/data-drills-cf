@@ -7,9 +7,10 @@ import {
   useBacklogRevisions,
   type BacklogMember,
 } from "@/hooks/queries/use-backlog";
-import type { BacklogBatchInput, BacklogFilterInput, BacklogUpdateInput } from "@/lib/schemas/backlog";
-import { applyBacklogFilter } from "@/lib/backlog-filter";
-import { BacklogFilterPicker } from "@/components/backlog-filter-picker";
+import type { BacklogBatchInput, BacklogUpdateInput } from "@/lib/schemas/backlog";
+import type { MemberFilterInput } from "@/lib/schemas/member-filter";
+import { applyMemberFilter } from "@/lib/member-filter";
+import { MemberFilterPicker } from "@/components/member-filter-picker";
 import { useProject } from "@/hooks/use-project";
 import { useProblemsList } from "@/hooks/queries/use-problems";
 import { useProblemDialogs } from "@/hooks/use-problem-dialogs";
@@ -59,7 +60,7 @@ export default function BacklogDetailPage() {
   type LocalMilestone = { id: string; layer_id: string; target: number; date: string };
   const [localLayers, setLocalLayers] = useState<LocalLayer[]>([]);
   const [localMilestones, setLocalMilestones] = useState<LocalMilestone[]>([]);
-  const [localFilter, setLocalFilter] = useState<BacklogFilterInput>({});
+  const [localFilter, setLocalFilter] = useState<MemberFilterInput>({});
   const [membersEditorOpen, setMembersEditorOpen] = useState(false);
   const [historyPanelOpen, setHistoryPanelOpen] = useState(false);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
@@ -148,16 +149,16 @@ export default function BacklogDetailPage() {
   const today = todayJST();
 
   /**
-   * filter が編集中なら useProblemsList + applyBacklogFilter で再計算、
+   * filter が編集中なら useProblemsList + applyMemberFilter で再計算、
    * 未編集ならサーバ計算済 data.members を流用 (= 余計な再計算なし)。
-   * セマンティクスはサーバ側 fetchMembers と同一 (両者とも applyBacklogFilter 経由)。
+   * セマンティクスはサーバ側 fetchMembers と同一 (両者とも applyMemberFilter 経由)。
    */
   const effectiveMembers = useMemo<BacklogMember[]>(() => {
     if (!data) return [];
     const sameFilter = JSON.stringify(data.backlog.filter ?? {}) === JSON.stringify(localFilter);
     if (sameFilter) return data.members;
     if (allProblems.length === 0) return data.members;
-    const filtered = applyBacklogFilter(
+    const filtered = applyMemberFilter(
       allProblems.map((p) => ({
         subjectId: p.subject_id || null,
         levelId: p.level_id || null,
@@ -537,7 +538,7 @@ export default function BacklogDetailPage() {
             className="absolute top-1.5 right-1.5 inline-flex items-center justify-center size-5 rounded-sm text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-40 disabled:cursor-not-allowed">
             <X className="size-3.5"/>
           </button>
-          <BacklogFilterPicker
+          <MemberFilterPicker
             projectId={currentProject.id}
             value={localFilter}
             onChange={setLocalFilter}

@@ -28,6 +28,8 @@ const AboutPage = lazy(() => import("./app/(pages)/about/page"));
 const BacklogPage = lazy(() => import("./app/(pages)/backlog/page"));
 const BacklogNewPage = lazy(() => import("./app/(pages)/backlog/new/page"));
 const BacklogDetailPage = lazy(() => import("./app/(pages)/backlog/$backlogId/page"));
+const ReviewNewPage = lazy(() => import("./app/(pages)/review/new/page"));
+const ReviewDetailPage = lazy(() => import("./app/(pages)/review/$scopeId/page"));
 
 /* ── Route tree ── */
 
@@ -64,6 +66,16 @@ function lazyRoute(
 }
 
 const reviewRoute = lazyRoute("/review", ReviewPage);
+const reviewNewRoute = lazyRoute("/review/new", ReviewNewPage);
+const reviewDetailRoute = createRoute({
+  getParentRoute: () => authLayout,
+  path: "/review/$scopeId",
+  component: () => (
+    <Suspense>
+      <ReviewDetailPage />
+    </Suspense>
+  ),
+});
 const throughputRoute = lazyRoute("/throughput", ThroughputPage);
 const flashcardsRoute = lazyRoute("/flashcards", FlashcardsPage);
 const tagsRoute = lazyRoute("/tags", TagsPage);
@@ -106,6 +118,8 @@ const ssoCallbackRoute = createRoute({
 const routeTree = rootRoute.addChildren([
   authLayout.addChildren([
     reviewRoute,
+    reviewNewRoute,
+    reviewDetailRoute,
     flashcardsRoute,
     tagsRoute,
     subjectsRoute,
