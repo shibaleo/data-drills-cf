@@ -61,9 +61,9 @@ const app = new Hono<Env>()
         p.subject_id,
         p.level_id,
         p.topic_id
-      FROM answer a
-      JOIN problem p ON p.id = a.problem_id
-      LEFT JOIN answer_status s ON s.id = a.answer_status_id
+      FROM data_drills.answer a
+      JOIN data_drills.problem p ON p.id = a.problem_id
+      LEFT JOIN data_drills.answer_status s ON s.id = a.answer_status_id
       WHERE p.project_id = ${projectId}
       ${asOfCond}
       ORDER BY a.date ASC, a.created_at ASC

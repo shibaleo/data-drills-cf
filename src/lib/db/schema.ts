@@ -1,5 +1,5 @@
 import {
-  pgTable,
+  pgSchema,
   uuid,
   text,
   integer,
@@ -11,6 +11,11 @@ import {
   index,
   date,
 } from "drizzle-orm/pg-core";
+
+// すべてのテーブルを `data_drills` schema 配下に置く。
+// 他ドメイン (Toggl / fitness / 等) との名前空間衝突を避けるため public を使わない。
+const ds = pgSchema("data_drills");
+const pgTable = ds.table.bind(ds);
 
 // =============================================================================
 // Helpers

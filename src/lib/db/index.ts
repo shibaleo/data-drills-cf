@@ -58,6 +58,7 @@ function getOrCreateDb(): DB {
         //  prepare: false → Hyperdrive プール越しに prepared statement cache が不整合になるのを回避
         fetch_types: false,
         prepare: false,
+        connection: { search_path: "data_drills,public" },
       });
       store.db = drizzle(store.client, { schema });
     }
@@ -66,17 +67,21 @@ function getOrCreateDb(): DB {
 
   // Local dev: process-cached client (HMR / vite SSR 再評価で重複生成しない)。
   // vite middleware は withRequestDb で包まないので、全 request がこの client を共有する。
-  // burst で並列リクエストが来ても 3 接続だけ握って postgres.js 内で queue。
-  // → Supabase session pool 15 を local 単独で枯渇させない。
+  // Supabase free plan の session pool 15 のうち ~9 は Supabase 内部サービスが使うので
+  // アプリ用は実質 ~6 枠。cf 本番 + vc 本番 + Render + MCP と分け合うため、local は
+  // max=2 で十分(digest の 10 並列 fetch も内部で queue されるだけ、エラーにはならない)。
   if (!cachedPg.db) {
     cachedPg.client = postgres(env.DATABASE_URL, {
-      max: 3,
+      max: 2,
       idle_timeout: 20,
       max_lifetime: 60 * 30,
       connect_timeout: 10,
       ssl: "require",
-      // Supabase pooler 全般で安全 (prepared statement cache 不整合を回避)
       prepare: false,
+      // 全 query を data_drills schema 配下で解決させる。
+      // drizzle の pgSchema は qualified SQL を出すが、生 sql\`FROM answer\` のような
+      // 未修飾参照のために search_path にも data_drills を入れておく。
+      connection: { search_path: "data_drills,public" },
     });
     cachedPg.db = drizzle(cachedPg.client, { schema });
     // Dev restart 時に Supabase 側にゾンビ接続が残らないよう explicit close。

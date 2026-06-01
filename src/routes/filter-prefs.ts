@@ -33,7 +33,7 @@ const app = new Hono<Env>()
     const { project_id: projectId, filters } = c.req.valid("json");
     if (!(await ownsProject(projectId, userId))) return c.json({ error: "Not found" }, 404);
     await db.execute(sql`
-      INSERT INTO filter_pref (user_id, project_id, filters)
+      INSERT INTO data_drills.filter_pref (user_id, project_id, filters)
       VALUES (${userId}, ${projectId}, ${JSON.stringify(filters)}::jsonb)
       ON CONFLICT (user_id, project_id) DO UPDATE SET filters = EXCLUDED.filters, updated_at = now()
     `);
