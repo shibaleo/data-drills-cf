@@ -40,18 +40,20 @@ function getOrCreateDb(): DB {
   const store = als.getStore();
 
   if (store) {
-    // CF Workers: per-request client
+    // per-request client (CF Workers 本番 + vite dev で withRequestDb 経由)
     if (!store.db) {
-      store.client = postgres(env.DATABASE_URL, {
-        // Hyperdrive 越しに複数 connection を並列で握れるので max を上げる。
-        // ハンドラ内 Promise.all([...]) が実際に並列に走り、合計レイテンシが縮む。
-        max: 5,
-        idle_timeout: 20,
+      const url = env.DATABASE_URL;
+      // Hyperdrive (cf 本番) は URL に "hyperdrive" を含む or pooler ホストでない。
+      // pooler.supabase.com を直接叩く = local dev → Supabase pool 上限 15 が GLOBAL なので
+      // 1 req あたりの接続数を絞る (= バースト時の枯渇を防ぐ)。
+      const isDirectSupabase = url.includes("pooler.supabase.com");
+      store.client = postgres(url, {
+        max: isDirectSupabase ? 2 : 5,
+        idle_timeout: isDirectSupabase ? 5 : 20,
         connect_timeout: 10,
-        ssl: false, // Hyperdrive handles SSL
+        ssl: isDirectSupabase ? "require" : false,
         // CF Hyperdrive 推奨設定
-        //  fetch_types: false → 接続直後の型 OID 取得クエリをスキップ (これが workerd 上で
-        //    intermittent に失敗し "Network connection lost" を起こすことが多い)
+        //  fetch_types: false → 接続直後の型 OID 取得クエリをスキップ (workerd 上で intermittent に失敗)
         //  prepare: false → Hyperdrive プール越しに prepared statement cache が不整合になるのを回避
         fetch_types: false,
         prepare: false,
@@ -64,13 +66,30 @@ function getOrCreateDb(): DB {
   // Local dev: process-cached client (HMR / vite SSR 再評価で重複生成しない)
   if (!cachedPg.db) {
     cachedPg.client = postgres(env.DATABASE_URL, {
-      max: 3,                  // 同時 query は最大 3 (= Supabase 15 上限から余裕を持つ)
-      idle_timeout: 5,         // 5 秒 idle で接続クローズ
-      max_lifetime: 60,        // 60 秒で接続強制リサイクル
+      // session pooler (5432) は pool_size 15 が GLOBAL なので local の取り分は最小に。
+      // 並列度は cf 本番側 (Hyperdrive max=5) と分けて考える。
+      max: 2,
+      idle_timeout: 5,
+      max_lifetime: 60,
       connect_timeout: 10,
       ssl: "require",
+      // Supabase pooler 全般で安全 (prepared statement cache 不整合を回避)
+      prepare: false,
     });
     cachedPg.db = drizzle(cachedPg.client, { schema });
+    // Dev restart 時に Supabase 側にゾンビ接続が残らないよう explicit close。
+    // 二重登録防止のため cachedPg にフラグを生やす。
+    const tagged = cachedPg as CachedPg & { _cleanupRegistered?: boolean };
+    if (!tagged._cleanupRegistered) {
+      tagged._cleanupRegistered = true;
+      const cleanup = () => {
+        cachedPg.client?.end({ timeout: 0 }).catch(() => {});
+      };
+      const proc = process as unknown as NodeJS.Process;
+      proc.once("exit", cleanup);
+      proc.once("SIGINT", () => { cleanup(); proc.exit(0); });
+      proc.once("SIGTERM", () => { cleanup(); proc.exit(0); });
+    }
   }
   return cachedPg.db;
 }

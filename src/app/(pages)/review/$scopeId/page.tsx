@@ -164,31 +164,7 @@ function ReviewChart({
 
           return (
             <g key={date}>
-              {/* Today column highlight */}
-              {isToday && (
-                <rect
-                  x={x - 1}
-                  y={TOP_AXIS_H}
-                  width={CELL + 2}
-                  height={maxStack * STEP}
-                  fill="hsl(var(--foreground))"
-                  opacity={0.1}
-                />
-              )}
-              {/* Empty background blocks */}
-              {Array.from({ length: maxStack }, (_, i) => (
-                <rect
-                  key={`bg-${i}`}
-                  x={x}
-                  y={chartHeight - BOTTOM_AXIS_H - (i + 1) * STEP}
-                  width={CELL}
-                  height={CELL}
-                  rx={2}
-                  fill="none"
-                  stroke="hsl(var(--border))"
-                  strokeWidth={0.5}
-                />
-              ))}
+              {/* Today 列ハイライト・空セルグリッドは ChartShell 内で描画済 (pointer-events 無効) */}
               {/* Filled blocks */}
               {dayItems.map((item, stackIdx) => {
                 const bx = x;

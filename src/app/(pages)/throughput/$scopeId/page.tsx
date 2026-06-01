@@ -524,17 +524,7 @@ export default function ThroughputPage() {
                   const showAxis = diff % 7 === 0;
                   return (
                     <g key={date}>
-                      {isToday && (
-                        <rect x={x - 1} y={TOP_AXIS_H} width={CELL + 2} height={maxStack * STEP}
-                          fill="hsl(var(--foreground))" opacity={0.1}/>
-                      )}
-                      {/* Empty base blocks */}
-                      {Array.from({ length: maxStack }, (_, i) => (
-                        <rect key={i} x={x}
-                          y={chartHeight - BOTTOM_AXIS_H - (i + 1) * STEP}
-                          width={CELL} height={CELL} rx={2}
-                          fill="none" stroke="hsl(var(--border))" strokeWidth={0.5}/>
-                      ))}
+                      {/* Today 列ハイライト・空セルグリッドは ChartShell 内で描画済 */}
                       {/* Filled blocks (capped at renderCap; chart leaves +2 rows of padding above) */}
                       {dayItems.slice(0, renderCap).map((r, stackIdx) => {
                         const by = chartHeight - BOTTOM_AXIS_H - (stackIdx + 1) * STEP;

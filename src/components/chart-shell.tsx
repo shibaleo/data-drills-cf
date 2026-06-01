@@ -158,35 +158,32 @@ export const ChartShell = forwardRef<ChartShellHandle, ChartShellProps>(function
       )}
       {/* center: scrollable main SVG */}
       <div ref={scrollRef} className="overflow-x-auto pb-2 flex-1 min-w-0 relative">
-        <svg width={chartWidth} height={chartHeight} className="block"
-          onPointerDown={(e) => {
-            if (!onCursorDrag) return;
-            const svg = e.currentTarget;
-            const rect = svg.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const cursorX = cursorIdx * STEP + CELL / 2;
-            if (Math.abs(x - cursorX) > 8) return;
-            e.preventDefault();
-            svg.setPointerCapture(e.pointerId);
-            svg.style.cursor = "grabbing";
-            isDraggingRef.current = true;
-            const move = (ev: PointerEvent) => {
-              const px = ev.clientX - rect.left;
-              const idx = Math.round((px - CELL / 2) / STEP);
-              const clamped = Math.max(0, Math.min(dates.length - 1, idx));
-              onCursorDrag(dates[clamped]);
-            };
-            const up = (ev: PointerEvent) => {
-              svg.releasePointerCapture(ev.pointerId);
-              svg.style.cursor = "";
-              isDraggingRef.current = false;
-              svg.removeEventListener("pointermove", move);
-              svg.removeEventListener("pointerup", up);
-            };
-            svg.addEventListener("pointermove", move);
-            svg.addEventListener("pointerup", up);
-          }}>
-          {/* cursor line */}
+        <svg width={chartWidth} height={chartHeight} className="block">
+          {/* cursor: 視覚線 + ヒット領域。ヒット領域は children より下に置く →
+             ブロックが上に被ったセルではブロッククリックが優先される (= カーソル列の
+             ブロックも普通にクリック可能)。ブロックがない縦帯ではヒット線がドラッグを受ける。 */}
+          {/* 空セルグリッド (装飾、全 column × maxStack 行)。pointer-events 無効で
+             カーソルヒット線へのクリックを邪魔しない。 */}
+          {dates.map((_, colIdx) => {
+            const x = colIdx * STEP;
+            return (
+              <g key={`grid-${colIdx}`} pointerEvents="none">
+                {Array.from({ length: maxStack }, (_, i) => (
+                  <rect key={i} x={x}
+                    y={chartHeight - bottomAxisH - (i + 1) * STEP}
+                    width={CELL} height={CELL} rx={2}
+                    fill="none" stroke="hsl(var(--border))" strokeWidth={0.5}/>
+                ))}
+              </g>
+            );
+          })}
+          {/* カーソル列の縦帯ハイライト (= "今日" 強調)。pointer-events 無効。 */}
+          {cursorIdx >= 0 && (
+            <rect x={cursorIdx * STEP - 1} y={topAxisH}
+              width={CELL + 2} height={maxStack * STEP}
+              fill="hsl(var(--foreground))" opacity={0.1}
+              pointerEvents="none"/>
+          )}
           {cursorIdx >= 0 && (
             <>
               <line x1={cursorIdx * STEP + CELL / 2} y1={topAxisH}
@@ -194,9 +191,38 @@ export const ChartShell = forwardRef<ChartShellHandle, ChartShellProps>(function
                 stroke="hsl(var(--foreground))" strokeWidth={1.5}
                 strokeDasharray="4 3" opacity={0.7}/>
               {onCursorDrag && (
-                <line x1={cursorIdx * STEP + CELL / 2} y1={topAxisH}
+                // ヒット領域: y=0 (= 上端、blocks が無い領域) から下端まで張る。
+                // 上半分の axis エリアは常に空なので、そこで widely 掴める。
+                // chart body 部分は strokeWidth=10 だが、blocks が SVG の後出しで上に被るので
+                // blocks がある列ではブロッククリックが優先される。
+                <line x1={cursorIdx * STEP + CELL / 2} y1={0}
                   x2={cursorIdx * STEP + CELL / 2} y2={chartHeight - bottomAxisH}
-                  stroke="transparent" strokeWidth={14} style={{ cursor: "grab" }}/>
+                  stroke="transparent" strokeWidth={10} style={{ cursor: "grab" }}
+                  onPointerDown={(e) => {
+                    const svg = e.currentTarget.ownerSVGElement;
+                    if (!svg) return;
+                    const rect = svg.getBoundingClientRect();
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.currentTarget.setPointerCapture(e.pointerId);
+                    isDraggingRef.current = true;
+                    svg.style.cursor = "grabbing";
+                    const move = (ev: PointerEvent) => {
+                      const px = ev.clientX - rect.left;
+                      const idx = Math.round((px - CELL / 2) / STEP);
+                      const clamped = Math.max(0, Math.min(dates.length - 1, idx));
+                      onCursorDrag(dates[clamped]);
+                    };
+                    const up = (ev: PointerEvent) => {
+                      try { (ev.target as Element).releasePointerCapture?.(ev.pointerId); } catch { /* ignore */ }
+                      svg.style.cursor = "";
+                      isDraggingRef.current = false;
+                      svg.removeEventListener("pointermove", move);
+                      svg.removeEventListener("pointerup", up);
+                    };
+                    svg.addEventListener("pointermove", move);
+                    svg.addEventListener("pointerup", up);
+                  }}/>
               )}
             </>
           )}

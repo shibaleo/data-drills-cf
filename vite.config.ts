@@ -16,7 +16,9 @@ function honoDevServer(): Plugin {
 
         try {
           const mod = await server.ssrLoadModule("/src/lib/hono-app.ts");
+          const dbMod = await server.ssrLoadModule("/src/lib/db/index.ts");
           const app = mod.default;
+          const withRequestDb = dbMod.withRequestDb;
 
           const url = new URL(req.url, `http://${req.headers.host}`);
           const headers = new Headers();
@@ -43,7 +45,10 @@ function honoDevServer(): Plugin {
             ...(body ? { body } : {}),
           } as RequestInit);
 
-          const response: Response = await app.fetch(request);
+          // withRequestDb で包む = リクエスト毎に postgres client を新規生成し、
+          // 終了時に .end() で接続を返す。idle 時の接続が常に 0 になるので、
+          // 開発プロセスを ungraceful kill しても Supabase 側にゾンビが残らない。
+          const response: Response = await withRequestDb(() => app.fetch(request));
 
           res.statusCode = response.status;
           response.headers.forEach((value: string, key: string) => {
