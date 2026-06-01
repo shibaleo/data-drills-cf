@@ -113,11 +113,11 @@ export function HourPattern({ rows }: Props) {
       </div>
       {fastest.label !== slowest.label && (
         <div className="text-[10px] text-muted-foreground border-t pt-1.5">
-          <span className="font-semibold text-primary">{fastest.label}-{fastest.from + 2}時</span>
-          {" "}が最速 ({fmtSec(fastest.medianSec)}) ·
-          {" "}<span className="font-semibold text-destructive">{slowest.label}-{slowest.from + 2}時</span>
-          {" "}が最遅 ({fmtSec(slowest.medianSec)})。
-          難しい問題は{fastest.label}時帯に
+          Fastest: <span className="font-semibold text-primary">{fastest.label}-{fastest.from + 2}h</span>
+          {" "}({fmtSec(fastest.medianSec)}) ·
+          {" "}Slowest: <span className="font-semibold text-destructive">{slowest.label}-{slowest.from + 2}h</span>
+          {" "}({fmtSec(slowest.medianSec)}).
+          {" "}Tackle hard problems around {fastest.label}h
         </div>
       )}
     </div>

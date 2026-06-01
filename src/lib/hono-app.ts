@@ -24,6 +24,7 @@ import backlog from "@/routes/backlog";
 import reviewScopes from "@/routes/review-scopes";
 import throughputScopes from "@/routes/throughput-scopes";
 import statsScopes from "@/routes/stats-scopes";
+import digestScopes from "@/routes/digest-scopes";
 import filterPrefs from "@/routes/filter-prefs";
 import googleAuth from "@/routes/google-auth";
 import drive from "@/routes/drive";
@@ -80,6 +81,7 @@ const v1 = new Hono<Env>()
   .route("/review-scopes", reviewScopes)
   .route("/throughput-scopes", throughputScopes)
   .route("/stats-scopes", statsScopes)
+  .route("/digest-scopes", digestScopes)
   .route("/filter-prefs", filterPrefs)
   .route("/toggl", toggl)
   // /me endpoint — return authenticated user info

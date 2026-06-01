@@ -81,7 +81,7 @@ export function StaleDoneList({ problems, statuses, onOpenProblem }: Props) {
       </div>
       {rows.length === 0 ? (
         <div className="text-[11px] text-muted-foreground">
-          {threshold}日以上経過した {doneStatus.name} 問題はありません
+          No {doneStatus.name} problems older than {threshold} days
         </div>
       ) : (
         <table className="text-xs w-full">
@@ -89,7 +89,7 @@ export function StaleDoneList({ problems, statuses, onOpenProblem }: Props) {
             <tr className="text-[10px] text-muted-foreground border-b">
               <th className="text-left font-medium pr-2 py-1">Code · Name</th>
               <th className="text-right font-medium px-2 py-1 w-24">Last {doneStatus.name}</th>
-              <th className="text-right font-medium pl-2 py-1 w-14">経過</th>
+              <th className="text-right font-medium pl-2 py-1 w-14">Age</th>
             </tr>
           </thead>
           <tbody>
@@ -113,10 +113,10 @@ export function StaleDoneList({ problems, statuses, onOpenProblem }: Props) {
         </table>
       )}
       {rows.length > 20 && (
-        <div className="text-[10px] text-muted-foreground">他 {rows.length - 20} 問あり</div>
+        <div className="text-[10px] text-muted-foreground">{rows.length - 20} more</div>
       )}
       <div className="text-[10px] text-muted-foreground">
-        試験前の抜き打ち復習対象。クリックで problem を開いて answer 追加
+        Candidates for a pre-exam spot check. Click to open the problem and add an answer.
       </div>
     </div>
   );

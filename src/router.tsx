@@ -16,6 +16,8 @@ import { AuthenticateWithRedirectCallback } from "@clerk/react";
 const ReviewPage = lazy(() => import("./app/(pages)/review/page"));
 const StatsPage = lazy(() => import("./app/(pages)/stats/page"));
 const DigestPage = lazy(() => import("./app/(pages)/digest/page"));
+const DigestNewPage = lazy(() => import("./app/(pages)/digest/new/page"));
+const DigestDetailPage = lazy(() => import("./app/(pages)/digest/$scopeId/page"));
 const StatsNewPage = lazy(() => import("./app/(pages)/stats/new/page"));
 const StatsDetailPage = lazy(() => import("./app/(pages)/stats/$scopeId/page"));
 const ThroughputPage = lazy(() => import("./app/(pages)/throughput/page"));
@@ -95,6 +97,16 @@ const throughputDetailRoute = createRoute({
 const throughputRoute = lazyRoute("/throughput", ThroughputPage);
 const statsRoute = lazyRoute("/stats", StatsPage);
 const digestRoute = lazyRoute("/digest", DigestPage);
+const digestNewRoute = lazyRoute("/digest/new", DigestNewPage);
+const digestDetailRoute = createRoute({
+  getParentRoute: () => authLayout,
+  path: "/digest/$scopeId",
+  component: () => (
+    <Suspense>
+      <DigestDetailPage />
+    </Suspense>
+  ),
+});
 const statsNewRoute = lazyRoute("/stats/new", StatsNewPage);
 const statsDetailRoute = createRoute({
   getParentRoute: () => authLayout,
@@ -168,6 +180,8 @@ const routeTree = rootRoute.addChildren([
     statsNewRoute,
     statsDetailRoute,
     digestRoute,
+    digestNewRoute,
+    digestDetailRoute,
   ]),
   indexRoute,
   ssoCallbackRoute,

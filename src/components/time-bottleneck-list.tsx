@@ -93,7 +93,7 @@ export function TimeBottleneckList({ problems, statuses, onOpenProblem, topN = 1
   return (
     <div className="rounded-md border p-3 space-y-2">
       <div className="flex items-center justify-between">
-        <div className="text-xs font-semibold">Time bottleneck (累計時間 top {visible.length})</div>
+        <div className="text-xs font-semibold">Time bottleneck (top {visible.length} by accumulated time)</div>
         {rows.length > topN && (
           <button type="button"
             onClick={() => setShowAll((v) => !v)}
@@ -110,7 +110,7 @@ export function TimeBottleneckList({ problems, statuses, onOpenProblem, topN = 1
             <th className="text-right font-medium px-2 py-1 w-16">Time</th>
             <th className="text-right font-medium px-2 py-1 w-12">×</th>
             <th className="text-center font-medium px-2 py-1 w-20">Status</th>
-            <th className="text-right font-medium pl-2 py-1 w-14">経過</th>
+            <th className="text-right font-medium pl-2 py-1 w-14">Age</th>
           </tr>
         </thead>
         <tbody>
@@ -140,7 +140,7 @@ export function TimeBottleneckList({ problems, statuses, onOpenProblem, topN = 1
         </tbody>
       </table>
       <div className="text-[10px] text-muted-foreground">
-        Miss/Rough のまま時間が嵩んでいる問題 = 闇雲な復習を止め、教材戻り / 解説精読 / 飛ばす判断を
+        Problems piling up time while stuck at Miss/Rough — stop blind repetition; revisit the source, study the explanation, or move on
       </div>
     </div>
   );

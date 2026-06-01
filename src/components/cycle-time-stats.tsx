@@ -68,8 +68,8 @@ export function CycleTimeStats({ problems, statuses }: Props) {
       <div className="rounded-md border p-3 space-y-1">
         <div className="text-xs font-semibold">Cycle time (First → {doneStatus.name})</div>
         <div className="text-[11px] text-muted-foreground">
-          まだ {doneStatus.name} に到達した問題がありません。Done 達成後に集計されます。
-          {inflight > 0 && <> (進行中: {inflight} 問)</>}
+          No problems have reached {doneStatus.name} yet. Stats become available after Done.
+          {inflight > 0 && <> (in progress: {inflight})</>}
         </div>
       </div>
     );
@@ -93,21 +93,21 @@ export function CycleTimeStats({ problems, statuses }: Props) {
       <div className="flex items-center justify-between">
         <div className="text-xs font-semibold">Cycle time (First → {doneStatus.name})</div>
         <div className="text-[10px] text-muted-foreground tabular-nums">
-          {samples.length} 完了 / {inflight} 進行中
+          {samples.length} done / {inflight} in progress
         </div>
       </div>
       <div className="grid grid-cols-2 gap-4">
-        <Stat label="所要日数 (median)"
+        <Stat label="Days to done (median)"
           value={`${stats.median} d`}
           range={`${stats.p25}–${stats.p75} d (IQR)`}
           extremes={`min ${stats.min} / max ${stats.max}`} />
-        <Stat label="所要 attempts (median)"
-          value={`${stats.medAttempts} 回`}
-          range={`${stats.p25Attempts}–${stats.p75Attempts} 回 (IQR)`} />
+        <Stat label="Attempts to done (median)"
+          value={`${stats.medAttempts}`}
+          range={`${stats.p25Attempts}–${stats.p75Attempts} (IQR)`} />
       </div>
       <Histogram values={daysArr} unitLabel="d" />
       <div className="text-[10px] text-muted-foreground">
-        未着手問題の見込み完了 = (残数 × 中央値) を milestone 設計の目安に
+        ETA for backlog = (remaining × median) — useful for milestone planning
       </div>
     </div>
   );

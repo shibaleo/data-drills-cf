@@ -64,10 +64,10 @@ export function SameDayRepeatStats({ problems, statuses }: Props) {
     );
 
     const bucketDefs = [
-      { label: "1回", min: 1, max: 1 },
-      { label: "2回", min: 2, max: 2 },
-      { label: "3回", min: 3, max: 3 },
-      { label: "4+回", min: 4, max: Infinity },
+      { label: "1×", min: 1, max: 1 },
+      { label: "2×", min: 2, max: 2 },
+      { label: "3×", min: 3, max: 3 },
+      { label: "4+×", min: 4, max: Infinity },
     ];
     return bucketDefs.map((bd) => {
       const inBucket = targetGroups.filter((g) =>
@@ -96,9 +96,9 @@ export function SameDayRepeatStats({ problems, statuses }: Props) {
   if (totalSamples < 5) {
     return (
       <div className="rounded-md border p-3 space-y-1">
-        <div className="text-xs font-semibold">Same-day repeat (Miss 系から始まる)</div>
+        <div className="text-xs font-semibold">Same-day repeat (starting from Miss-tier)</div>
         <div className="text-[11px] text-muted-foreground">
-          サンプル不足 (n={totalSamples})。Miss/Rough から始まった同日学習が増えると集計されます
+          Not enough samples (n={totalSamples}). Stats will appear as more same-day sessions starting from Miss/Rough accumulate.
         </div>
       </div>
     );
@@ -106,14 +106,14 @@ export function SameDayRepeatStats({ problems, statuses }: Props) {
 
   return (
     <div className="rounded-md border p-3 space-y-2">
-      <div className="text-xs font-semibold">Same-day repeat (Miss 系から始まる、終了時の状態)</div>
+      <div className="text-xs font-semibold">Same-day repeat (starting from Miss-tier, end-of-day status)</div>
       <table className="text-xs w-full">
         <thead>
           <tr className="text-[10px] text-muted-foreground border-b">
-            <th className="text-left font-medium pr-2 py-1 w-16">同日回数</th>
+            <th className="text-left font-medium pr-2 py-1 w-16">Reps</th>
             <th className="text-right font-medium px-2 py-1 w-12">n</th>
-            <th className="text-right font-medium px-2 py-1">Miss 系のまま</th>
-            <th className="text-right font-medium pl-2 py-1">上達 (rank up)</th>
+            <th className="text-right font-medium px-2 py-1">Still Miss-tier</th>
+            <th className="text-right font-medium pl-2 py-1">Rank up</th>
           </tr>
         </thead>
         <tbody>
@@ -136,7 +136,7 @@ export function SameDayRepeatStats({ problems, statuses }: Props) {
         </tbody>
       </table>
       <div className="text-[10px] text-muted-foreground">
-        同日 N 回のうち最後の attempt の状態。集中復習 vs 1回切り上げの effectiveness 比較
+        Status of the last attempt of the day. Compare effectiveness of repeated drilling vs single-shot review.
       </div>
     </div>
   );

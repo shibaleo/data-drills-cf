@@ -107,8 +107,8 @@ export function ActivityHeatmap({ rows, days = 90 }: Props) {
       <div className="flex items-center justify-between">
         <div className="text-xs font-semibold">Activity ({days}d)</div>
         <div className="text-[10px] text-muted-foreground tabular-nums">
-          <span className="font-semibold text-foreground">{currentStreak}</span> 連続 ·
-          最長 {longestStreak} 日 · 活動 {activeDays} / {days} 日
+          <span className="font-semibold text-foreground">{currentStreak}</span> streak ·
+          max {longestStreak}d · active {activeDays} / {days}d
         </div>
       </div>
       <div className="overflow-x-auto">

@@ -467,3 +467,19 @@ export const statsScope = pgTable("stats_scope", {
   index("stats_scope_current_idx").on(t.id, t.revision.desc()),
   index("stats_scope_project_active_idx").on(t.projectId, t.isActive, t.validTo),
 ]);
+
+export const digestScope = pgTable("digest_scope", {
+  id: uuid("id").notNull(),
+  revision: integer("revision").notNull(),
+  projectId: uuid("project_id").notNull().references(() => project.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  filter: jsonb("filter").$type<MemberFilter>().notNull().default({}),
+  isActive: boolean("is_active").notNull().default(true),
+  validFrom: timestamp("valid_from", { withTimezone: true }).notNull().defaultNow(),
+  validTo: timestamp("valid_to", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  primaryKey({ columns: [t.id, t.revision] }),
+  index("digest_scope_current_idx").on(t.id, t.revision.desc()),
+  index("digest_scope_project_active_idx").on(t.projectId, t.isActive, t.validTo),
+]);

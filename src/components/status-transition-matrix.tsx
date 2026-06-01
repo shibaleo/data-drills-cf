@@ -170,7 +170,7 @@ function Hints({
     if (firstLowPct >= 0.85) {
       hints.push({
         tone: "info",
-        text: `初回の ${Math.round(firstLowPct * 100)}% が ${order[0]}/${order[1]} = 未習レベルの問題に取り組み中。教材の予習なしで問題集を叩いている可能性`,
+        text: `${Math.round(firstLowPct * 100)}% of first attempts land in ${order[0]}/${order[1]} — likely tackling unfamiliar problems without first studying the material`,
       });
     }
   }
@@ -188,7 +188,7 @@ function Hints({
     if (decay >= 0.2) {
       hints.push({
         tone: "warn",
-        text: `${from} → 下位 status へ ${Math.round(decay * 100)}% (n=${total})。stability_days を短縮して再観測する価値あり`,
+        text: `${from} decays to lower status ${Math.round(decay * 100)}% of the time (n=${total}) — consider shortening stability_days and reobserving`,
       });
     }
   }
@@ -201,7 +201,7 @@ function Hints({
     if (selfPct >= 0.45) {
       hints.push({
         tone: "warn",
-        text: `${from} → ${from} ループが ${Math.round(selfPct * 100)}% (n=${total})。闇雲な復習を止め、教材戻り/解説精読/類題に切替`,
+        text: `${from} → ${from} loop at ${Math.round(selfPct * 100)}% (n=${total}) — stop blind repetition; revisit source, study explanation, or try similar problems`,
       });
     }
   }
@@ -222,7 +222,7 @@ function Hints({
     if (upRate >= 0.7) {
       hints.push({
         tone: "good",
-        text: `上達遷移 ${Math.round(upRate * 100)}% (${upCount}/${totalNonFirst})。復習サイクルがよく回っている`,
+        text: `Up transitions ${Math.round(upRate * 100)}% (${upCount}/${totalNonFirst}) — the review cycle is working well`,
       });
     }
   }
@@ -234,7 +234,7 @@ function Hints({
     if (total > 0 && total < 5) {
       hints.push({
         tone: "info",
-        text: `${from} の遷移サンプル ${total} 件と少ない。傾向確定には観察期間を伸ばす`,
+        text: `${from} has only ${total} transition samples — extend the observation window to confirm trends`,
       });
     }
   }
