@@ -1,5 +1,5 @@
 import {
-  pgTable,
+  pgSchema,
   uuid,
   text,
   integer,
@@ -7,6 +7,9 @@ import {
   jsonb,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
+
+const ds = pgSchema("data_drills");
+const pgTable = ds.table.bind(ds);
 
 // =============================================================================
 // Helpers
