@@ -1,6 +1,7 @@
 "use client";
 import { useMemo, useState, Fragment } from "react";
-import { ChevronLeft, ChevronRight, Clock, ChevronDown, ChevronUp, MessageSquareText, Layers } from "lucide-react";
+import { ChevronLeft, ChevronRight, Clock, ChevronDown, ChevronUp, MessageSquareText, Layers, ArrowUpRight, AlertTriangle } from "lucide-react";
+import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useProject } from "@/hooks/use-project";
 import { useThroughputList } from "@/hooks/queries/use-throughput";
@@ -320,9 +321,9 @@ export default function DigestPage() {
       const sub = r.subjectId ? subjectMap.get(r.subjectId) : null;
       const lvl = r.levelId ? levelMap.get(r.levelId) : null;
       const top = r.topicId ? topicMap.get(r.topicId) : null;
-      bump(bySubject, sub?.id ?? null, sub?.name ?? "(未設定)", sub?.color ?? null, sec);
-      bump(byLevel, lvl?.id ?? null, lvl?.name ?? "(未設定)", lvl?.color ?? null, sec);
-      bump(byTopic, top?.id ?? null, top?.name ?? "(未設定)", null, sec);
+      bump(bySubject, sub?.id ?? null, sub?.name ?? "(unset)", sub?.color ?? null, sec);
+      bump(byLevel, lvl?.id ?? null, lvl?.name ?? "(unset)", lvl?.color ?? null, sec);
+      bump(byTopic, top?.id ?? null, top?.name ?? "(unset)", null, sec);
     }
     const sortDesc = (a: BreakdownRow, b: BreakdownRow) => b.count - a.count;
     return {
@@ -382,9 +383,22 @@ export default function DigestPage() {
           className="text-[10px] text-muted-foreground hover:text-foreground disabled:opacity-40">
           Today
         </button>
-        <span className="ml-2 text-xs text-muted-foreground">
-          {formatMonthDay(`${date}T12:00:00`)} ({new Date(`${date}T00:00:00`).toLocaleDateString("ja-JP", { weekday: "short" })})
-        </span>
+        {(() => {
+          const d = new Date(`${date}T12:00:00`);
+          const dow = d.getDay();
+          const dowLabel = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][dow];
+          const dowColor = dow === 0 ? "text-red-500" : dow === 6 ? "text-blue-500" : "text-foreground";
+          const isToday = date === todayJST();
+          return (
+            <span className="ml-2 text-xs flex items-baseline gap-1">
+              <span className="text-muted-foreground">{formatMonthDay(`${date}T12:00:00`)}</span>
+              <span className={`font-medium ${dowColor}`}>({dowLabel})</span>
+              {isToday && (
+                <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-primary/15 text-primary font-medium ml-0.5">TODAY</span>
+              )}
+            </span>
+          );
+        })()}
         {/* 直近 7 日累計 (D 含む) — 「今週」感覚で右側に出す */}
         <span className="ml-auto text-[10px] text-muted-foreground tabular-nums">
           7d: <span className="text-foreground font-medium">{weekly.attempts}</span> attempts ·
@@ -396,11 +410,11 @@ export default function DigestPage() {
       {/* サマリ */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <SummaryCard label="Attempts" value={dayRows.length.toString()}
-          sub={`${summary.uniqueProblems} 問`}
+          sub={`${summary.uniqueProblems} problems`}
           trend={formatDelta(dayRows.length, trend.attemptsAvg)}/>
         <SummaryCard label="Problem time"
           value={summary.totalSec > 0 ? fmtSec(summary.totalSec) : "—"}
-          sub={dayRows.length > 0 ? `平均 ${fmtSec(summary.totalSec / Math.max(1, dayRows.filter((r) => r.duration).length))}` : ""}
+          sub={dayRows.length > 0 ? `Avg ${fmtSec(summary.totalSec / Math.max(1, dayRows.filter((r) => r.duration).length))}` : ""}
           trend={formatDelta(summary.totalSec, trend.totalSecAvg)}/>
         <SummaryCard label="Study time (Toggl)"
           value={togglStudySec > 0 ? fmtSec(togglStudySec) : "—"}
@@ -409,9 +423,9 @@ export default function DigestPage() {
               ? `Problem ${Math.round((summary.totalSec * 100) / togglStudySec)}%`
               : (togglStudySec > 0 ? "Problem 0%" : "")
           }/>
-        <SummaryCard label="上達 / 維持 / 退行"
+        <SummaryCard label="Up / Same / Down"
           value={`${summary.up} / ${summary.same} / ${summary.down}`}
-          sub={summary.first > 0 ? `初回 ${summary.first}` : ""}/>
+          sub={summary.first > 0 ? `First ${summary.first}` : ""}/>
         <StatusMixCard
           statuses={sortedStatuses}
           counts={summary.byStatus}
@@ -452,32 +466,34 @@ export default function DigestPage() {
 
       {/* 予実: Backlog (前日 snapshot で D に割当だった問題 vs D 実績) */}
       <PlanSection
-        title="Backlog 予実"
+        title="Backlog"
         planned={backlogPlanToday.length}
         done={backlogTodayDone.length}
         missed={backlogTodayMissed}
         extras={[...actualProblemIds].filter(
           (id) => !backlogPlanToday.some((p) => p.problemId === id),
         ).length}
-        emptyHint="この日に割当だった backlog 問題はなし"
+        emptyHint="No backlog problems planned for this date"
         onOpen={openDetail}
+        href="/backlog"
       />
 
       {/* 予実: Review 今日 due (前日時点で D がジャストの due) */}
       <PlanSection
-        title="Review 予実 (今日 due)"
+        title="Review (due today)"
         planned={reviewPlanToday.length}
         done={reviewTodayDone.length}
         missed={reviewTodayMissed.map((r) => ({
           problemId: r.problemId, code: r.code, name: r.name, sub: r.lastStatus || null,
         }))}
-        emptyHint="この日が due の問題はなし"
+        emptyHint="No problems due today"
         onOpen={openDetail}
+        href="/review"
       />
 
       {/* 過去 due の持ち越し (前日時点で既に nextReview が D 未満) */}
       <PlanSection
-        title="Review 過去 due (持ち越し)"
+        title="Review carry-over (past due)"
         planned={reviewOverdue.length}
         done={reviewOverdueDone.length}
         missed={reviewOverdueOpen.map((r) => {
@@ -491,21 +507,23 @@ export default function DigestPage() {
             sub: `${days}d overdue (due ${r.nextReview})`,
           };
         })}
-        emptyHint="持ち越し overdue なし"
+        emptyHint="No overdue carry-over"
         onOpen={openDetail}
-        missedLabel="未消化"
+        missedLabel="Outstanding"
+        href="/review"
+        warn={reviewOverdueOpen.length >= 20}
       />
 
       {/* Answer log (時系列) */}
       <div className="rounded-md border p-3 space-y-2">
         <div className="text-xs font-semibold">Answer log ({dayRows.length})</div>
         {dayRows.length === 0 ? (
-          <div className="text-[11px] text-muted-foreground py-2">この日の answer はありません</div>
+          <div className="text-[11px] text-muted-foreground py-2">No answers on this date</div>
         ) : (
           <table className="text-xs w-full">
             <thead>
               <tr className="text-[10px] text-muted-foreground border-b">
-                <th className="text-left font-medium pr-2 py-1 w-12">時刻</th>
+                <th className="text-left font-medium pr-2 py-1 w-12">Start</th>
                 <th className="text-left font-medium pr-2 py-1">Code · Name</th>
                 <th className="text-center font-medium px-2 py-1 w-44">prev → next</th>
                 <th className="text-right font-medium pl-2 py-1 w-14">Time</th>
@@ -585,7 +603,7 @@ export default function DigestPage() {
           Flashcards ({dayFlashcardReviews.length})
         </div>
         {dayFlashcardReviews.length === 0 ? (
-          <div className="text-[11px] text-muted-foreground py-2">この日の flashcard review はありません</div>
+          <div className="text-[11px] text-muted-foreground py-2">No flashcard reviews on this date</div>
         ) : (
           <>
             {/* quality 分布 (1-5) */}
@@ -680,10 +698,10 @@ function DayTimeline({
         <Clock className="size-3.5 text-muted-foreground"/>
         Timeline
         <span className="text-[10px] font-normal text-muted-foreground ml-1">{HOUR_START}:00 – {HOUR_END}:00 JST</span>
-        <span className="text-[9px] font-normal text-muted-foreground ml-auto">上段: 計画 (Toggl project 色) / 下段: 実績 (drills)</span>
+        <span className="text-[9px] font-normal text-muted-foreground ml-auto">Top: Planned (Toggl) / Bottom: Actual (drills)</span>
       </div>
       {!hasData ? (
-        <div className="text-[11px] text-muted-foreground py-2">この日のアクティビティはなし</div>
+        <div className="text-[11px] text-muted-foreground py-2">No activity on this date</div>
       ) : (
         <svg viewBox={`0 0 1000 ${SVG_H}`} preserveAspectRatio="none" className="w-full" style={{ height: SVG_H }}>
           {/* 時刻軸 */}
@@ -771,7 +789,7 @@ function DayTimeline({
       )}
       {/* 凡例 (実績側のみ。Toggl 上段は project 色を直接使うので別途凡例不要) */}
       <div className="flex items-center gap-3 text-[9px] text-muted-foreground flex-wrap">
-        <span className="font-medium text-foreground">実績:</span>
+        <span className="font-medium text-foreground">Actual:</span>
         <span className="inline-flex items-center gap-1"><span className="inline-block w-2.5 h-2 rounded-sm bg-violet-500"/>Answer</span>
         <span className="inline-flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-full bg-emerald-500"/>Flashcard Q≥4</span>
         <span className="inline-flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-full bg-amber-500"/>Q3</span>
@@ -782,7 +800,8 @@ function DayTimeline({
 }
 
 function PlanSection({
-  title, planned, done, missed, extras, emptyHint, onOpen, missedLabel = "未着手",
+  title, planned, done, missed, extras, emptyHint, onOpen, missedLabel = "Pending",
+  href, warn,
 }: {
   title: string;
   planned: number;
@@ -792,21 +811,35 @@ function PlanSection({
   emptyHint: string;
   onOpen: (problemId: string) => void;
   missedLabel?: string;
+  /** 振り返り→アクション動線 (Review / Backlog ページへ) */
+  href?: string;
+  /** missed が多すぎる時の警告。空ならテーマ色 (red) で section header を縁取り */
+  warn?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const pct = planned > 0 ? Math.round((done * 100) / planned) : 0;
   const hasContent = planned > 0;
   return (
-    <div className="rounded-md border p-3 space-y-2">
+    <div className={`rounded-md border p-3 space-y-2 ${warn ? "border-red-500/40 bg-red-500/5" : ""}`}>
       <div className="flex items-center justify-between gap-2">
-        <div className="text-xs font-semibold">{title}</div>
+        <div className="flex items-center gap-1.5">
+          {warn && <AlertTriangle className="size-3.5 text-red-500"/>}
+          <div className="text-xs font-semibold">{title}</div>
+          {href && (
+            <Link to={href}
+              className="inline-flex items-center gap-0.5 text-[10px] text-muted-foreground hover:text-foreground"
+              title="ページを開く">
+              <ArrowUpRight className="size-3"/>
+            </Link>
+          )}
+        </div>
         {hasContent ? (
           <div className="flex items-center gap-2 text-[11px] tabular-nums">
-            <span className="text-muted-foreground">予定 <span className="text-foreground font-medium">{planned}</span></span>
-            <span className="text-muted-foreground">/ 実績 <span className="text-foreground font-medium">{done}</span></span>
+            <span className="text-muted-foreground">Planned <span className="text-foreground font-medium">{planned}</span></span>
+            <span className="text-muted-foreground">/ Done <span className="text-foreground font-medium">{done}</span></span>
             <span className={`font-medium ${pct >= 100 ? "text-emerald-500" : pct >= 50 ? "text-amber-500" : "text-red-500"}`}>{pct}%</span>
             {extras && extras > 0 ? (
-              <span className="text-[10px] text-muted-foreground">+{extras} 計画外</span>
+              <span className="text-[10px] text-muted-foreground">+{extras} extra</span>
             ) : null}
           </div>
         ) : (
@@ -866,7 +899,7 @@ function BreakdownColumn({
     return (
       <div className="space-y-1.5">
         <div className="text-[10px] text-muted-foreground uppercase tracking-wide">{title}</div>
-        <div className="text-[10px] text-muted-foreground italic">なし</div>
+        <div className="text-[10px] text-muted-foreground italic">None</div>
       </div>
     );
   }
@@ -908,13 +941,13 @@ function SummaryCard({ label, value, sub, trend }: {
   trend?: { label: string; color: string } | null;
 }) {
   return (
-    <div className="rounded-md border p-3 space-y-0.5">
+    <div className="rounded-md border p-3 flex flex-col gap-0.5 min-h-[88px]">
       <div className="flex items-baseline justify-between gap-1">
         <div className="text-[10px] text-muted-foreground uppercase tracking-wide">{label}</div>
         {trend && <div className={`text-[9px] tabular-nums ${trend.color}`}>{trend.label}</div>}
       </div>
       <div className="text-base font-semibold tabular-nums">{value}</div>
-      {sub && <div className="text-[10px] text-muted-foreground tabular-nums">{sub}</div>}
+      {sub && <div className="text-[10px] text-muted-foreground tabular-nums mt-auto">{sub}</div>}
     </div>
   );
 }
@@ -932,7 +965,7 @@ function StatusMixCard({
   const entries = statuses.map((s) => ({ s, n: counts.get(s.name) ?? 0 }));
   const total = entries.reduce((sum, e) => sum + e.n, 0);
   return (
-    <div className="rounded-md border p-3 space-y-1.5">
+    <div className="rounded-md border p-3 flex flex-col gap-1.5 min-h-[88px]">
       <div className="flex items-baseline justify-between gap-1">
         <div className="text-[10px] text-muted-foreground uppercase tracking-wide">Status mix</div>
         <div className="text-[10px] text-muted-foreground tabular-nums">{total}</div>

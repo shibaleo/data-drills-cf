@@ -44,11 +44,12 @@ function getOrCreateDb(): DB {
     if (!store.db) {
       const url = env.DATABASE_URL;
       // Hyperdrive (cf 本番) は URL に "hyperdrive" を含む or pooler ホストでない。
-      // pooler.supabase.com を直接叩く = local dev → Supabase pool 上限 15 が GLOBAL なので
-      // 1 req あたりの接続数を絞る (= バースト時の枯渇を防ぐ)。
+      // pooler.supabase.com を直接叩く = local dev → Supabase pool 上限 15 が GLOBAL。
+      // local dev は per-request client なので max=1。同時 N リクエストで最大 N 接続。
+      // (handler 内 Promise.all は直列化されるが、pool 枯渇させる方が痛い)
       const isDirectSupabase = url.includes("pooler.supabase.com");
       store.client = postgres(url, {
-        max: isDirectSupabase ? 2 : 5,
+        max: isDirectSupabase ? 1 : 5,
         idle_timeout: isDirectSupabase ? 5 : 20,
         connect_timeout: 10,
         ssl: isDirectSupabase ? "require" : false,
@@ -63,14 +64,15 @@ function getOrCreateDb(): DB {
     return store.db;
   }
 
-  // Local dev: process-cached client (HMR / vite SSR 再評価で重複生成しない)
+  // Local dev: process-cached client (HMR / vite SSR 再評価で重複生成しない)。
+  // vite middleware は withRequestDb で包まないので、全 request がこの client を共有する。
+  // burst で並列リクエストが来ても 3 接続だけ握って postgres.js 内で queue。
+  // → Supabase session pool 15 を local 単独で枯渇させない。
   if (!cachedPg.db) {
     cachedPg.client = postgres(env.DATABASE_URL, {
-      // session pooler (5432) は pool_size 15 が GLOBAL なので local の取り分は最小に。
-      // 並列度は cf 本番側 (Hyperdrive max=5) と分けて考える。
-      max: 2,
-      idle_timeout: 5,
-      max_lifetime: 60,
+      max: 3,
+      idle_timeout: 20,
+      max_lifetime: 60 * 30,
       connect_timeout: 10,
       ssl: "require",
       // Supabase pooler 全般で安全 (prepared statement cache 不整合を回避)
