@@ -501,11 +501,27 @@ export const BacklogChart = forwardRef<BacklogChartHandle, BacklogChartProps>(fu
             const rowY = layerYById.get(layer.id) ?? MS_TOP_PAD;
             // ピン非表示 or layer 個別非表示時は、すべてグリッド最上段から (= today 破線と同じ開始位置)
             const lineY1 = (!_showPins || hidden) ? TOP_AXIS_H : rowY;
+            const lineDraggable = !!onMilestoneDateChange;
             return (
               <g key={`ms-${ms.id}`}>
                 <line x1={cx} y1={lineY1} x2={cx} y2={chartHeight - BOTTOM_AXIS_H}
                   stroke={layerColor} strokeWidth={layerLineWidth} opacity={layerOpacity}
                   strokeDasharray={layerLineDash}/>
+                {lineDraggable && (
+                  <line x1={cx} y1={lineY1} x2={cx} y2={chartHeight - BOTTOM_AXIS_H}
+                    stroke="transparent" strokeWidth={12}
+                    style={{ cursor: "grab" }}
+                    onPointerDown={onPinDown(ms.id) as unknown as React.PointerEventHandler<SVGLineElement>}
+                    onPointerMove={onPinMove(ms.id) as unknown as React.PointerEventHandler<SVGLineElement>}
+                    onPointerUp={onPinUp(ms.id) as unknown as React.PointerEventHandler<SVGLineElement>}
+                    onPointerCancel={onPinUp(ms.id) as unknown as React.PointerEventHandler<SVGLineElement>}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setMenu({ id: ms.id, x: e.clientX, y: e.clientY });
+                    }}
+                  />
+                )}
                 {_showPins && !hidden && (
                   <circle cx={cx} cy={rowY} r={8.1}
                     fill={layerColor} opacity={layerOpacity}

@@ -63,7 +63,7 @@ async function fetchFirstAnswers(problemIds: string[], asOfDate?: string | null)
         GROUP BY problem_id
       `)
     : await db.execute<{ problem_id: string; min_date: string }>(sql`
-        SELECT problem_id, MIN(date)::date::text AS min_date
+        SELECT problem_id, MIN((date AT TIME ZONE 'Asia/Tokyo')::date)::text AS min_date
         FROM answer WHERE problem_id IN ${problemIds}
         GROUP BY problem_id
       `);
