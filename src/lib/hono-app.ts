@@ -27,6 +27,7 @@ import statsScopes from "@/routes/stats-scopes";
 import filterPrefs from "@/routes/filter-prefs";
 import googleAuth from "@/routes/google-auth";
 import drive from "@/routes/drive";
+import toggl from "@/routes/toggl";
 
 /* ── V1 API sub-app ──
  *
@@ -80,6 +81,7 @@ const v1 = new Hono<Env>()
   .route("/throughput-scopes", throughputScopes)
   .route("/stats-scopes", statsScopes)
   .route("/filter-prefs", filterPrefs)
+  .route("/toggl", toggl)
   // /me endpoint — return authenticated user info
   .get("/me", (c) => {
     const authResult = c.get("authResult");

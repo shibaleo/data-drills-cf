@@ -8,6 +8,8 @@ import { useProblemsList } from "@/hooks/queries/use-problems";
 import { useReviewList } from "@/hooks/queries/use-review";
 import { useBacklogList, type BacklogDetail } from "@/hooks/queries/use-backlog";
 import { useFlashcardsData } from "@/hooks/queries/use-flashcards";
+import { useTopicsList } from "@/hooks/queries/use-topics";
+import { useTogglEntries, type TogglEntry } from "@/hooks/queries/use-toggl";
 import { useProblemDialogs } from "@/hooks/use-problem-dialogs";
 import { usePageTitle } from "@/lib/page-context";
 import { todayJST, formatMonthDay } from "@/lib/date-utils";
@@ -40,7 +42,11 @@ function fmtSec(sec: number): string {
 
 export default function DigestPage() {
   usePageTitle("Digest");
-  const { currentProject, statuses } = useProject();
+  const { currentProject, statuses, subjects, levels } = useProject();
+  const { data: topics = [] } = useTopicsList(currentProject?.id);
+  const subjectMap = useMemo(() => new Map(subjects.map((s) => [s.id, s])), [subjects]);
+  const levelMap = useMemo(() => new Map(levels.map((l) => [l.id, l])), [levels]);
+  const topicMap = useMemo(() => new Map(topics.map((t) => [t.id, t])), [topics]);
   const [date, setDate] = useState<string>(todayJST());
 
   const { data: rows = [] } = useThroughputList(currentProject?.id);
@@ -78,6 +84,24 @@ export default function DigestPage() {
     () => new Map(fcCards.map((c) => [c.id, c])),
     [fcCards],
   );
+  // Toggl 当日 time entries (Neon DWH 透過、JST 日付フィルタ、日跨ぎ entry 含む)
+  const { data: togglEntries = [] } = useTogglEntries(date, date);
+  // Study 時間は日跨ぎ entry を当日に重なった秒数だけカウントする
+  const togglStudySec = useMemo(() => {
+    const dayStart = new Date(`${date}T00:00:00+09:00`).getTime();
+    const dayEnd = new Date(`${addDays(date, 1)}T00:00:00+09:00`).getTime();
+    let sec = 0;
+    for (const e of togglEntries) {
+      if (e.personal_category !== "Education") continue;
+      const s = new Date(e.started_at).getTime();
+      const dur = e.duration_seconds ?? 0;
+      const en = e.stopped_at ? new Date(e.stopped_at).getTime() : s + dur * 1000;
+      const overlap = Math.max(0, Math.min(en, dayEnd) - Math.max(s, dayStart));
+      sec += overlap / 1000;
+    }
+    return Math.round(sec);
+  }, [togglEntries, date]);
+
   const dayFlashcardReviews = useMemo(() => {
     return fcReviews
       .filter((r) => {
@@ -229,6 +253,76 @@ export default function DigestPage() {
     return { totalSec, uniqueProblems, byStatus, up, same, down, first };
   }, [dayRows, statuses]);
 
+  // 直近 7 日 (D を除く) の平均 — トレンド比較用。
+  // 期間内に活動が無かった日も母数に入れる (= 「普段ペース」の素直な平均)。
+  const trend = useMemo(() => {
+    const fromDate = addDays(date, -7);
+    const toDate = addDays(date, -1);
+    const prevRows = rows.filter((r) => r.date >= fromDate && r.date <= toDate);
+    const days = 7;
+    const totalSec = prevRows.reduce((s, r) => s + (r.duration ?? 0), 0);
+    return {
+      attemptsAvg: prevRows.length / days,
+      totalSecAvg: totalSec / days,
+    };
+  }, [rows, date]);
+  // 直近 7 日 (D 含む) の合計 — 今週累計表示用
+  const weekly = useMemo(() => {
+    const fromDate = addDays(date, -6);
+    const weekRows = rows.filter((r) => r.date >= fromDate && r.date <= date);
+    const totalSec = weekRows.reduce((s, r) => s + (r.duration ?? 0), 0);
+    const activeDays = new Set(weekRows.map((r) => r.date)).size;
+    return {
+      attempts: weekRows.length,
+      totalSec,
+      activeDays,
+    };
+  }, [rows, date]);
+
+  // 当日 dayRows の subject / level / topic 別 breakdown
+  type BreakdownRow = { id: string | null; name: string; color: string | null; count: number; sec: number };
+  const breakdown = useMemo(() => {
+    const bySubject = new Map<string | null, BreakdownRow>();
+    const byLevel = new Map<string | null, BreakdownRow>();
+    const byTopic = new Map<string | null, BreakdownRow>();
+    function bump(
+      map: Map<string | null, BreakdownRow>,
+      id: string | null,
+      name: string,
+      color: string | null,
+      sec: number,
+    ) {
+      const cur = map.get(id) ?? { id, name, color, count: 0, sec: 0 };
+      cur.count += 1;
+      cur.sec += sec;
+      map.set(id, cur);
+    }
+    for (const r of dayRows) {
+      const sec = r.duration ?? 0;
+      const sub = r.subjectId ? subjectMap.get(r.subjectId) : null;
+      const lvl = r.levelId ? levelMap.get(r.levelId) : null;
+      const top = r.topicId ? topicMap.get(r.topicId) : null;
+      bump(bySubject, sub?.id ?? null, sub?.name ?? "(未設定)", sub?.color ?? null, sec);
+      bump(byLevel, lvl?.id ?? null, lvl?.name ?? "(未設定)", lvl?.color ?? null, sec);
+      bump(byTopic, top?.id ?? null, top?.name ?? "(未設定)", null, sec);
+    }
+    const sortDesc = (a: BreakdownRow, b: BreakdownRow) => b.count - a.count;
+    return {
+      subject: [...bySubject.values()].sort(sortDesc),
+      level: [...byLevel.values()].sort(sortDesc),
+      topic: [...byTopic.values()].sort(sortDesc),
+    };
+  }, [dayRows, subjectMap, levelMap, topicMap]);
+
+  const formatDelta = (curr: number, avg: number) => {
+    if (avg <= 0) return null;
+    const pct = Math.round(((curr - avg) / avg) * 100);
+    if (Math.abs(pct) < 5) return { label: "≈ 7d", color: "text-muted-foreground" };
+    return pct > 0
+      ? { label: `+${pct}% vs 7d`, color: "text-emerald-500" }
+      : { label: `${pct}% vs 7d`, color: "text-red-500" };
+  };
+
   if (!currentProject) return <div className="p-6 text-muted-foreground">Please select a project</div>;
 
   const sortedStatuses = [...statuses].sort((a, b) => a.sortOrder - b.sortOrder);
@@ -236,7 +330,13 @@ export default function DigestPage() {
   return (
     <div className="p-3 md:p-4 flex flex-col gap-3 max-w-4xl">
       {/* 日付ナビ */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 flex-wrap">
+        <button type="button"
+          onClick={() => setDate(addDays(date, -7))}
+          className="inline-flex items-center gap-0.5 h-7 px-1.5 rounded-md border text-[10px] text-muted-foreground hover:text-foreground hover:bg-muted"
+          title="7 日前へ">
+          <ChevronLeft className="size-3"/>7d
+        </button>
         <button type="button"
           onClick={() => setDate(addDays(date, -1))}
           className="inline-flex items-center justify-center size-7 rounded-md border text-muted-foreground hover:text-foreground hover:bg-muted">
@@ -252,6 +352,13 @@ export default function DigestPage() {
           <ChevronRight className="size-3.5"/>
         </button>
         <button type="button"
+          onClick={() => setDate(addDays(date, 7))}
+          disabled={addDays(date, 7) > todayJST()}
+          className="inline-flex items-center gap-0.5 h-7 px-1.5 rounded-md border text-[10px] text-muted-foreground hover:text-foreground hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed"
+          title="7 日後へ">
+          7d<ChevronRight className="size-3"/>
+        </button>
+        <button type="button"
           onClick={() => setDate(todayJST())}
           disabled={date === todayJST()}
           className="text-[10px] text-muted-foreground hover:text-foreground disabled:opacity-40">
@@ -260,25 +367,52 @@ export default function DigestPage() {
         <span className="ml-2 text-xs text-muted-foreground">
           {formatMonthDay(`${date}T12:00:00`)} ({new Date(`${date}T00:00:00`).toLocaleDateString("ja-JP", { weekday: "short" })})
         </span>
+        {/* 直近 7 日累計 (D 含む) — 「今週」感覚で右側に出す */}
+        <span className="ml-auto text-[10px] text-muted-foreground tabular-nums">
+          7d: <span className="text-foreground font-medium">{weekly.attempts}</span> attempts ·
+          <span className="text-foreground font-medium ml-1">{weekly.totalSec > 0 ? fmtSec(weekly.totalSec) : "—"}</span> ·
+          <span className="text-foreground font-medium ml-1">{weekly.activeDays}</span>/7 active
+        </span>
       </div>
 
       {/* サマリ */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <SummaryCard label="Attempts" value={dayRows.length.toString()} sub={`${summary.uniqueProblems} 問`}/>
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <SummaryCard label="Attempts" value={dayRows.length.toString()}
+          sub={`${summary.uniqueProblems} 問`}
+          trend={formatDelta(dayRows.length, trend.attemptsAvg)}/>
         <SummaryCard label="Problem time"
           value={summary.totalSec > 0 ? fmtSec(summary.totalSec) : "—"}
-          sub={dayRows.length > 0 ? `平均 ${fmtSec(summary.totalSec / Math.max(1, dayRows.filter((r) => r.duration).length))}` : ""}/>
+          sub={dayRows.length > 0 ? `平均 ${fmtSec(summary.totalSec / Math.max(1, dayRows.filter((r) => r.duration).length))}` : ""}
+          trend={formatDelta(summary.totalSec, trend.totalSecAvg)}/>
+        <SummaryCard label="Study time (Toggl)"
+          value={togglStudySec > 0 ? fmtSec(togglStudySec) : "—"}
+          sub={
+            togglStudySec > 0 && summary.totalSec > 0
+              ? `Problem ${Math.round((summary.totalSec * 100) / togglStudySec)}%`
+              : (togglStudySec > 0 ? "Problem 0%" : "")
+          }/>
         <SummaryCard label="上達 / 維持 / 退行"
           value={`${summary.up} / ${summary.same} / ${summary.down}`}
           sub={summary.first > 0 ? `初回 ${summary.first}` : ""}/>
-        <SummaryCard label="Status mix"
-          value={sortedStatuses.map((s) => summary.byStatus.get(s.name) ?? 0).join(" · ")}
-          sub={sortedStatuses.map((s) => s.name.slice(0, 1)).join(" · ")}/>
+        <StatusMixCard
+          statuses={sortedStatuses}
+          counts={summary.byStatus}
+        />
       </div>
 
-      {/* Timeline (1日の時間軸ビュー) */}
+      {/* 分野別 breakdown (subject / level / topic) */}
+      {dayRows.length > 0 && (
+        <div className="rounded-md border p-3 grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+          <BreakdownColumn title="Subject" rows={breakdown.subject} totalSec={summary.totalSec}/>
+          <BreakdownColumn title="Level" rows={breakdown.level} totalSec={summary.totalSec}/>
+          <BreakdownColumn title="Topic" rows={breakdown.topic} totalSec={summary.totalSec}/>
+        </div>
+      )}
+
+      {/* Timeline (1日の時間軸ビュー、計画=Toggl / 実績=Drills の対比) */}
       <DayTimeline
         date={date}
+        toggl={togglEntries}
         answers={dayRows.map((r) => ({
           id: r.id,
           problemId: r.problemId,
@@ -475,9 +609,10 @@ export default function DigestPage() {
  * Toggl 連携時はこの行の下に同じ時間軸で勉強ブロックを重ねる予定。
  */
 function DayTimeline({
-  date, answers, flashcards, onOpenAnswer,
+  date, toggl, answers, flashcards, onOpenAnswer,
 }: {
   date: string;
+  toggl: TogglEntry[];
   answers: {
     id: string;
     problemId: string;
@@ -494,7 +629,8 @@ function DayTimeline({
   const HOUR_START = 5;
   const HOUR_END = 24;
   const ROW_H = 16;
-  const TRACK_TOP = 14;
+  const TRACK_TOGGL_TOP = 14;
+  const TRACK_TOP = TRACK_TOGGL_TOP + ROW_H + 4;  // 計画 (Toggl) 下に 実績 (drills)
   const TRACK_FC_TOP = TRACK_TOP + ROW_H + 6;
   const SVG_H = TRACK_FC_TOP + 16;
 
@@ -506,7 +642,19 @@ function DayTimeline({
     return t * totalW;
   };
 
-  const hasData = answers.length > 0 || flashcards.length > 0;
+  const hasData = answers.length > 0 || flashcards.length > 0 || toggl.length > 0;
+
+  // Toggl entry の自前 project_color を使う。null の時のみ category 別 fallback。
+  const coarseColor: Record<string, string> = {
+    Essentials: "#3b82f6",
+    Obligation: "#64748b",
+    Leisure: "#ec4899",
+  };
+  const togglFill = (e: TogglEntry): string => {
+    if (e.project_color) return e.project_color;
+    if (e.personal_category === "Education") return "#10b981";
+    return (e.coarse_personal_category && coarseColor[e.coarse_personal_category]) ?? "#888";
+  };
 
   return (
     <div className="rounded-md border p-3 space-y-1">
@@ -514,7 +662,7 @@ function DayTimeline({
         <Clock className="size-3.5 text-muted-foreground"/>
         Timeline
         <span className="text-[10px] font-normal text-muted-foreground ml-1">{HOUR_START}:00 – {HOUR_END}:00 JST</span>
-        <span className="text-[9px] font-normal text-muted-foreground ml-auto">Toggl 連携後にここへ勉強帯を重ね合わせ</span>
+        <span className="text-[9px] font-normal text-muted-foreground ml-auto">上段: 計画 (Toggl project 色) / 下段: 実績 (drills)</span>
       </div>
       {!hasData ? (
         <div className="text-[11px] text-muted-foreground py-2">この日のアクティビティはなし</div>
@@ -536,6 +684,39 @@ function DayTimeline({
               </g>
             );
           })}
+          {/* 計画: Toggl entry 帯 (上段、薄め)。
+             前日開始 / 翌日跨ぎ entry は当日視認領域 (HOUR_START–HOUR_END JST) に
+             クリップして描画する。 */}
+          {(() => {
+            const dayStartMs = baseMs + HOUR_START * 3_600_000;
+            const dayEndMs = baseMs + HOUR_END * 3_600_000;
+            const pxPerMs = 1000 / ((HOUR_END - HOUR_START) * 3_600_000);
+            return toggl.map((e) => {
+              const startMs = new Date(e.started_at).getTime();
+              const dur = e.duration_seconds ?? 0;
+              const endMs = e.stopped_at
+                ? new Date(e.stopped_at).getTime()
+                : startMs + dur * 1000;
+              const effStart = Math.max(startMs, dayStartMs);
+              const effEnd = Math.min(endMs, dayEndMs);
+              if (effEnd <= effStart) return null;  // 視認領域に重なってない
+              const x = (effStart - dayStartMs) * pxPerMs;
+              const w = Math.max(2, (effEnd - effStart) * pxPerMs);
+              const fill = togglFill(e);
+              return (
+                <rect key={e.id} x={x} y={TRACK_TOGGL_TOP}
+                  width={w} height={ROW_H - 2} rx={1.5}
+                  fill={fill} opacity={0.55}>
+                  <title>
+                    {`${jstHM(e.started_at)} ${e.description ?? ""}`}
+                    {e.project_name ? ` [${e.project_name}]` : ""}
+                    {e.personal_category ? ` (${e.personal_category})` : ""}
+                    {dur ? ` ${fmtSec(dur)}` : ""}
+                  </title>
+                </rect>
+              );
+            });
+          })()}
           {/* Answer 帯 (duration ある→帯幅、なし→点) */}
           {answers.map((a) => {
             const startMs = new Date(a.startedAt).getTime();
@@ -570,10 +751,11 @@ function DayTimeline({
           })}
         </svg>
       )}
-      {/* 凡例 */}
-      <div className="flex items-center gap-3 text-[9px] text-muted-foreground">
-        <span className="inline-flex items-center gap-1"><span className="inline-block w-3 h-2 rounded-sm bg-violet-500"/>Answer (duration)</span>
-        <span className="inline-flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-full bg-emerald-500"/>Flashcard (Q≥4)</span>
+      {/* 凡例 (実績側のみ。Toggl 上段は project 色を直接使うので別途凡例不要) */}
+      <div className="flex items-center gap-3 text-[9px] text-muted-foreground flex-wrap">
+        <span className="font-medium text-foreground">実績:</span>
+        <span className="inline-flex items-center gap-1"><span className="inline-block w-2.5 h-2 rounded-sm bg-violet-500"/>Answer</span>
+        <span className="inline-flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-full bg-emerald-500"/>Flashcard Q≥4</span>
         <span className="inline-flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-full bg-amber-500"/>Q3</span>
         <span className="inline-flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-full bg-red-500"/>Q≤2</span>
       </div>
@@ -651,12 +833,120 @@ function PlanSection({
   );
 }
 
-function SummaryCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
+/**
+ * 1 軸 (subject / level / topic) のカウント + 時間の breakdown 列。
+ * row.color あれば色ドットを表示。バーは時間ベース (sec / totalSec)。
+ */
+function BreakdownColumn({
+  title, rows, totalSec,
+}: {
+  title: string;
+  rows: { id: string | null; name: string; color: string | null; count: number; sec: number }[];
+  totalSec: number;
+}) {
+  if (rows.length === 0) {
+    return (
+      <div className="space-y-1.5">
+        <div className="text-[10px] text-muted-foreground uppercase tracking-wide">{title}</div>
+        <div className="text-[10px] text-muted-foreground italic">なし</div>
+      </div>
+    );
+  }
+  const maxCount = rows.reduce((m, r) => Math.max(m, r.count), 1);
+  return (
+    <div className="space-y-1.5">
+      <div className="text-[10px] text-muted-foreground uppercase tracking-wide">{title}</div>
+      <ul className="space-y-1">
+        {rows.map((r) => {
+          const pct = (r.count / maxCount) * 100;
+          const secPct = totalSec > 0 ? Math.round((r.sec / totalSec) * 100) : 0;
+          return (
+            <li key={r.id ?? "_"} className="space-y-0.5">
+              <div className="flex items-baseline gap-1.5 text-[11px]">
+                {r.color && (
+                  <span className="inline-block size-2 rounded-full shrink-0" style={{ backgroundColor: r.color }}/>
+                )}
+                <span className="flex-1 truncate">{r.name}</span>
+                <span className="tabular-nums text-muted-foreground shrink-0">{r.count}</span>
+                {totalSec > 0 && (
+                  <span className="tabular-nums text-[9px] text-muted-foreground shrink-0">({secPct}%)</span>
+                )}
+              </div>
+              <div className="h-1 rounded-full bg-muted overflow-hidden">
+                <div className="h-full bg-foreground/40" style={{ width: `${pct}%` }}/>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
+function SummaryCard({ label, value, sub, trend }: {
+  label: string;
+  value: string;
+  sub?: string;
+  trend?: { label: string; color: string } | null;
+}) {
   return (
     <div className="rounded-md border p-3 space-y-0.5">
-      <div className="text-[10px] text-muted-foreground uppercase tracking-wide">{label}</div>
+      <div className="flex items-baseline justify-between gap-1">
+        <div className="text-[10px] text-muted-foreground uppercase tracking-wide">{label}</div>
+        {trend && <div className={`text-[9px] tabular-nums ${trend.color}`}>{trend.label}</div>}
+      </div>
       <div className="text-base font-semibold tabular-nums">{value}</div>
       {sub && <div className="text-[10px] text-muted-foreground tabular-nums">{sub}</div>}
+    </div>
+  );
+}
+
+/**
+ * Status mix を比率バーで表示。各 status の color を反映、ホバーで数字。
+ * 数字羅列より一瞬で偏り (Miss 多い / Fluent 多い 等) が見える。
+ */
+function StatusMixCard({
+  statuses, counts,
+}: {
+  statuses: { id: string; name: string; color?: string | null; sortOrder: number }[];
+  counts: Map<string, number>;
+}) {
+  const entries = statuses.map((s) => ({ s, n: counts.get(s.name) ?? 0 }));
+  const total = entries.reduce((sum, e) => sum + e.n, 0);
+  return (
+    <div className="rounded-md border p-3 space-y-1.5">
+      <div className="flex items-baseline justify-between gap-1">
+        <div className="text-[10px] text-muted-foreground uppercase tracking-wide">Status mix</div>
+        <div className="text-[10px] text-muted-foreground tabular-nums">{total}</div>
+      </div>
+      {total === 0 ? (
+        <div className="text-base font-semibold tabular-nums text-muted-foreground">—</div>
+      ) : (
+        <>
+          <div className="flex h-3 w-full rounded-sm overflow-hidden bg-muted">
+            {entries.map(({ s, n }) => {
+              if (n === 0) return null;
+              const pct = (n / total) * 100;
+              return (
+                <div key={s.id}
+                  style={{ width: `${pct}%`, backgroundColor: s.color ?? "hsl(var(--muted-foreground))" }}
+                  title={`${s.name}: ${n} (${Math.round(pct)}%)`}/>
+              );
+            })}
+          </div>
+          <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-[9px] tabular-nums">
+            {entries.map(({ s, n }) => (
+              <span key={s.id} className="inline-flex items-center gap-1">
+                <span className="inline-block size-1.5 rounded-full"
+                  style={{ backgroundColor: s.color ?? "hsl(var(--muted-foreground))" }}/>
+                <span className={n === 0 ? "text-muted-foreground" : "text-foreground"}>
+                  {s.name.slice(0, 1)}:{n}
+                </span>
+              </span>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }
