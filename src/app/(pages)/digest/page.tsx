@@ -84,8 +84,26 @@ export default function DigestPage() {
     () => new Map(fcCards.map((c) => [c.id, c])),
     [fcCards],
   );
-  // Toggl 当日 time entries (Neon DWH 透過、JST 日付フィルタ、日跨ぎ entry 含む)
-  const { data: togglEntries = [] } = useTogglEntries(date, date);
+  // Toggl entries は他データ (throughput/problems) と揃えて 1 回広い範囲で fetch、
+  // 日付フィルタは client side。これで日付ナビ毎に Neon を叩かないので体感がきく。
+  // 範囲は throughput と同じく「ある程度過去」まで取れば十分(trend 比較 7d、digest UI で
+  // ジャンプ可能な範囲をカバー)。90 日固定。
+  const togglRangeTo = todayJST();
+  const togglRangeFrom = useMemo(() => addDays(togglRangeTo, -90), [togglRangeTo]);
+  const { data: togglEntriesAll = [] } = useTogglEntries(togglRangeFrom, togglRangeTo);
+
+  // 当日 (D) と OVERLAP する entry をクライアント側で抽出
+  const togglEntries = useMemo(() => {
+    const dayStart = new Date(`${date}T00:00:00+09:00`).getTime();
+    const dayEnd = new Date(`${addDays(date, 1)}T00:00:00+09:00`).getTime();
+    return togglEntriesAll.filter((e) => {
+      const s = new Date(e.started_at).getTime();
+      const dur = e.duration_seconds ?? 0;
+      const en = e.stopped_at ? new Date(e.stopped_at).getTime() : s + dur * 1000;
+      return s < dayEnd && en > dayStart;
+    });
+  }, [togglEntriesAll, date]);
+
   // Study 時間は日跨ぎ entry を当日に重なった秒数だけカウントする
   const togglStudySec = useMemo(() => {
     const dayStart = new Date(`${date}T00:00:00+09:00`).getTime();
