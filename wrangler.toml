@@ -8,7 +8,7 @@ VITE_BASE_URL = "https://data-drills-cf.shibaleo.workers.dev"
 
 [[hyperdrive]]
 binding = "HYPERDRIVE"
-id = "ec8131aac5e64775864336ec25f1267b"
+id = "10aa89de790d4ad8b16c0d24b023c365"
 
 [assets]
 directory = "dist"
