@@ -21,7 +21,7 @@ import {
   codeBlockField,
   collapseOnSelectionFacet,
 } from "codemirror-live-markdown";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import "katex/dist/katex.min.css";
 
 import {
@@ -45,10 +45,9 @@ function trimTrailingSpaces(text: string): string {
 }
 
 export default function CodemirrorEditor({ defaultValue, onChange, placeholder, compact }: Props) {
-  const normalizedValue = useMemo(
-    () => trimTrailingSpaces(defaultValue),
-    [defaultValue],
-  );
+  // 真の uncontrolled: 初期値だけ一度確定させ、以降は親の defaultValue 変化を無視する。
+  // 親が外部リセットしたい場合は <CodemirrorEditor key={...} /> で remount すること。
+  const [initialValue] = useState(() => trimTrailingSpaces(defaultValue));
 
   const extensions = useMemo(
     () => [
@@ -88,7 +87,7 @@ export default function CodemirrorEditor({ defaultValue, onChange, placeholder, 
 
   return (
     <CodeMirror
-      value={normalizedValue}
+      value={initialValue}
       onChange={onChange}
       extensions={extensions}
       basicSetup={false}

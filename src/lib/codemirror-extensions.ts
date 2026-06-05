@@ -155,25 +155,13 @@ export const bulletPlugin = ViewPlugin.fromClass(
       const builder = new RangeSetBuilder<Decoration>();
       const state = view.state;
 
-      // アクティブ行を収集（livePreviewPlugin の block mark 判定と同期）
-      const activeLines = new Set<number>();
-      for (const range of state.selection.ranges) {
-        const startLine = state.doc.lineAt(range.from).number;
-        const endLine = state.doc.lineAt(range.to).number;
-        for (let i = startLine; i <= endLine; i++) {
-          activeLines.add(i);
-        }
-      }
-
       syntaxTree(state).iterate({
         enter(node) {
           if (node.name !== "ListMark") return;
           const text = state.doc.sliceString(node.from, node.to);
           if (!/^[-*+]$/.test(text)) return;
-          // アクティブ行ならスキップ（livePreviewPlugin が raw を表示する）
-          const line = state.doc.lineAt(node.from);
-          if (activeLines.has(line.number)) return;
-          // ListMark テキスト (「-」等) を「•」ウィジェットで完全に置換
+          // ListMark テキスト (「-」等) を「•」ウィジェットで常に置換
+          // (アクティブ行でも置換することで、入力中もバレット表示を維持する)
           builder.add(node.from, node.to, bulletReplace);
         },
       });
