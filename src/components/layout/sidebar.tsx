@@ -6,6 +6,7 @@ import { SITE_NAME } from "@/lib/site";
 import {
   BarChart2,
   CalendarDays,
+  CalendarRange,
   History,
   Info,
   Inbox,
@@ -89,6 +90,7 @@ const navItems: NavItem[] = [
   { href: "/review", label: "Review", icon: Repeat, Badge: OverdueBadge },
   { href: "/backlog", label: "Backlog", icon: Inbox, Badge: BacklogBadge },
   { href: "/throughput", label: "Throughput", icon: History },
+  { href: "/plan", label: "Plan", icon: CalendarRange },
   { href: "/stats", label: "Stats", icon: BarChart2 },
   { href: "/digest", label: "Digest", icon: CalendarDays, dividerAfter: true },
   { href: "/flashcards", label: "Flashcards", icon: Layers },

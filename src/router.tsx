@@ -34,6 +34,7 @@ const AboutPage = lazy(() => import("./app/(pages)/about/page"));
 const BacklogPage = lazy(() => import("./app/(pages)/backlog/page"));
 const BacklogNewPage = lazy(() => import("./app/(pages)/backlog/new/page"));
 const BacklogDetailPage = lazy(() => import("./app/(pages)/backlog/$backlogId/page"));
+const PlanPage = lazy(() => import("./app/(pages)/plan/page"));
 const ReviewNewPage = lazy(() => import("./app/(pages)/review/new/page"));
 const ReviewDetailPage = lazy(() => import("./app/(pages)/review/$scopeId/page"));
 const ThroughputNewPage = lazy(() => import("./app/(pages)/throughput/new/page"));
@@ -128,6 +129,7 @@ const apiKeysRoute = lazyRoute("/api-keys", ApiKeysPage);
 const mastersRoute = lazyRoute("/masters", MastersPage);
 const aboutRoute = lazyRoute("/about", AboutPage);
 const backlogRoute = lazyRoute("/backlog", BacklogPage);
+const planRoute = lazyRoute("/plan", PlanPage);
 const backlogNewRoute = lazyRoute("/backlog/new", BacklogNewPage);
 const backlogDetailRoute = createRoute({
   getParentRoute: () => authLayout,
@@ -173,6 +175,7 @@ const routeTree = rootRoute.addChildren([
     backlogRoute,
     backlogNewRoute,
     backlogDetailRoute,
+    planRoute,
     throughputRoute,
     throughputNewRoute,
     throughputDetailRoute,
