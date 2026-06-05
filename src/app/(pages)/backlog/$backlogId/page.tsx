@@ -19,6 +19,7 @@ import { backlogKeys } from "@/hooks/queries/use-backlog";
 import { problemsKeys } from "@/hooks/queries/use-problems";
 import { BacklogChart, type BacklogChartHandle } from "@/components/backlog-chart";
 import { allocate, type MemberInput } from "@/lib/backlog-allocate";
+import { COLOR_PLANNED, COLOR_FIRST_ATTEMPT } from "@/lib/block-color";
 import { formatRelDay } from "@/lib/relative-day";
 import { todayJST } from "@/lib/date-utils";
 import { Input } from "@/components/ui/input";
@@ -648,8 +649,8 @@ export default function BacklogDetailPage() {
               </PopoverContent>
             </Popover>
             <BlockLegend entries={[
-              ...(hideFirst ? [] : [{ kind: "fill" as const, label: "First", color: "#ec4899" }]),
-              ...(hideFuture ? [] : [{ kind: "fill" as const, label: "Planned", color: "#8b5cf6" }]),
+              ...(hideFirst ? [] : [{ kind: "fill" as const, label: "First", color: COLOR_FIRST_ATTEMPT }]),
+              ...(hideFuture ? [] : [{ kind: "fill" as const, label: "Planned", color: COLOR_PLANNED }]),
               { kind: "ring" as const, label: "Over budget", color: "#f59e0b" },
               { kind: "ring" as const, label: "Overflow", color: "#ef4444" },
             ]}/>

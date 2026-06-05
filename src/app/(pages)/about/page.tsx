@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { usePageTitle } from "@/lib/page-context";
 import { useProject } from "@/hooks/use-project";
 import { useUpdateStatus } from "@/hooks/queries/use-statuses";
+import { COLOR_PLANNED, COLOR_FIRST_ATTEMPT } from "@/lib/block-color";
 
 /* ── KaTeX helpers ── */
 
@@ -203,15 +204,15 @@ export default function AboutPage() {
               </tr>
             </thead>
             <tbody className="text-muted-foreground">
-              <tr className="border-b border-border/50"><td className="pr-4 py-1" style={{ color: "#8b5cf6" }}>Planned</td><td className="py-1">violet 塗り (Backlog 未着手)</td></tr>
-              <tr className="border-b border-border/50"><td className="pr-4 py-1" style={{ color: "#ec4899" }}>First attempt</td><td className="py-1">pink 塗り (初回回答)</td></tr>
+              <tr className="border-b border-border/50"><td className="pr-4 py-1" style={{ color: COLOR_PLANNED }}>Planned</td><td className="py-1">Backlog 未着手</td></tr>
+              <tr className="border-b border-border/50"><td className="pr-4 py-1" style={{ color: COLOR_FIRST_ATTEMPT }}>First attempt</td><td className="py-1">初回回答</td></tr>
               <tr className="border-b border-border/50"><td className="pr-4 py-1" style={{ color: "#ef4444" }}>Repeat after Miss</td><td className="py-1">red 塗り</td></tr>
               <tr className="border-b border-border/50"><td className="pr-4 py-1" style={{ color: "#f97316" }}>Repeat after Rough</td><td className="py-1">orange 塗り</td></tr>
               <tr className="border-b border-border/50"><td className="pr-4 py-1" style={{ color: "#eab308" }}>Repeat after Fair</td><td className="py-1">yellow 塗り</td></tr>
               <tr className="border-b border-border/50"><td className="pr-4 py-1" style={{ color: "#22c55e" }}>Repeat after Fluent</td><td className="py-1">green 塗り</td></tr>
               <tr className="border-b border-border/50"><td className="pr-4 py-1" style={{ color: "#3b82f6" }}>Repeat after Done</td><td className="py-1">blue 塗り</td></tr>
-              <tr className="border-b border-border/50"><td className="pr-4 py-1 text-amber-500">Over budget</td><td className="py-1">violet 塗り + amber 破線枠 (1問が日次枠超過)</td></tr>
-              <tr><td className="pr-4 py-1 text-red-500">Overflow</td><td className="py-1">violet 塗り + red 破線枠 (milestone 締切超過 pile-up)</td></tr>
+              <tr className="border-b border-border/50"><td className="pr-4 py-1 text-amber-500">Over budget</td><td className="py-1">Planned 塗り + amber 破線枠 (1問が日次枠超過)</td></tr>
+              <tr><td className="pr-4 py-1 text-red-500">Overflow</td><td className="py-1">Planned 塗り + red 破線枠 (milestone 締切超過 pile-up)</td></tr>
             </tbody>
           </table>
         </section>

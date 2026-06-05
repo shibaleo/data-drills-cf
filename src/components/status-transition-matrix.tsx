@@ -9,6 +9,7 @@
  */
 import { useMemo } from "react";
 import type { ThroughputRow } from "@/hooks/queries/use-throughput";
+import { COLOR_FIRST_ATTEMPT } from "@/lib/block-color";
 
 type Status = { id: string; name: string; color: string | null; sortOrder: number };
 
@@ -94,7 +95,7 @@ export function StatusTransitionMatrix({ rows, statuses, period, setPeriod }: Pr
         <tbody>
           {rowLabels.map((from) => {
             const total = rowTotals[from] ?? 0;
-            const fromColor = from === FIRST_LABEL ? "#ec4899" : colorByName.get(from) ?? "#888";
+            const fromColor = from === FIRST_LABEL ? COLOR_FIRST_ATTEMPT : colorByName.get(from) ?? "#888";
             return (
               <tr key={from} className="border-t">
                 <th className="text-left text-[11px] font-semibold pr-2 py-1"

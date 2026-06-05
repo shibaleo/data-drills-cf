@@ -1,5 +1,6 @@
 "use client";
 import { useMemo, useState, Fragment } from "react";
+import { COLOR_FIRST_ATTEMPT } from "@/lib/block-color";
 import { ChevronLeft, ChevronRight, Clock, ChevronDown, ChevronUp, MessageSquareText, Layers, ArrowUpRight, AlertTriangle, ArrowLeft } from "lucide-react";
 import { Link, useParams } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
@@ -847,7 +848,7 @@ function DayTimeline({
             // duration は分→x ピクセルに変換。総時間幅 (HOUR_END-HOUR_START)*3600 が 1000px に対応
             const wPx = (dur / ((HOUR_END - HOUR_START) * 3600)) * 1000;
             const w = Math.max(2, wPx); // 最小 2px
-            const fill = a.statusColor ?? "#8b5cf6";
+            const fill = a.statusColor ?? COLOR_FIRST_ATTEMPT;
             return (
               <g key={a.id}>
                 <rect x={x} y={TRACK_TOP} width={w} height={ROW_H - 2} rx={1.5}

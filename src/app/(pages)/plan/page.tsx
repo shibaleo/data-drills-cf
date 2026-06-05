@@ -1,5 +1,5 @@
 "use client";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useQueries } from "@tanstack/react-query";
 import { useProject } from "@/hooks/use-project";
 import { useBacklogList, backlogKeys } from "@/hooks/queries/use-backlog";
@@ -7,11 +7,12 @@ import { useReviewList } from "@/hooks/queries/use-review";
 import { usePageTitle } from "@/lib/page-context";
 import { rpc, unwrap } from "@/lib/rpc-client";
 import { allocate, type MemberInput, type Milestone } from "@/lib/backlog-allocate";
-import { blockColor, blockBorder } from "@/lib/block-color";
+import { blockColor, blockBorder, COLOR_PLANNED, COLOR_FIRST_ATTEMPT } from "@/lib/block-color";
 import { todayJST } from "@/lib/date-utils";
 import { formatRelDay } from "@/lib/relative-day";
 import { ChartShell, DEFAULT_TOP_AXIS_H, DEFAULT_BOTTOM_AXIS_H } from "@/components/chart-shell";
 import { CELL, STEP, MIN_ROWS } from "@/lib/chart-constants";
+import { BlockLegend, type LegendEntry } from "@/components/block-legend";
 
 const PAD_BEFORE = 7;
 const PAD_AFTER = 14;
@@ -24,6 +25,12 @@ type Block = {
   color: string;
   border: { stroke: string; dashed: boolean; width: number } | null;
   source: "backlog" | "review";
+  /** backlog future のみ true 可。"First" pink past / Review は false */
+  isFuture: boolean;
+  overflow: boolean;
+  overBudget: boolean;
+  /** review block の status 名 (フィルター用)。backlog は null */
+  statusName: string | null;
 };
 
 function addDays(s: string, n: number): string {
@@ -34,9 +41,14 @@ function addDays(s: string, n: number): string {
 
 export default function PlanPage() {
   usePageTitle("Plan");
-  const { currentProject } = useProject();
+  const { currentProject, statuses } = useProject();
   const projectId = currentProject?.id;
   const today = todayJST();
+  const [hideFirst, setHideFirst] = useState(false);
+  const [hideFuture, setHideFuture] = useState(false);
+  const [hiddenStatuses, setHiddenStatuses] = useState<Set<string>>(new Set());
+  const [overflowOnly, setOverflowOnly] = useState(false);
+  const [overBudgetOnly, setOverBudgetOnly] = useState(false);
 
   const { data: backlogs = [] } = useBacklogList(projectId);
   const reviewQuery = useReviewList(projectId);
@@ -94,6 +106,10 @@ export default function PlanPage() {
           color: blockColor(kind),
           border: blockBorder(kind),
           source: "backlog",
+          isFuture: a.side === "future",
+          overflow: a.overflow,
+          overBudget: a.overBudget,
+          statusName: null,
         });
       }
     }
@@ -108,14 +124,37 @@ export default function PlanPage() {
         color: r.statusColor ?? "#a3a3a3",
         border: null,
         source: "review",
+        isFuture: false,
+        overflow: false,
+        overBudget: false,
+        statusName: r.lastStatus,
       });
     }
     return out;
   }, [detailQueries, reviewQuery.data, today]);
 
+  const visibleBlocks = useMemo(() => {
+    return blocks.filter((b) => {
+      if (b.source === "backlog") {
+        if (b.isFuture) {
+          if (hideFuture) return false;
+        } else {
+          if (hideFirst) return false;
+        }
+        if (overflowOnly && !b.overflow) return false;
+        if (overBudgetOnly && !b.overBudget) return false;
+      } else {
+        // review
+        if (overflowOnly || overBudgetOnly) return false;
+        if (b.statusName && hiddenStatuses.has(b.statusName)) return false;
+      }
+      return true;
+    });
+  }, [blocks, hideFirst, hideFuture, hiddenStatuses, overflowOnly, overBudgetOnly]);
+
   const grouped = useMemo(() => {
     const map = new Map<string, Block[]>();
-    for (const b of blocks) {
+    for (const b of visibleBlocks) {
       const list = map.get(b.date) ?? [];
       list.push(b);
       map.set(b.date, list);
@@ -126,10 +165,10 @@ export default function PlanPage() {
       list.sort((a, b) => order[a.source] - order[b.source]);
     }
     return map;
-  }, [blocks]);
+  }, [visibleBlocks]);
 
   const dates = useMemo(() => {
-    const allDates = [today, ...blocks.map((b) => b.date)];
+    const allDates = [today, ...visibleBlocks.map((b) => b.date)];
     const minDate = allDates.reduce((a, b) => (a < b ? a : b));
     const maxDate = allDates.reduce((a, b) => (a > b ? a : b));
     const start = addDays(minDate < today ? minDate : today, -PAD_BEFORE);
@@ -141,7 +180,7 @@ export default function PlanPage() {
       d = addDays(d, 1);
     }
     return ds;
-  }, [blocks, today]);
+  }, [visibleBlocks, today]);
 
   const maxCount = Math.max(0, ...dates.map((d) => (grouped.get(d) ?? []).length));
   const maxStack = Math.max(MIN_ROWS, maxCount + 2);
@@ -156,25 +195,65 @@ export default function PlanPage() {
 
   const isLoading = detailQueries.some((q) => q.isLoading) || reviewQuery.isLoading;
 
-  const backlogCount = blocks.filter((b) => b.source === "backlog").length;
-  const reviewCount = blocks.filter((b) => b.source === "review").length;
+  const legendEntries: LegendEntry[] = useMemo(() => {
+    const entries: LegendEntry[] = [
+      {
+        kind: "fill",
+        label: "First",
+        color: COLOR_FIRST_ATTEMPT,
+        active: !hideFirst,
+        onClick: () => setHideFirst((v) => !v),
+      },
+      {
+        kind: "fill",
+        label: "Planned",
+        color: COLOR_PLANNED,
+        active: !hideFuture,
+        onClick: () => setHideFuture((v) => !v),
+      },
+      ...statuses.map<LegendEntry>((s) => ({
+        kind: "fill",
+        label: s.name,
+        color: s.color ?? "#888",
+        active: !hiddenStatuses.has(s.name),
+        onClick: () =>
+          setHiddenStatuses((prev) => {
+            const next = new Set(prev);
+            if (next.has(s.name)) next.delete(s.name);
+            else next.add(s.name);
+            return next;
+          }),
+      })),
+      {
+        kind: "ring",
+        label: "Over budget",
+        color: "#f59e0b",
+        active: overBudgetOnly,
+        onClick: () => setOverBudgetOnly((v) => !v),
+      },
+      {
+        kind: "ring",
+        label: "Overflow",
+        color: "#ef4444",
+        active: overflowOnly,
+        onClick: () => setOverflowOnly((v) => !v),
+      },
+    ];
+    return entries;
+  }, [hideFirst, hideFuture, hiddenStatuses, overBudgetOnly, overflowOnly, statuses]);
 
   if (!currentProject) return <div className="p-6 text-muted-foreground">Please select a project</div>;
 
   return (
     <div className="p-3 md:p-4 flex flex-col gap-3">
-      <div className="flex items-center gap-4 text-xs text-muted-foreground">
-        <div className="flex items-center gap-1.5">
-          <span className="inline-block size-3 rounded-sm" style={{ background: "#8b5cf6" }} />
-          <span>Backlog future ({backlogCount}) — violet</span>
+      <div className="rounded-md border p-3 space-y-2">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <BlockLegend entries={legendEntries} />
+          </div>
+          {isLoading && <span className="text-xs text-muted-foreground">Loading…</span>}
         </div>
-        <div className="flex items-center gap-1.5">
-          <span className="inline-block size-3 rounded-sm bg-muted-foreground/60" />
-          <span>Review ({reviewCount}) — latest status 色</span>
-        </div>
-        {isLoading && <span>Loading…</span>}
-      </div>
-      <ChartShell dates={dates} cursorDate={today} maxStack={maxStack} yAxisLabels={yTicks}>
+        <ChartShell dates={dates} cursorDate={today} maxStack={maxStack} yAxisLabels={yTicks}>
         {dates.map((date, colIdx) => {
           const dayItems = grouped.get(date) ?? [];
           const x = colIdx * STEP;
@@ -238,7 +317,8 @@ export default function PlanPage() {
             </g>
           );
         })}
-      </ChartShell>
+        </ChartShell>
+      </div>
     </div>
   );
 }
