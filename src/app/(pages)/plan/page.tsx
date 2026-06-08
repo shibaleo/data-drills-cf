@@ -10,6 +10,7 @@ import { allocate, type MemberInput, type Milestone } from "@/lib/backlog-alloca
 import { blockColor, blockBorder, COLOR_PLANNED, COLOR_FIRST_ATTEMPT } from "@/lib/block-color";
 import { todayJST } from "@/lib/date-utils";
 import { computeNextReview } from "@/lib/review-scoring";
+import { useScopes } from "@/hooks/queries/use-scopes";
 import { formatRelDay } from "@/lib/relative-day";
 import { ChartShell, DEFAULT_TOP_AXIS_H, DEFAULT_BOTTOM_AXIS_H } from "@/components/chart-shell";
 import { CELL, STEP, MIN_ROWS } from "@/lib/chart-constants";
@@ -102,9 +103,17 @@ export default function PlanPage() {
   const [hiddenStatuses, setHiddenStatuses] = useState<Set<string>>(new Set());
   const [overflowOnly, setOverflowOnly] = useState(false);
   const [overBudgetOnly, setOverBudgetOnly] = useState(false);
+  // Phase 3c: scope を選ぶと review API に scope_id を渡し、scope.status_stabilities で
+  // FSRS パラメタを override する。未選択ならグローバル fallback (= 従来通り)。
+  const [selectedScopeId, setSelectedScopeId] = useState<string | null>(null);
+  const { data: scopes = [] } = useScopes();
+  const selectedScope = useMemo(
+    () => scopes.find((s) => s.id === selectedScopeId) ?? null,
+    [scopes, selectedScopeId],
+  );
 
   const { data: backlogs = [] } = useBacklogList(projectId);
-  const reviewQuery = useReviewList(projectId);
+  const reviewQuery = useReviewList(projectId, null, selectedScopeId);
 
   // Fan-out backlog details.
   const detailQueries = useQueries({
@@ -122,11 +131,14 @@ export default function PlanPage() {
 
   const statusByName = useMemo(() => {
     const m = new Map<string, { stabilityDays: number; color: string | null }>();
+    const override = selectedScope?.status_stabilities ?? {};
     for (const s of statuses) {
-      m.set(s.name, { stabilityDays: s.stabilityDays, color: s.color ?? null });
+      // scope の override > global stability_days
+      const days = override[s.name] !== undefined ? override[s.name] : s.stabilityDays;
+      m.set(s.name, { stabilityDays: days, color: s.color ?? null });
     }
     return m;
-  }, [statuses]);
+  }, [statuses, selectedScope]);
 
   const horizonDate = useMemo(() => addDays(today, PROJECTION_HORIZON_DAYS), [today]);
 
@@ -346,7 +358,20 @@ export default function PlanPage() {
           <div className="flex items-center gap-2 flex-wrap">
             <BlockLegend entries={legendEntries} />
           </div>
-          {isLoading && <span className="text-xs text-muted-foreground">Loading…</span>}
+          <div className="flex items-center gap-2">
+            <label className="text-[10px] text-muted-foreground">Scope:</label>
+            <select
+              className="text-[11px] rounded border bg-background px-2 py-0.5"
+              value={selectedScopeId ?? ""}
+              onChange={(e) => setSelectedScopeId(e.target.value || null)}
+            >
+              <option value="">— global (no override)</option>
+              {scopes.map((s) => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </select>
+            {isLoading && <span className="text-xs text-muted-foreground">Loading…</span>}
+          </div>
         </div>
         <ChartShell dates={dates} cursorDate={today} maxStack={maxStack} yAxisLabels={yTicks}>
         {dates.map((date, colIdx) => {
