@@ -11,6 +11,7 @@ import type { BacklogBatchInput, BacklogUpdateInput } from "@/lib/schemas/backlo
 import type { MemberFilterInput } from "@/lib/schemas/member-filter";
 import { applyMemberFilter } from "@/lib/member-filter";
 import { MemberFilterPicker } from "@/components/member-filter-picker";
+import { StabilitySlider } from "@/components/stability-slider";
 import { useProject } from "@/hooks/use-project";
 import { useProblemsList } from "@/hooks/queries/use-problems";
 import { useProblemDialogs } from "@/hooks/use-problem-dialogs";
@@ -44,7 +45,7 @@ import { useScope, useUpdateScope } from "@/hooks/queries/use-scopes";
 
 export default function ScopeDetailPage() {
   const { scopeId } = useParams({ strict: false }) as { scopeId: string };
-  const { currentProject, subjects, levels } = useProject();
+  const { currentProject, subjects, levels, statuses } = useProject();
   const subjectMap = useMemo(() => new Map(subjects.map((s) => [s.id, s])), [subjects]);
   const levelMap = useMemo(() => new Map(levels.map((l) => [l.id, l])), [levels]);
   const navigate = useNavigate();
@@ -741,11 +742,11 @@ export default function ScopeDetailPage() {
                   })}
                 </div>
               </div>
-              {/* Phase 3c: FSRS パラメタ override (status name → 次回 review までの基準日数) */}
+              {/* Phase 3c: FSRS パラメタ override (status name → 次回 review までの基準日数)。
+                  visual slider 版。空 (= 未指定) は global stability_days にフォールバック。 */}
               {scopeQuery.data && (
-                <FSRSStabilitiesEditor
-                  scopeId={scopeId}
-                  statuses={scopeStatusListForFSRS(currentProject?.id)}
+                <FSRSStabilitiesSliderEditor
+                  statuses={statuses}
                   current={scopeQuery.data.status_stabilities ?? {}}
                   disabled={readOnly}
                   onSave={(next) =>
@@ -1000,18 +1001,15 @@ function WeekdayWeightsInput({ value, onChange, dailyMinutes }: {
   );
 }
 
-function scopeStatusListForFSRS(_projectId: string | undefined) {
-  // Phase 3c minimal: FSRS slider 用の status 一覧。useProject の statuses をそのまま使うが
-  // パネルから独立呼び出しのため一度コンポーネントで参照する形にする。簡単のためここでは
-  // SMOOTH_CHAIN 順固定にする。
-  return ["Miss", "Rough", "Fair", "Fluent", "Done"];
-}
-
-function FSRSStabilitiesEditor({
-  scopeId: _scopeId, statuses, current, disabled, onSave,
+/* ── FSRS override 編集 (visual slider 版) ──────────────────────────
+ * scope.status_stabilities (= status name → days の override マップ) を編集。
+ * slider の thumb を drag すると local preview 更新、明示的 save ボタンで反映。
+ * thumb 位置は override > global stabilityDays > 0 のフォールバック。
+ */
+function FSRSStabilitiesSliderEditor({
+  statuses, current, disabled, onSave,
 }: {
-  scopeId: string;
-  statuses: string[];
+  statuses: { id: string; name: string; color: string | null; stabilityDays: number }[];
   current: Record<string, number>;
   disabled?: boolean;
   onSave: (next: Record<string, number>) => Promise<unknown>;
@@ -1020,40 +1018,56 @@ function FSRSStabilitiesEditor({
   const [saving, setSaving] = useState(false);
   useEffect(() => { setLocal(current); }, [current]);
   const dirty = JSON.stringify(local) !== JSON.stringify(current);
+
+  const overrides = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const [k, v] of Object.entries(local)) m.set(k, v);
+    return m;
+  }, [local]);
+
+  const sliderStatuses = useMemo(
+    () => statuses.map((s) => ({ name: s.name, color: s.color, stabilityDays: s.stabilityDays })),
+    [statuses],
+  );
+  const sliderMax = useMemo(() => {
+    const peak = Math.max(30, ...statuses.map((s) => s.stabilityDays), ...Object.values(local));
+    return Math.ceil((peak * 2) / 10) * 10;
+  }, [statuses, local]);
+
   return (
-    <div className="border-t pt-2 space-y-1">
+    <div className="border-t pt-2 space-y-2">
       <div className="flex items-center justify-between">
         <Label className="text-[9px] uppercase tracking-wide text-muted-foreground">FSRS override (days)</Label>
-        {dirty && (
-          <button type="button"
-            disabled={saving || disabled}
-            className="text-[10px] text-primary hover:underline disabled:opacity-40"
-            onClick={async () => {
-              setSaving(true);
-              try { await onSave(local); toast.success("FSRS パラメタを保存"); }
-              catch (e) { toast.error(e instanceof Error ? e.message : "保存失敗"); }
-              finally { setSaving(false); }
-            }}>save</button>
-        )}
-      </div>
-      {statuses.map((name) => (
-        <div key={name} className="flex items-center gap-2">
-          <span className="text-[10px] text-muted-foreground w-12">{name}</span>
-          <Input type="number" min={0} value={local[name] ?? ""}
-            placeholder="(global)"
-            disabled={disabled || saving}
-            onChange={(e) => {
-              const v = e.target.value;
-              setLocal((prev) => {
-                const next = { ...prev };
-                if (v === "") delete next[name];
-                else next[name] = Math.max(0, parseInt(v, 10) || 0);
-                return next;
-              });
-            }}
-            className="h-6 flex-1 px-1 text-center text-[10px] tabular-nums"/>
+        <div className="flex items-center gap-2">
+          {dirty && (
+            <>
+              <button type="button"
+                disabled={saving || disabled}
+                className="text-[10px] text-muted-foreground hover:text-foreground disabled:opacity-40"
+                onClick={() => setLocal(current)}>reset</button>
+              <button type="button"
+                disabled={saving || disabled}
+                className="text-[10px] text-primary hover:underline disabled:opacity-40"
+                onClick={async () => {
+                  setSaving(true);
+                  try { await onSave(local); toast.success("FSRS パラメタを保存"); }
+                  catch (e) { toast.error(e instanceof Error ? e.message : "保存失敗"); }
+                  finally { setSaving(false); }
+                }}>save</button>
+            </>
+          )}
         </div>
-      ))}
+      </div>
+      {sliderStatuses.length > 0 && (
+        <div className="px-2">
+          <StabilitySlider
+            statuses={sliderStatuses}
+            overrides={overrides}
+            max={sliderMax}
+            onChange={(name, v) => setLocal((prev) => ({ ...prev, [name]: Math.max(0, v) }))}
+          />
+        </div>
+      )}
     </div>
   );
 }
