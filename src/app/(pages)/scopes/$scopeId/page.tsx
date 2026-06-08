@@ -35,13 +35,13 @@ import { FilterSection } from "@/components/filter-section";
 import { useFilterPrefs, useSaveFilterPrefs } from "@/hooks/queries/use-filter-prefs";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Filter, SlidersHorizontal, Activity, ArrowLeft, Archive, Save, RotateCcw, Loader2, Download, History, ListFilter, MoreVertical, Check, X } from "lucide-react";
+import { Filter, SlidersHorizontal, ArrowLeft, Archive, Save, RotateCcw, Loader2, Download, History, ListFilter, MoreVertical, Check, X } from "lucide-react";
 import { AsOfControls } from "@/components/as-of-controls";
 import { useTopicsList } from "@/hooks/queries/use-topics";
 import { usePageTitle, useHeaderSlot, usePageBack } from "@/lib/page-context";
 import { rpc } from "@/lib/rpc-client";
 import { toast } from "sonner";
-import { useScope, useUpdateScope } from "@/hooks/queries/use-scopes";
+import { useScope, useScopeRevisions, useUpdateScope } from "@/hooks/queries/use-scopes";
 
 export default function ScopeDetailPage() {
   const { scopeId } = useParams({ strict: false }) as { scopeId: string };
@@ -60,6 +60,25 @@ export default function ScopeDetailPage() {
   // Phase 3c: 並走する新 scope エンティティから status_stabilities を読み書き。
   // 旧 backlog テーブルが Phase 4 で削除されるまでは並列に保持する。
   const scopeQuery = useScope(scopeId);
+  const scopeRevisionsQuery = useScopeRevisions(scopeId);
+
+  // asOf 時点の scope snapshot を revisions から選ぶ (bitemporal lookup, client side)。
+  // 履歴 panel が既に revisions を取得しているので追加 fetch なし。
+  // valid_from <= asOf < (valid_to ?? infinity) を満たす最新 revision を採用。
+  const scopeAtAsOf = useMemo(() => {
+    if (!asOf) return scopeQuery.data ?? null;
+    const revs = scopeRevisionsQuery.data ?? [];
+    if (revs.length === 0) return scopeQuery.data ?? null;
+    const asOfDate = new Date(asOf + "T23:59:59Z").getTime();
+    const matched = revs
+      .filter((r) => {
+        const vf = new Date(r.valid_from).getTime();
+        const vt = r.valid_to ? new Date(r.valid_to).getTime() : Infinity;
+        return vf <= asOfDate && asOfDate < vt;
+      })
+      .sort((a, b) => b.revision - a.revision)[0];
+    return matched ?? scopeQuery.data ?? null;
+  }, [asOf, scopeQuery.data, scopeRevisionsQuery.data]);
   const updateScope = useUpdateScope();
 
   // 編集はすべてローカル state、「確定」で diff を計算して mutations を発火する。
@@ -78,7 +97,6 @@ export default function ScopeDetailPage() {
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showMilestonePins, setShowMilestonePins] = useState(false);
-  const [showFSRS, setShowFSRS] = useState(false);
   const [hideFirst, setHideFirst] = useState(false);
   const [hideFuture, setHideFuture] = useState(false);
   const [overflowOnly, setOverflowOnly] = useState(false);
@@ -677,30 +695,20 @@ export default function ScopeDetailPage() {
             <span className="text-xs text-muted-foreground tabular-nums">{visibleMembers.length} / {memberCount}</span>
           </div>
           <div className="flex items-center gap-2">
-            {scopeQuery.data && (
-              <button type="button"
-                title="FSRS override (stability slider)" aria-pressed={showFSRS}
-                className={`relative inline-flex items-center justify-center size-[26px] rounded-md border transition-colors ${showFSRS ? "bg-accent text-accent-foreground border-accent-foreground/20" : "text-muted-foreground hover:bg-muted"}`}
-                onClick={() => setShowFSRS((p) => !p)}>
-                <Activity className="size-3"/>
-                {Object.keys(scopeQuery.data.status_stabilities ?? {}).length > 0 && (
-                  <span className="absolute -top-1 -right-1 size-2 rounded-full bg-primary"/>
-                )}
-              </button>
-            )}
             <button type="button"
-              title="Toggle milestone pins" aria-pressed={milestonePinsVisible}
+              title="Toggle milestone pins / FSRS slider" aria-pressed={milestonePinsVisible}
               className={`inline-flex items-center justify-center size-[26px] rounded-md border transition-colors ${milestonePinsVisible ? "bg-accent text-accent-foreground border-accent-foreground/20" : "text-muted-foreground hover:bg-muted"}`}
               onClick={() => setShowMilestonePins((p) => !p)}>
               <SlidersHorizontal className="size-3"/>
             </button>
           </div>
         </div>
-        {showFSRS && scopeQuery.data && (
+        {milestonePinsVisible && scopeAtAsOf && (
           <div className="px-3 pb-2 -mt-1">
             <FSRSStabilitiesSliderEditor
+              key={`${scopeAtAsOf.revision}-${asOf ?? "live"}`}
               statuses={statuses}
-              current={scopeQuery.data.status_stabilities ?? {}}
+              current={scopeAtAsOf.status_stabilities ?? {}}
               disabled={readOnly}
               onSave={(next) =>
                 updateScope.mutateAsync({ id: scopeId, payload: { status_stabilities: next } })
