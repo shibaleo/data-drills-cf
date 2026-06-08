@@ -16,11 +16,19 @@ import { db } from "@/lib/db";
 import { scope, problem, field, goalLayer, goalMilestone } from "@/lib/db/schema";
 import { and, asc, desc, eq, isNull, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
-import { scopeCreateInputSchema, scopeUpdateInputSchema } from "@/lib/schemas/scope";
+import { scopeCreateInputSchema, scopeUpdateInputSchema, scopeBatchInputSchema } from "@/lib/schemas/scope";
 import { applyMemberFilter } from "@/lib/member-filter";
+import { allocate, type MemberInput, type Milestone as AMilestone } from "@/lib/backlog-allocate";
+import { todayJST } from "@/lib/date-utils";
 import type { AuthResult } from "@/lib/auth";
 
 type Env = { Variables: { authResult: AuthResult } };
+
+const todayCountCache = new Map<string, { count: number; expiresAt: number }>();
+const TODAY_COUNT_TTL_MS = 5 * 60 * 1000;
+function invalidateTodayCount() {
+  todayCountCache.clear();
+}
 
 function scopeToApi(row: typeof scope.$inferSelect) {
   return {
@@ -54,6 +62,67 @@ async function fetchCurrent(scopeId: string, userId: string) {
 }
 
 const app = new Hono<Env>()
+  /**
+   * GET /today-count — user の全 active scope に対し allocate(today) を回し、
+   * future-side & date===today なメンバ件数を合算する。サイドバーバッジ用。
+   */
+  .get("/today-count", async (c) => {
+    const userId = c.get("authResult").userId;
+    const cached = todayCountCache.get(userId);
+    if (cached && Date.now() < cached.expiresAt) {
+      return c.json({ data: { count: cached.count } });
+    }
+    const today = todayJST();
+    const scopes = await db.select().from(scope)
+      .where(and(eq(scope.userId, userId), isNull(scope.validTo), eq(scope.isActive, true)));
+    if (scopes.length === 0) {
+      todayCountCache.set(userId, { count: 0, expiresAt: Date.now() + TODAY_COUNT_TTL_MS });
+      return c.json({ data: { count: 0 } });
+    }
+    // user の全 problem (across fields) を一度だけ取って、各 scope ごとに filter で絞る。
+    const allProblems = await db.select({
+      id: problem.id,
+      code: problem.code,
+      name: problem.name,
+      standardTime: problem.standardTime,
+      fieldId: problem.fieldId,
+      subjectId: problem.subjectId,
+      levelId: problem.levelId,
+    }).from(problem)
+      .innerJoin(field, eq(field.id, problem.fieldId))
+      .where(eq(field.userId, userId))
+      .orderBy(asc(problem.code), asc(problem.id));
+    let total = 0;
+    for (const s of scopes) {
+      const members = applyMemberFilter(allProblems, s.filter);
+      if (members.length === 0) continue;
+      const firstAnswers = members.length === 0
+        ? new Map<string, string>()
+        : new Map(
+            (await db.execute<{ problem_id: string; min_date: string }>(sql`
+              SELECT problem_id, MIN((date AT TIME ZONE 'Asia/Tokyo')::date)::text AS min_date
+              FROM data_drills.answer WHERE problem_id IN ${members.map((m) => m.id)}
+              GROUP BY problem_id
+            `)).map((r) => [r.problem_id, r.min_date.slice(0, 10)]),
+          );
+      const memberInputs: MemberInput[] = members.map((m) => ({
+        id: m.id, code: m.code, name: m.name,
+        standardTimeSec: m.standardTime, firstAnswerDate: firstAnswers.get(m.id) ?? null,
+      }));
+      const msList = await db.select().from(goalMilestone)
+        .where(and(eq(goalMilestone.scopeId, s.id), isNull(goalMilestone.validTo), eq(goalMilestone.isActive, true)));
+      const milestones: AMilestone[] = msList.map((m) => ({
+        target: m.target,
+        date: typeof m.date === "string" ? m.date : (m.date as Date).toISOString().slice(0, 10),
+        id: m.id,
+        layer_id: m.layerId,
+      }));
+      const allocated = allocate(memberInputs, milestones, s.dailyMinutes, today, s.timeMultiplierPct, s.weekdayWeights);
+      total += allocated.filter((a) => a.side === "future" && a.date === today).length;
+    }
+    todayCountCache.set(userId, { count: total, expiresAt: Date.now() + TODAY_COUNT_TTL_MS });
+    return c.json({ data: { count: total } });
+  })
   // List: user の current scope を全部 (= valid_to IS NULL && is_active)
   .get("/", async (c) => {
     const userId = c.get("authResult").userId;
@@ -86,6 +155,7 @@ const app = new Hono<Env>()
       fieldId: problem.fieldId,
       subjectId: problem.subjectId,
       levelId: problem.levelId,
+      topicId: problem.topicId,
     }).from(problem)
       .innerJoin(field, eq(field.id, problem.fieldId))
       .where(eq(field.userId, userId))
@@ -120,6 +190,7 @@ const app = new Hono<Env>()
           standard_time: m.standardTime,
           subject_id: m.subjectId,
           level_id: m.levelId,
+          topic_id: m.topicId,
           first_answer_date: firstAnswers.get(m.id) ?? null,
         })),
         layers: layers.map((l) => ({
@@ -127,6 +198,9 @@ const app = new Hono<Env>()
           revision: l.revision,
           name: l.name,
           color: l.color,
+          opacity_pct: l.opacityPct,
+          line_style: l.lineStyle,
+          line_width: l.lineWidth,
           sort_order: l.sortOrder,
         })),
         milestones: milestones.map((m) => ({
@@ -139,13 +213,69 @@ const app = new Hono<Env>()
       },
     });
   })
-  // Revisions: 履歴 (bitemporal viewing)
+  // Revisions: 履歴 (bitemporal viewing) — scope 本体の各 revision を返す
   .get("/:id/revisions", async (c) => {
     const userId = c.get("authResult").userId;
     const rows = await db.select().from(scope)
       .where(and(eq(scope.id, c.req.param("id")), eq(scope.userId, userId)))
       .orderBy(desc(scope.revision));
     return c.json({ data: rows.map(scopeToApi), next_cursor: null });
+  })
+  // History: scope + layer + milestone の全 revision を時系列で混ぜて返す。
+  // history panel で「いつ何が変更されたか」をまとめて表示するため。
+  .get("/:id/history", async (c) => {
+    const userId = c.get("authResult").userId;
+    const scopeId = c.req.param("id");
+    // ownership check
+    const [own] = await db.select({ id: scope.id }).from(scope)
+      .where(and(eq(scope.id, scopeId), eq(scope.userId, userId))).limit(1);
+    if (!own) return c.json({ data: [] });
+    type Entry = {
+      kind: "scope" | "layer" | "milestone";
+      entity_id: string;
+      revision: number;
+      valid_from: string;
+      valid_to: string | null;
+      is_active: boolean;
+      summary: string;
+    };
+    const out: Entry[] = [];
+    const sRows = await db.select().from(scope)
+      .where(eq(scope.id, scopeId)).orderBy(desc(scope.validFrom));
+    for (const r of sRows) {
+      out.push({
+        kind: "scope", entity_id: r.id, revision: r.revision,
+        valid_from: (r.validFrom as Date).toISOString(),
+        valid_to: r.validTo ? (r.validTo as Date).toISOString() : null,
+        is_active: r.isActive,
+        summary: `scope "${r.name}" · ${r.dailyMinutes} min/day${r.isActive ? "" : " (archived)"}`,
+      });
+    }
+    const lRows = await db.select().from(goalLayer)
+      .where(eq(goalLayer.scopeId, scopeId)).orderBy(desc(goalLayer.validFrom));
+    for (const r of lRows) {
+      out.push({
+        kind: "layer", entity_id: r.id, revision: r.revision,
+        valid_from: (r.validFrom as Date).toISOString(),
+        valid_to: r.validTo ? (r.validTo as Date).toISOString() : null,
+        is_active: r.isActive,
+        summary: `layer "${r.name || "(unnamed)"}"${r.isActive ? "" : " (removed)"}`,
+      });
+    }
+    const mRows = await db.select().from(goalMilestone)
+      .where(eq(goalMilestone.scopeId, scopeId)).orderBy(desc(goalMilestone.validFrom));
+    for (const r of mRows) {
+      const dateStr = typeof r.date === "string" ? r.date : (r.date as Date).toISOString().slice(0, 10);
+      out.push({
+        kind: "milestone", entity_id: r.id, revision: r.revision,
+        valid_from: (r.validFrom as Date).toISOString(),
+        valid_to: r.validTo ? (r.validTo as Date).toISOString() : null,
+        is_active: r.isActive,
+        summary: `milestone target=${r.target} by ${dateStr}${r.isActive ? "" : " (removed)"}`,
+      });
+    }
+    out.sort((a, b) => b.valid_from.localeCompare(a.valid_from));
+    return c.json({ data: out });
   })
   // Create: revision=1 で INSERT
   .post("/", zValidator("json", scopeCreateInputSchema), async (c) => {
@@ -163,6 +293,7 @@ const app = new Hono<Env>()
       weekdayWeights: body.weekday_weights,
       statusStabilities: body.status_stabilities,
     }).returning();
+    invalidateTodayCount();
     return c.json({ data: scopeToApi(row) }, 201);
   })
   // Update: 旧 revision の valid_to を塗って、revision+1 を INSERT
@@ -193,7 +324,160 @@ const app = new Hono<Env>()
       });
     });
     const fresh = await fetchCurrent(scopeId, userId);
+    invalidateTodayCount();
     return c.json({ data: fresh ? scopeToApi(fresh) : null });
+  })
+  /**
+   * POST /:id/batch — scope 本体 + 全 layer / milestone の create/update/delete を
+   * 単一トランザクションで適用。tmp-id (= クライアント側の一時 id) はサーバが本物の
+   * UUID に置き換えてレスポンスの id_map で返す。
+   *
+   * 注: Phase 4 で goal_layer.backlog_id が drop されるまでは backlogId にも同じ値
+   * (= scope.id) を書く (NOT NULL 制約のため)。Phase 4 で backlogId 書き込みを外す。
+   */
+  .post("/:id/batch", zValidator("json", scopeBatchInputSchema), async (c) => {
+    const userId = c.get("authResult").userId;
+    const scopeId = c.req.param("id");
+    const body = c.req.valid("json");
+    const current = await fetchCurrent(scopeId, userId);
+    if (!current) return c.json({ error: "Not found" }, 404);
+
+    type Maps = { layer_id_map: Record<string, string>; milestone_id_map: Record<string, string> };
+    const maps: Maps = await db.transaction(async (tx) => {
+      const layerIdMap: Record<string, string> = {};
+      const milestoneIdMap: Record<string, string> = {};
+      const now = new Date();
+
+      // 1. scope 本体の編集 (新 revision)
+      if (body.scope_update) {
+        const upd = body.scope_update;
+        await tx.update(scope).set({ validTo: now })
+          .where(and(eq(scope.id, scopeId), eq(scope.revision, current.revision)));
+        await tx.insert(scope).values({
+          id: scopeId,
+          revision: current.revision + 1,
+          userId,
+          name: upd.name ?? current.name,
+          filter: upd.filter ?? current.filter,
+          dailyMinutes: upd.daily_minutes ?? current.dailyMinutes,
+          timeMultiplierPct: upd.time_multiplier_pct ?? current.timeMultiplierPct,
+          weekdayWeights: upd.weekday_weights ?? current.weekdayWeights,
+          statusStabilities: upd.status_stabilities ?? current.statusStabilities,
+          isActive: upd.is_active ?? current.isActive,
+          validFrom: now,
+        });
+      }
+
+      // 2. layer deletes
+      for (const lid of body.layer_deletes) {
+        const [cur] = await tx.select().from(goalLayer)
+          .where(and(eq(goalLayer.id, lid), isNull(goalLayer.validTo), eq(goalLayer.isActive, true)))
+          .orderBy(desc(goalLayer.revision))
+          .limit(1);
+        if (!cur) continue;
+        await tx.update(goalLayer).set({ validTo: now })
+          .where(and(eq(goalLayer.id, lid), eq(goalLayer.revision, cur.revision)));
+        await tx.insert(goalLayer).values({
+          id: lid, revision: cur.revision + 1,
+          backlogId: cur.backlogId, scopeId: cur.scopeId ?? scopeId,
+          name: cur.name, color: cur.color,
+          opacityPct: cur.opacityPct, lineStyle: cur.lineStyle, lineWidth: cur.lineWidth,
+          sortOrder: cur.sortOrder, isActive: false,
+        });
+      }
+
+      // 3. layer creates
+      for (const l of body.layer_creates) {
+        const realId = randomUUID();
+        layerIdMap[l.temp_id] = realId;
+        await tx.insert(goalLayer).values({
+          id: realId, revision: 1,
+          backlogId: l.scope_id, scopeId: l.scope_id,
+          name: l.name,
+          color: l.color ?? null,
+          opacityPct: l.opacity_pct ?? null,
+          lineStyle: l.line_style ?? null,
+          lineWidth: l.line_width ?? null,
+          sortOrder: l.sort_order,
+        });
+      }
+
+      // 4. layer updates
+      for (const u of body.layer_updates) {
+        const [cur] = await tx.select().from(goalLayer)
+          .where(and(eq(goalLayer.id, u.id), isNull(goalLayer.validTo), eq(goalLayer.isActive, true)))
+          .orderBy(desc(goalLayer.revision))
+          .limit(1);
+        if (!cur) continue;
+        await tx.update(goalLayer).set({ validTo: now })
+          .where(and(eq(goalLayer.id, u.id), eq(goalLayer.revision, cur.revision)));
+        await tx.insert(goalLayer).values({
+          id: u.id, revision: cur.revision + 1,
+          backlogId: cur.backlogId, scopeId: cur.scopeId ?? scopeId,
+          name: u.payload.name ?? cur.name,
+          color: u.payload.color !== undefined ? u.payload.color : cur.color,
+          opacityPct: u.payload.opacity_pct !== undefined ? u.payload.opacity_pct : cur.opacityPct,
+          lineStyle: u.payload.line_style !== undefined ? u.payload.line_style : cur.lineStyle,
+          lineWidth: u.payload.line_width !== undefined ? u.payload.line_width : cur.lineWidth,
+          sortOrder: u.payload.sort_order ?? cur.sortOrder,
+          isActive: cur.isActive,
+        });
+      }
+
+      // 5. milestone deletes
+      for (const mid of body.milestone_deletes) {
+        const [cur] = await tx.select().from(goalMilestone)
+          .where(and(eq(goalMilestone.id, mid), isNull(goalMilestone.validTo), eq(goalMilestone.isActive, true)))
+          .orderBy(desc(goalMilestone.revision))
+          .limit(1);
+        if (!cur) continue;
+        await tx.update(goalMilestone).set({ validTo: now })
+          .where(and(eq(goalMilestone.id, mid), eq(goalMilestone.revision, cur.revision)));
+        await tx.insert(goalMilestone).values({
+          id: mid, revision: cur.revision + 1,
+          backlogId: cur.backlogId, scopeId: cur.scopeId ?? scopeId,
+          layerId: cur.layerId, target: cur.target,
+          date: typeof cur.date === "string" ? cur.date : (cur.date as Date).toISOString().slice(0, 10),
+          isActive: false,
+        });
+      }
+
+      // 6. milestone creates
+      for (const m of body.milestone_creates) {
+        const realId = randomUUID();
+        milestoneIdMap[m.temp_id] = realId;
+        const resolvedLayerId = layerIdMap[m.layer_id] ?? m.layer_id;
+        await tx.insert(goalMilestone).values({
+          id: realId, revision: 1,
+          backlogId: m.scope_id, scopeId: m.scope_id,
+          layerId: resolvedLayerId, target: m.target, date: m.date,
+        });
+      }
+
+      // 7. milestone updates
+      for (const u of body.milestone_updates) {
+        const [cur] = await tx.select().from(goalMilestone)
+          .where(and(eq(goalMilestone.id, u.id), isNull(goalMilestone.validTo), eq(goalMilestone.isActive, true)))
+          .orderBy(desc(goalMilestone.revision))
+          .limit(1);
+        if (!cur) continue;
+        await tx.update(goalMilestone).set({ validTo: now })
+          .where(and(eq(goalMilestone.id, u.id), eq(goalMilestone.revision, cur.revision)));
+        await tx.insert(goalMilestone).values({
+          id: u.id, revision: cur.revision + 1,
+          backlogId: cur.backlogId, scopeId: cur.scopeId ?? scopeId,
+          layerId: u.payload.layer_id ?? cur.layerId,
+          target: u.payload.target ?? cur.target,
+          date: u.payload.date ?? (typeof cur.date === "string" ? cur.date : (cur.date as Date).toISOString().slice(0, 10)),
+          isActive: cur.isActive,
+        });
+      }
+
+      return { layer_id_map: layerIdMap, milestone_id_map: milestoneIdMap };
+    });
+
+    invalidateTodayCount();
+    return c.json({ data: maps });
   })
   // Delete = is_active=false の新 revision を INSERT (= archive)
   .delete("/:id", async (c) => {
@@ -220,6 +504,7 @@ const app = new Hono<Env>()
         validFrom: now,
       });
     });
+    invalidateTodayCount();
     return c.json({ data: { id: scopeId } });
   });
 

@@ -22,7 +22,7 @@ import { cn } from "@/lib/utils";
 import { useField } from "@/hooks/use-field";
 import { useReviewList } from "@/hooks/queries/use-review";
 import { useFilterPrefs } from "@/hooks/queries/use-filter-prefs";
-import { useBacklogTodayCount } from "@/hooks/queries/use-backlog";
+import { useScopeTodayCount } from "@/hooks/queries/use-scopes";
 import { useQueryClient } from "@tanstack/react-query";
 import { reviewKeys } from "@/hooks/queries/use-review";
 import { UserMenu } from "./user-menu";
@@ -76,8 +76,7 @@ function OverdueBadge() {
 }
 
 function BacklogBadge() {
-  const { currentField } = useField();
-  const { data: count = 0 } = useBacklogTodayCount(currentField?.id);
+  const { data: count = 0 } = useScopeTodayCount();
   if (count <= 0) return null;
   return (
     <span className="absolute -right-2 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-0.5 text-[10px] font-bold leading-none text-destructive-foreground">

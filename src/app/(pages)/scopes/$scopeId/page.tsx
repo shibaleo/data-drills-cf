@@ -1,13 +1,10 @@
 "use client";
 import { useMemo, useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "@tanstack/react-router";
-import {
-  useBacklog, useArchiveBacklog,
-  useBacklogBatchSave,
-  useBacklogRevisions,
-  type BacklogMember,
-} from "@/hooks/queries/use-backlog";
-import type { BacklogBatchInput, BacklogUpdateInput } from "@/lib/schemas/backlog";
+import type { ScopeBatchInput, ScopeUpdateInput } from "@/lib/schemas/scope";
+import type { ScopeDetail } from "@/hooks/queries/use-scopes";
+
+type ScopeMember = ScopeDetail["members"][number];
 import type { MemberFilterInput } from "@/lib/schemas/member-filter";
 import { applyMemberFilter } from "@/lib/member-filter";
 import { MemberFilterPicker } from "@/components/member-filter-picker";
@@ -16,7 +13,6 @@ import { useField } from "@/hooks/use-field";
 import { useProblemsList } from "@/hooks/queries/use-problems";
 import { useProblemDialogs } from "@/hooks/use-problem-dialogs";
 import { useQueryClient } from "@tanstack/react-query";
-import { backlogKeys } from "@/hooks/queries/use-backlog";
 import { problemsKeys } from "@/hooks/queries/use-problems";
 import { BacklogChart, type BacklogChartHandle } from "@/components/backlog-chart";
 import { allocate, type MemberInput } from "@/lib/backlog-allocate";
@@ -41,7 +37,11 @@ import { useTopicsList } from "@/hooks/queries/use-topics";
 import { usePageTitle, useHeaderSlot, usePageBack } from "@/lib/page-context";
 import { rpc } from "@/lib/rpc-client";
 import { toast } from "sonner";
-import { useScope, useScopeRevisions, useUpdateScope } from "@/hooks/queries/use-scopes";
+import {
+  useScope, useScopeRevisions, useUpdateScope,
+  useScopeDetail, useScopeHistory, useScopeBatchSave, useDeleteScope,
+  scopesKeys,
+} from "@/hooks/queries/use-scopes";
 
 export default function ScopeDetailPage() {
   const { scope_id: scopeId } = useParams({ strict: false }) as { scope_id: string };
@@ -53,10 +53,10 @@ export default function ScopeDetailPage() {
   const readOnly = asOf != null;
   // 注: asOf はチャート側の client-side フィルタ専用にし、エンティティ取得は常に最新を引く。
   // (asOf がエンティティ作成より古い場合に server 側の bitemporal WHERE で 404 になる問題回避)
-  const { data, isLoading } = useBacklog(scopeId);
-  const revisionsQuery = useBacklogRevisions(scopeId);
-  const archive = useArchiveBacklog(currentField?.id);
-  const batchSave = useBacklogBatchSave(scopeId, currentField?.id);
+  const { data, isLoading } = useScopeDetail(scopeId);
+  const revisionsQuery = useScopeHistory(scopeId);
+  const archive = useDeleteScope();
+  const batchSave = useScopeBatchSave(scopeId);
   // Phase 3c: 並走する新 scope エンティティから status_stabilities を読み書き。
   // 旧 backlog テーブルが Phase 4 で削除されるまでは並列に保持する。
   const scopeQuery = useScope(scopeId);
@@ -163,7 +163,7 @@ export default function ScopeDetailPage() {
   const chartRef = useRef<BacklogChartHandle>(null);
   const handleDataChanged = useCallback(() => {
     if (currentField) {
-      qc.invalidateQueries({ queryKey: backlogKeys.detail(scopeId) });
+      qc.invalidateQueries({ queryKey: scopesKeys.fullDetail(scopeId) });
       qc.invalidateQueries({ queryKey: problemsKeys.list(currentField.id) });
     }
   }, [qc, currentField, scopeId]);
@@ -180,15 +180,15 @@ export default function ScopeDetailPage() {
   useEffect(() => {
     if (!data) return;
     // 初回ロード or 保存後 (revision が増えた) のみローカル state を server data から再同期する。
-    if (lastSyncRevRef.current === data.backlog.revision) return;
-    lastSyncRevRef.current = data.backlog.revision;
-    setDailyMinutes(data.backlog.daily_minutes);
-    setTimeMultiplier(data.backlog.time_multiplier_pct / 100);
-    setWeekdayWeights(data.backlog.weekday_weights);
-    setName(data.backlog.name);
+    if (lastSyncRevRef.current === data.scope.revision) return;
+    lastSyncRevRef.current = data.scope.revision;
+    setDailyMinutes(data.scope.daily_minutes);
+    setTimeMultiplier(data.scope.time_multiplier_pct / 100);
+    setWeekdayWeights(data.scope.weekday_weights);
+    setName(data.scope.name);
     setLocalLayers(data.layers.map((l) => ({ id: l.id, name: l.name, color: l.color ?? null, opacity_pct: l.opacity_pct ?? null, line_style: (l.line_style as "solid" | "dashed" | "dotted" | null) ?? null, line_width: l.line_width ?? null })));
     setLocalMilestones(data.milestones.map((m) => ({ id: m.id, layer_id: m.layer_id, target: m.target, date: m.date })));
-    setLocalFilter(data.backlog.filter ?? {});
+    setLocalFilter(data.scope.filter ?? {});
   }, [data]);
 
   // today は asOf に追従 (drag/再生で動く)。
@@ -199,9 +199,9 @@ export default function ScopeDetailPage() {
    * 未編集ならサーバ計算済 data.members を流用 (= 余計な再計算なし)。
    * セマンティクスはサーバ側 fetchMembers と同一 (両者とも applyMemberFilter 経由)。
    */
-  const effectiveMembers = useMemo<BacklogMember[]>(() => {
+  const effectiveMembers = useMemo<ScopeMember[]>(() => {
     if (!data) return [];
-    const sameFilter = JSON.stringify(data.backlog.filter ?? {}) === JSON.stringify(localFilter);
+    const sameFilter = JSON.stringify(data.scope.filter ?? {}) === JSON.stringify(localFilter);
     // 過去 cursor (asOf < todayJST) のみ first_answer_date を asOf でフィルタ
     // (= 過去時点の状態を再現)。未来 cursor の場合は全 answer を含める。
     const realToday = todayJST();
@@ -293,16 +293,16 @@ export default function ScopeDetailPage() {
   const multPct = Math.round(timeMultiplier * 100);
   // local 状態がまだサーバ値と同期していない (初回読み込み直後) は dirty=false で抑える
   // → ナビゲーション時に Save ボタンが一瞬光るのを防ぐ。
-  const synced = lastSyncRevRef.current === data.backlog.revision;
+  const synced = lastSyncRevRef.current === data.scope.revision;
   const planDirty = synced && (
-    name !== data.backlog.name ||
-    dailyMinutes !== data.backlog.daily_minutes ||
-    multPct !== data.backlog.time_multiplier_pct ||
-    JSON.stringify(weekdayWeights) !== JSON.stringify(data.backlog.weekday_weights)
+    name !== data.scope.name ||
+    dailyMinutes !== data.scope.daily_minutes ||
+    multPct !== data.scope.time_multiplier_pct ||
+    JSON.stringify(weekdayWeights) !== JSON.stringify(data.scope.weekday_weights)
   );
   const layersDirty = synced && JSON.stringify(localLayers) !== JSON.stringify(data.layers.map((l) => ({ id: l.id, name: l.name, color: l.color ?? null, opacity_pct: l.opacity_pct ?? null, line_style: (l.line_style as "solid" | "dashed" | "dotted" | null) ?? null, line_width: l.line_width ?? null })));
   const milestonesDirty = synced && JSON.stringify(localMilestones) !== JSON.stringify(data.milestones.map((m) => ({ id: m.id, layer_id: m.layer_id, target: m.target, date: m.date })));
-  const filterDirty = synced && JSON.stringify(localFilter) !== JSON.stringify(data.backlog.filter ?? {});
+  const filterDirty = synced && JSON.stringify(localFilter) !== JSON.stringify(data.scope.filter ?? {});
   // dirty な間は editor を閉じられないようにする (preview を隠したくない)
   const membersOpen = membersEditorOpen || filterDirty;
   // history panel は明示的に ⋮ メニューで開いた時のみ展開する。
@@ -354,7 +354,7 @@ export default function ScopeDetailPage() {
   const lastMs = [...localMilestones].sort((a, b) => a.date.localeCompare(b.date)).pop();
   const daysToDeadline = lastMs ? diffDays(today, lastMs.date) : null;
 
-  function passesDisplayFilter(m: BacklogMember): boolean {
+  function passesDisplayFilter(m: ScopeMember): boolean {
     if (filterSubjects.size > 0 && (!m.subject_id || !filterSubjects.has(m.subject_id))) return false;
     if (filterLevels.size > 0 && (!m.level_id || !filterLevels.has(m.level_id))) return false;
     if (filterTopics.size > 0 && (!m.topic_id || !filterTopics.has(m.topic_id))) return false;
@@ -392,12 +392,12 @@ export default function ScopeDetailPage() {
     if (!data) return;
 
     // ローカルの diff を 1 つの batch payload に組み立てる
-    const payload: BacklogBatchInput = {
+    const payload: ScopeBatchInput = {
       layer_deletes: [], layer_creates: [], layer_updates: [],
       milestone_deletes: [], milestone_creates: [], milestone_updates: [],
     };
     if (planDirty || filterDirty) {
-      const upd: BacklogUpdateInput = {};
+      const upd: ScopeUpdateInput = {};
       if (planDirty) {
         upd.name = name;
         upd.daily_minutes = dailyMinutes;
@@ -407,7 +407,7 @@ export default function ScopeDetailPage() {
       if (filterDirty) {
         upd.filter = localFilter;
       }
-      payload.backlog_update = upd;
+      payload.scope_update = upd;
     }
     // layer
     const localLayerIds = new Set(localLayers.map((l) => l.id));
@@ -418,7 +418,7 @@ export default function ScopeDetailPage() {
       const l = localLayers[i];
       if (isTmp(l.id)) {
         payload.layer_creates!.push({
-          temp_id: l.id, backlog_id: scopeId, name: l.name,
+          temp_id: l.id, scope_id: scopeId, name: l.name,
           color: l.color ?? undefined,
           opacity_pct: l.opacity_pct ?? undefined,
           line_style: l.line_style ?? undefined,
@@ -447,7 +447,7 @@ export default function ScopeDetailPage() {
     for (const m of localMilestones) {
       if (isTmp(m.id)) {
         payload.milestone_creates!.push({
-          temp_id: m.id, backlog_id: scopeId,
+          temp_id: m.id, scope_id: scopeId,
           layer_id: m.layer_id,  // tmp なら server が id_map で解決
           target: m.target, date: m.date,
         });
@@ -487,12 +487,12 @@ export default function ScopeDetailPage() {
           <div className="ml-auto flex items-center gap-2">
             <button type="button"
               onClick={() => {
-                setName(data.backlog.name); setDailyMinutes(data.backlog.daily_minutes);
-                setTimeMultiplier(data.backlog.time_multiplier_pct / 100);
-                setWeekdayWeights(data.backlog.weekday_weights);
+                setName(data.scope.name); setDailyMinutes(data.scope.daily_minutes);
+                setTimeMultiplier(data.scope.time_multiplier_pct / 100);
+                setWeekdayWeights(data.scope.weekday_weights);
                 setLocalLayers(data.layers.map((l) => ({ id: l.id, name: l.name, color: l.color ?? null, opacity_pct: l.opacity_pct ?? null, line_style: (l.line_style as "solid" | "dashed" | "dotted" | null) ?? null, line_width: l.line_width ?? null })));
                 setLocalMilestones(data.milestones.map((m) => ({ id: m.id, layer_id: m.layer_id, target: m.target, date: m.date })));
-                setLocalFilter(data.backlog.filter ?? {});
+                setLocalFilter(data.scope.filter ?? {});
               }}
               disabled={batchSave.isPending}
               className="inline-flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground disabled:opacity-50"
@@ -562,7 +562,7 @@ export default function ScopeDetailPage() {
               const tsLabel = `${ts.getMonth() + 1}/${ts.getDate()} ${String(ts.getHours()).padStart(2, "0")}:${String(ts.getMinutes()).padStart(2, "0")}`;
               const isoDay = ts.toISOString().slice(0, 10);
               const isActiveAsOf = asOf === isoDay;
-              const kindCls = r.kind === "backlog" ? "text-foreground/80" : r.kind === "layer" ? "text-violet-500" : "text-pink-500";
+              const kindCls = r.kind === "scope" ? "text-foreground/80" : r.kind === "layer" ? "text-violet-500" : "text-pink-500";
               return (
                 <button key={`${r.kind}-${r.entity_id}-${r.revision}`}
                   type="button"
@@ -595,7 +595,7 @@ export default function ScopeDetailPage() {
                 {filterDirty && (
                   <button type="button"
                     className="hover:text-foreground"
-                    onClick={() => setLocalFilter(data.backlog.filter ?? {})}>
+                    onClick={() => setLocalFilter(data.scope.filter ?? {})}>
                     Reset
                   </button>
                 )}

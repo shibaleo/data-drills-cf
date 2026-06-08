@@ -83,20 +83,24 @@ psql "$NEON_URL" -f drizzle/manual/005_phase4_drop_old.sql
 | `/scopes` list | `useBacklogList` | `useScopes` | ✅ `712b756` |
 | `/scopes/new` | `useCreateBacklog` | `useCreateScope` | ✅ `712b756` |
 | `/plan` | `useBacklogList` + backlog/:id | `useScopes` + scopes/:id/detail | ✅ `287adf4` |
-| `/scopes/$id` detail | `useBacklog`, `useBacklogRevisions`, `useBacklogBatchSave`, `useArchiveBacklog` | TODO: 全部 scope 版に | ⏳ |
-| `/digest/$id` | `useBacklogList` + backlog/:id | TODO: `useScopes` + scopes/:id/detail | ⏳ |
-| sidebar Badge | `useBacklogTodayCount` | TODO: `useScopeTodayCount` (新 endpoint 要) | ⏳ |
+| `/scopes/$id` detail | `useBacklog`, `useBacklogRevisions`, `useBacklogBatchSave`, `useArchiveBacklog` | `useScopeDetail`, `useScopeHistory`, `useScopeBatchSave`, `useDeleteScope` | ✅ |
+| `/digest/$id` | `useBacklogList` + backlog/:id | `useScopes` + scopes/:id/detail | ✅ |
+| sidebar Badge | `useBacklogTodayCount` | `useScopeTodayCount` | ✅ |
 
-残作業:
+Phase 4.3 完了。**Phase 4 SQL 適用前に dev で /scopes/$id, /digest/$id, sidebar badge の動作確認必須**
+(新 endpoint で path を全部叩いているので、SQL drop 前にも壊れていないか触ること)。
 
-1. **scope batch endpoint** を `src/routes/scopes.ts` に追加
-   - `POST /api/v1/scopes/:id/batch` — backlog batch のコピーで `scope` table + `goal_*.scope_id` 経由に書き換え
-   - schemas は `src/lib/schemas/backlog.ts` の `*BatchSchema` を scope-version で複製 (backlog_id → scope_id)
-2. **`useScopeBatchSave`** hook を `src/hooks/queries/use-scopes.ts` に追加
-3. **scopes/$id page** の useBacklog* を useScope* に置換 (shape 差: `data.backlog` → `data.scope`, `useBacklogRevisions` → `useScopeRevisions`)
-4. **scope today-count endpoint** を追加 (allocator を scope filter で実行)
-5. **sidebar Badge** を `useBacklogTodayCount` → `useScopeTodayCount` に
-6. **digest/$id** で backlog 依存を scopes API に
+新 endpoint:
+- `GET /api/v1/scopes/today-count` (user 全 active scope に対し allocator を走らせて
+  future-today 件数を合算、5 min server cache)
+- `POST /api/v1/scopes/:id/batch` (scope_update + layer / milestone の create/update/delete を 1 tx)
+- `GET /api/v1/scopes/:id/history` (scope + layer + milestone の全 revision を時系列に混ぜて返す)
+- `GET /api/v1/scopes/:id/detail` … layer に opacity_pct/line_style/line_width を含め、
+  member に topic_id を追加 (旧 backlog detail 互換)
+
+注: Phase 4 SQL 適用後 (= `goal_layer.backlog_id` / `goal_milestone.backlog_id` 列が drop された後)、
+`src/routes/scopes.ts` の batch ハンドラ内 INSERT で `backlogId: ...` を書いている箇所を削除する
+(現状は NOT NULL 制約のため両方書きにしてある)。
 
 ### Phase 5: 仕上げ + 本番デプロイ
 

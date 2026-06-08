@@ -1,9 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { rpc, unwrap, type RpcData } from "@/lib/rpc-client";
-import type { ScopeCreateInput, ScopeUpdateInput } from "@/lib/schemas/scope";
+import type { ScopeCreateInput, ScopeUpdateInput, ScopeBatchInput } from "@/lib/schemas/scope";
 
 export type ScopeRow = RpcData<typeof rpc.api.v1.scopes.$get>["data"][number];
 export type ScopeRevision = RpcData<typeof rpc.api.v1.scopes[":id"]["revisions"]["$get"]>["data"][number];
+export type ScopeHistoryEntry = RpcData<typeof rpc.api.v1.scopes[":id"]["history"]["$get"]>["data"][number];
 
 export const scopesKeys = {
   all: ["scopes"] as const,
@@ -11,6 +12,7 @@ export const scopesKeys = {
   detail: (id: string) => [...scopesKeys.all, "detail", id] as const,
   fullDetail: (id: string) => [...scopesKeys.all, "full-detail", id] as const,
   revisions: (id: string) => [...scopesKeys.all, "revisions", id] as const,
+  history: (id: string) => [...scopesKeys.all, "history", id] as const,
 };
 
 export type ScopeDetail = RpcData<typeof rpc.api.v1.scopes[":id"]["detail"]["$get"]>["data"];
@@ -59,6 +61,17 @@ export function useScopeRevisions(id: string | undefined) {
   });
 }
 
+export function useScopeHistory(id: string | undefined) {
+  return useQuery({
+    queryKey: id ? scopesKeys.history(id) : scopesKeys.all,
+    queryFn: async () => {
+      const json = await unwrap(rpc.api.v1.scopes[":id"].history.$get({ param: { id: id! } }));
+      return json.data;
+    },
+    enabled: !!id,
+  });
+}
+
 export function useCreateScope() {
   const qc = useQueryClient();
   return useMutation({
@@ -78,6 +91,33 @@ export function useUpdateScope() {
       qc.invalidateQueries({ queryKey: scopesKeys.detail(vars.id) });
       qc.invalidateQueries({ queryKey: scopesKeys.revisions(vars.id) });
     },
+  });
+}
+
+export function useScopeBatchSave(scopeId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: ScopeBatchInput) =>
+      unwrap(rpc.api.v1.scopes[":id"].batch.$post({ param: { id: scopeId }, json: payload })),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: scopesKeys.list() });
+      qc.invalidateQueries({ queryKey: scopesKeys.detail(scopeId) });
+      qc.invalidateQueries({ queryKey: scopesKeys.fullDetail(scopeId) });
+      qc.invalidateQueries({ queryKey: scopesKeys.revisions(scopeId) });
+      qc.invalidateQueries({ queryKey: scopesKeys.history(scopeId) });
+      qc.invalidateQueries({ queryKey: [...scopesKeys.all, "today-count"] });
+    },
+  });
+}
+
+export function useScopeTodayCount() {
+  return useQuery({
+    queryKey: [...scopesKeys.all, "today-count"] as const,
+    queryFn: async () => {
+      const json = await unwrap(rpc.api.v1.scopes["today-count"].$get());
+      return json.data.count;
+    },
+    staleTime: 60 * 1000,
   });
 }
 

@@ -26,3 +26,57 @@ export const scopeUpdateInputSchema = z.object({
 
 export type ScopeCreateInput = z.infer<typeof scopeCreateInputSchema>;
 export type ScopeUpdateInput = z.infer<typeof scopeUpdateInputSchema>;
+
+/* ── GoalLayer / GoalMilestone batch (scope-scoped) ──────────────── */
+
+export const scopeGoalLayerUpdateInputSchema = z.object({
+  name: z.string().optional(),
+  color: z.string().nullish(),
+  opacity_pct: z.number().int().min(0).max(100).nullish(),
+  line_style: z.enum(["solid", "dashed", "dotted"]).nullish(),
+  line_width: z.number().int().min(1).max(10).nullish(),
+  sort_order: z.number().int().nonnegative().optional(),
+});
+
+export const scopeGoalMilestoneUpdateInputSchema = z.object({
+  layer_id: z.string().uuid().optional(),
+  target: z.number().int().nonnegative().optional(),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "expected YYYY-MM-DD").optional(),
+});
+
+export const scopeGoalLayerInBatchSchema = z.object({
+  temp_id: z.string().min(1),
+  scope_id: z.string().uuid(),
+  name: z.string().default(""),
+  color: z.string().nullish(),
+  opacity_pct: z.number().int().min(0).max(100).nullish(),
+  line_style: z.enum(["solid", "dashed", "dotted"]).nullish(),
+  line_width: z.number().int().min(1).max(10).nullish(),
+  sort_order: z.number().int().nonnegative().default(0),
+});
+
+export const scopeGoalMilestoneInBatchSchema = z.object({
+  temp_id: z.string().min(1),
+  scope_id: z.string().uuid(),
+  /** UUID か、同じ batch 内の layer の temp_id。サーバ側で id_map 解決する。 */
+  layer_id: z.string().min(1),
+  target: z.number().int().nonnegative(),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "expected YYYY-MM-DD"),
+});
+
+export const scopeBatchInputSchema = z.object({
+  scope_update: scopeUpdateInputSchema.nullish(),
+  layer_deletes: z.array(z.string().uuid()).default([]),
+  layer_creates: z.array(scopeGoalLayerInBatchSchema).default([]),
+  layer_updates: z.array(z.object({
+    id: z.string().uuid(),
+    payload: scopeGoalLayerUpdateInputSchema,
+  })).default([]),
+  milestone_deletes: z.array(z.string().uuid()).default([]),
+  milestone_creates: z.array(scopeGoalMilestoneInBatchSchema).default([]),
+  milestone_updates: z.array(z.object({
+    id: z.string().uuid(),
+    payload: scopeGoalMilestoneUpdateInputSchema,
+  })).default([]),
+});
+export type ScopeBatchInput = z.infer<typeof scopeBatchInputSchema>;

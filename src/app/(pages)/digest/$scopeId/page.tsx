@@ -9,7 +9,7 @@ import { useField } from "@/hooks/use-field";
 import { useThroughputList } from "@/hooks/queries/use-throughput";
 import { useProblemsList } from "@/hooks/queries/use-problems";
 import { useReviewList } from "@/hooks/queries/use-review";
-import { useBacklogList, type BacklogDetail } from "@/hooks/queries/use-backlog";
+import { useScopes, type ScopeDetail } from "@/hooks/queries/use-scopes";
 import { useFlashcardsData } from "@/hooks/queries/use-flashcards";
 import { useTogglEntries, type TogglEntry } from "@/hooks/queries/use-toggl";
 import { useDigestScope } from "@/hooks/queries/use-digest-scopes";
@@ -187,22 +187,21 @@ export default function DigestPage() {
     [reviewYesterdayAnswered, date],
   );
 
-  // Backlog: active な backlog 全部を D-1 snapshot で取り、allocate(today=D) で D 割当を抽出
-  const { data: backlogs = [] } = useBacklogList(currentField?.id);
+  // Scopes (= 旧 backlog): active な scope 全部を取り、各 scope の detail を fan-out
+  // して allocate(today=D) で D 割当を抽出
+  const { data: allScopes = [] } = useScopes();
   const activeBacklogs = useMemo(
-    () => backlogs.filter((b) => b.is_active && !b.valid_to),
-    [backlogs],
+    () => allScopes.filter((s) => s.is_active && !s.valid_to),
+    [allScopes],
   );
-  // 並列度抑制: useQueries で fan-out すると Supabase pool が瞬間的に詰まる。
-  // 1 つの useQuery で sequential に N backlog を取りに行く (= 同時 1 接続だけ占有)。
   const activeBacklogIds = useMemo(() => activeBacklogs.map((b) => b.id).sort().join(","), [activeBacklogs]);
-  const { data: backlogDetailMap = new Map<string, BacklogDetail>() } = useQuery({
-    queryKey: ["digest", "backlog-details", activeBacklogIds],
+  const { data: backlogDetailMap = new Map<string, ScopeDetail>() } = useQuery({
+    queryKey: ["digest", "scope-details", activeBacklogIds],
     queryFn: async () => {
-      const out = new Map<string, BacklogDetail>();
+      const out = new Map<string, ScopeDetail>();
       for (const b of activeBacklogs) {
         try {
-          const json = await unwrap(rpc.api.v1.backlog[":id"].$get({ param: { id: b.id }, query: {} }));
+          const json = await unwrap(rpc.api.v1.scopes[":id"].detail.$get({ param: { id: b.id } }));
           out.set(b.id, json.data);
         } catch { /* skip missing */ }
       }
@@ -219,7 +218,7 @@ export default function DigestPage() {
     for (const d of backlogDetailMap.values()) {
       if (!d) continue;
       // backlog ページの effectiveMembers と同じ:
-      //   allProblems を backlog.filter で絞り、firstAnswerDate を D-1 までの answer から再計算
+      //   allProblems を scope.filter で絞り、firstAnswerDate を D-1 までの answer から再計算
       //   (= 「その日時点で未着手だった問題」を future として allocate に渡す)
       const filtered = allProblems.length > 0
         ? applyMemberFilter(
@@ -228,7 +227,7 @@ export default function DigestPage() {
               levelId: p.level_id || null,
               _orig: p,
             })),
-            d.backlog.filter ?? {},
+            d.scope.filter ?? {},
           )
         : null;
       const members: MemberInput[] = filtered
@@ -249,8 +248,8 @@ export default function DigestPage() {
         target: m.target, date: m.date, id: m.id, layer_id: m.layer_id,
       }));
       const allocated = allocate(
-        members, ms, d.backlog.daily_minutes, date,
-        d.backlog.time_multiplier_pct, d.backlog.weekday_weights,
+        members, ms, d.scope.daily_minutes, date,
+        d.scope.time_multiplier_pct, d.scope.weekday_weights,
       );
       const memberInfo = new Map(members.map((m) => [m.id, { code: m.code, name: m.name }]));
       for (const a of allocated) {
@@ -261,7 +260,7 @@ export default function DigestPage() {
           problemId: a.problemId,
           code: m?.code ?? a.code,
           name: m?.name ?? a.name,
-          sub: d.backlog.name,
+          sub: d.scope.name,
         });
       }
     }
@@ -563,7 +562,7 @@ export default function DigestPage() {
         ).length}
         emptyHint="No backlog problems planned for this date"
         onOpen={openDetail}
-        href="/backlog"
+        href="/scopes"
       />
 
       {/* 予実: Review 今日 due (前日時点で D がジャストの due) */}
