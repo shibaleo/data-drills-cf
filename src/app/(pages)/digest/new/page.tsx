@@ -27,7 +27,7 @@ export default function DigestScopeNewPage() {
       name: name.trim(),
       filter,
     });
-    navigate({ to: "/digest/$scopeId" as string, params: { scopeId: res.data.id } });
+    navigate({ to: "/digest/$scope_id" as string, params: { scope_id: res.data.id } });
   }
 
   return (

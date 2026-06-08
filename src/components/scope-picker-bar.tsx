@@ -26,8 +26,8 @@ export function ScopePickerBar({ value, onChange, dirty, disabled }: Props) {
       </select>
       {value && (
         <Link
-          to={"/scopes/$scopeId" as string}
-          params={{ scopeId: value }}
+          to={"/scopes/$scope_id" as string}
+          params={{ scope_id: value }}
           className="text-[10px] text-primary hover:underline"
         >
           Edit scope →

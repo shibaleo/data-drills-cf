@@ -343,7 +343,7 @@ const columns: ColumnDef<ScheduleRow>[] = [
 export default function SchedulePage() {
   usePageTitle("Review");
   const renderHeaderSlot = useHeaderSlot();
-  const { scopeId } = useParams({ strict: false }) as { scopeId: string };
+  const { scope_id: scopeId } = useParams({ strict: false }) as { scope_id: string };
   const navigate = useNavigate();
   usePageBack(useCallback(() => navigate({ to: "/review" as string }), [navigate]));
   const { currentProject, subjects, levels, statuses } = useProject();

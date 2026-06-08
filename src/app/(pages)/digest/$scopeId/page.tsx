@@ -44,7 +44,7 @@ function fmtSec(sec: number): string {
 }
 
 export default function DigestPage() {
-  const { scopeId } = useParams({ strict: false }) as { scopeId: string };
+  const { scope_id: scopeId } = useParams({ strict: false }) as { scope_id: string };
   const { data: scopeData } = useDigestScope(scopeId);
   const scope = scopeData?.scope;
   usePageTitle(scope?.name ? `Digest · ${scope.name}` : "Digest");

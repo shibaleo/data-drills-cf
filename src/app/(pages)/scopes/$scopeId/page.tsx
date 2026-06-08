@@ -44,7 +44,7 @@ import { toast } from "sonner";
 import { useScope, useScopeRevisions, useUpdateScope } from "@/hooks/queries/use-scopes";
 
 export default function ScopeDetailPage() {
-  const { scopeId } = useParams({ strict: false }) as { scopeId: string };
+  const { scope_id: scopeId } = useParams({ strict: false }) as { scope_id: string };
   const { currentProject, subjects, levels, statuses } = useProject();
   const subjectMap = useMemo(() => new Map(subjects.map((s) => [s.id, s])), [subjects]);
   const levelMap = useMemo(() => new Map(levels.map((l) => [l.id, l])), [levels]);

@@ -27,7 +27,7 @@ export default function StatsScopeNewPage() {
       name: name.trim(),
       filter,
     });
-    navigate({ to: "/stats/$scopeId" as string, params: { scopeId: res.data.id } });
+    navigate({ to: "/stats/$scope_id" as string, params: { scope_id: res.data.id } });
   }
 
   return (

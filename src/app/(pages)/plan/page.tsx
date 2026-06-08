@@ -103,13 +103,13 @@ export default function PlanPage() {
   const [hiddenStatuses, setHiddenStatuses] = useState<Set<string>>(new Set());
   const [overflowOnly, setOverflowOnly] = useState(false);
   const [overBudgetOnly, setOverBudgetOnly] = useState(false);
-  // Phase: scope を URL search param (?scopeId=) で持つ。
+  // Phase: scope を URL search param (?scope_id=) で持つ。
   // 未指定なら全 scope を集約 (legacy 俯瞰)。指定があればその scope だけのビュー。
-  const search = useSearch({ from: "/plan" as never }) as { scopeId?: string };
+  const search = useSearch({ from: "/plan" as never }) as { scope_id?: string };
   const navigate = useNavigate();
-  const selectedScopeId = search.scopeId ?? null;
+  const selectedScopeId = search.scope_id ?? null;
   const setSelectedScopeId = (id: string | null) => {
-    navigate({ to: "/plan" as string, search: id ? { scopeId: id } : {} });
+    navigate({ to: "/plan" as string, search: id ? { scope_id: id } : {} });
   };
   const { data: scopes = [] } = useScopes();
   const selectedScope = useMemo(
@@ -121,7 +121,7 @@ export default function PlanPage() {
     if (selectedScopeId || scopes.length === 0) return;
     const saved = typeof window !== "undefined" ? localStorage.getItem("dd_last_scope_id") : null;
     if (saved && scopes.some((s) => s.id === saved)) {
-      navigate({ to: "/plan" as string, search: { scopeId: saved }, replace: true });
+      navigate({ to: "/plan" as string, search: { scope_id: saved }, replace: true });
     }
   }, [selectedScopeId, scopes, navigate]);
   useEffect(() => {

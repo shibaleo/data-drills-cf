@@ -27,7 +27,7 @@ export default function ReviewScopeNewPage() {
       name: name.trim(),
       filter,
     });
-    navigate({ to: "/review/$scopeId" as string, params: { scopeId: res.data.id } });
+    navigate({ to: "/review/$scope_id" as string, params: { scope_id: res.data.id } });
   }
 
   return (

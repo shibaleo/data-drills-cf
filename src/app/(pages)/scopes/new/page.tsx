@@ -32,7 +32,7 @@ export default function ScopeNewPage() {
       weekday_weights: [1, 1, 1, 1, 1, 1, 1],
       filter,
     });
-    navigate({ to: "/scopes/$scopeId" as string, params: { scopeId: res.data.id } });
+    navigate({ to: "/scopes/$scope_id" as string, params: { scope_id: res.data.id } });
   }
 
   return (

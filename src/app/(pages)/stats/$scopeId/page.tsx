@@ -27,7 +27,7 @@ import type { MemberFilterInput } from "@/lib/schemas/member-filter";
 export default function StatsDetailPage() {
   usePageTitle("Stats");
   const renderHeaderSlot = useHeaderSlot();
-  const { scopeId } = useParams({ strict: false }) as { scopeId: string };
+  const { scope_id: scopeId } = useParams({ strict: false }) as { scope_id: string };
   const navigate = useNavigate();
   usePageBack(useCallback(() => navigate({ to: "/stats" as string }), [navigate]));
   const { currentProject, statuses } = useProject();

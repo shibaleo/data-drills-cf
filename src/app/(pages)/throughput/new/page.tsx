@@ -27,7 +27,7 @@ export default function ThroughputScopeNewPage() {
       name: name.trim(),
       filter,
     });
-    navigate({ to: "/throughput/$scopeId" as string, params: { scopeId: res.data.id } });
+    navigate({ to: "/throughput/$scope_id" as string, params: { scope_id: res.data.id } });
   }
 
   return (

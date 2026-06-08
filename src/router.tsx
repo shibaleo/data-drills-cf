@@ -78,8 +78,8 @@ function lazyRoute(
 const reviewRoute = createRoute({
   getParentRoute: () => authLayout,
   path: "/review",
-  validateSearch: (search: Record<string, unknown>): { scopeId?: string } => ({
-    scopeId: typeof search.scopeId === "string" ? search.scopeId : undefined,
+  validateSearch: (search: Record<string, unknown>): { scope_id?: string } => ({
+    scope_id: typeof search.scope_id === "string" ? search.scope_id : undefined,
   }),
   component: () => (
     <Suspense>
@@ -90,7 +90,7 @@ const reviewRoute = createRoute({
 const reviewNewRoute = lazyRoute("/review/new", ReviewNewPage);
 const reviewDetailRoute = createRoute({
   getParentRoute: () => authLayout,
-  path: "/review/$scopeId",
+  path: "/review/$scope_id",
   component: () => (
     <Suspense>
       <ReviewDetailPage />
@@ -100,7 +100,7 @@ const reviewDetailRoute = createRoute({
 const throughputNewRoute = lazyRoute("/throughput/new", ThroughputNewPage);
 const throughputDetailRoute = createRoute({
   getParentRoute: () => authLayout,
-  path: "/throughput/$scopeId",
+  path: "/throughput/$scope_id",
   component: () => (
     <Suspense>
       <ThroughputDetailPage />
@@ -111,8 +111,8 @@ function scopeSearchRoute(path: string, Component: React.LazyExoticComponent<Rea
   return createRoute({
     getParentRoute: () => authLayout,
     path,
-    validateSearch: (search: Record<string, unknown>): { scopeId?: string } => ({
-      scopeId: typeof search.scopeId === "string" ? search.scopeId : undefined,
+    validateSearch: (search: Record<string, unknown>): { scope_id?: string } => ({
+      scope_id: typeof search.scope_id === "string" ? search.scope_id : undefined,
     }),
     component: () => (
       <Suspense>
@@ -127,7 +127,7 @@ const digestRoute = scopeSearchRoute("/digest", DigestPage);
 const digestNewRoute = lazyRoute("/digest/new", DigestNewPage);
 const digestDetailRoute = createRoute({
   getParentRoute: () => authLayout,
-  path: "/digest/$scopeId",
+  path: "/digest/$scope_id",
   component: () => (
     <Suspense>
       <DigestDetailPage />
@@ -137,7 +137,7 @@ const digestDetailRoute = createRoute({
 const statsNewRoute = lazyRoute("/stats/new", StatsNewPage);
 const statsDetailRoute = createRoute({
   getParentRoute: () => authLayout,
-  path: "/stats/$scopeId",
+  path: "/stats/$scope_id",
   component: () => (
     <Suspense>
       <StatsDetailPage />
@@ -158,8 +158,8 @@ const scopesRoute = lazyRoute("/scopes", ScopesPage);
 const planRoute = createRoute({
   getParentRoute: () => authLayout,
   path: "/plan",
-  validateSearch: (search: Record<string, unknown>): { scopeId?: string } => ({
-    scopeId: typeof search.scopeId === "string" ? search.scopeId : undefined,
+  validateSearch: (search: Record<string, unknown>): { scope_id?: string } => ({
+    scope_id: typeof search.scope_id === "string" ? search.scope_id : undefined,
   }),
   component: () => (
     <Suspense>
@@ -170,7 +170,7 @@ const planRoute = createRoute({
 const scopesNewRoute = lazyRoute("/scopes/new", ScopesNewPage);
 const scopesDetailRoute = createRoute({
   getParentRoute: () => authLayout,
-  path: "/scopes/$scopeId",
+  path: "/scopes/$scope_id",
   component: () => (
     <Suspense>
       <ScopesDetailPage />

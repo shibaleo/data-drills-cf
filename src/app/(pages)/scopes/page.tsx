@@ -45,7 +45,7 @@ export default function ScopesPage() {
           const prog = progressByBacklog.get(b.id) ?? { done: 0, total: 0 };
           const pct = prog.total > 0 ? Math.round((prog.done * 100) / prog.total) : 0;
           return (
-            <Link key={b.id} to="/scopes/$scopeId" params={{ scopeId: b.id }}
+            <Link key={b.id} to="/scopes/$scope_id" params={{ scope_id: b.id }}
               className="block border rounded p-4 hover:bg-accent transition space-y-2">
               <div className="font-semibold">{b.name}</div>
               <div className="flex items-center gap-2">

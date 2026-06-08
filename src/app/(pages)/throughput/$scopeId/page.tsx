@@ -48,7 +48,7 @@ function diffDays(from: string, to: string): number {
 export default function ThroughputPage() {
   usePageTitle("Throughput");
   const renderHeaderSlot = useHeaderSlot();
-  const { scopeId } = useParams({ strict: false }) as { scopeId: string };
+  const { scope_id: scopeId } = useParams({ strict: false }) as { scope_id: string };
   const navigate = useNavigate();
   usePageBack(useCallback(() => navigate({ to: "/throughput" as string }), [navigate]));
   const { currentProject, subjects, levels, statuses } = useProject();
