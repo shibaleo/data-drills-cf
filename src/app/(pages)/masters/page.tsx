@@ -176,7 +176,7 @@ function SortableProjectSection({
           type="button"
           className="inline-flex size-5 items-center justify-center rounded text-muted-foreground/40 hover:text-foreground transition-colors"
           onClick={() => onEditProject(project)}
-          title="Edit project"
+          title="Edit field"
         >
           <Pencil className="size-3" />
         </button>
@@ -229,8 +229,8 @@ function ProjectDialog({
     >
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>{isCreate ? "New Project" : "Edit Project"}</DialogTitle>
-          <DialogDescription className="sr-only">Project details</DialogDescription>
+          <DialogTitle>{isCreate ? "New Field" : "Edit Field"}</DialogTitle>
+          <DialogDescription className="sr-only">Field details</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <div className="space-y-2">
@@ -239,7 +239,7 @@ function ProjectDialog({
           </div>
           <div className="space-y-2">
             <Label>Name</Label>
-            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Project name" />
+            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Field name" />
           </div>
           {error && <p className="text-sm text-destructive">{error}</p>}
         </div>
@@ -310,7 +310,7 @@ export default function MastersPage() {
     if (!confirmDeleteProject) return;
     deleteProject.mutate(confirmDeleteProject.id, {
       onSuccess: () => {
-        toast.success("Project deleted");
+        toast.success("Field deleted");
         setConfirmDeleteProject(null);
         setProjectDialogOpen(false);
       },
@@ -321,10 +321,10 @@ export default function MastersPage() {
   const handleSaveProject = async (payload: { code: string; name: string }) => {
     if (projectDialogItem) {
       await updateProject.mutateAsync({ id: projectDialogItem.id, payload });
-      toast.success("Project updated");
+      toast.success("Field updated");
     } else {
       await createProject.mutateAsync(payload);
-      toast.success("Project created");
+      toast.success("Field created");
     }
     setProjectDialogOpen(false);
   };
@@ -365,7 +365,7 @@ export default function MastersPage() {
             onClick={() => { setProjectDialogItem(null); setProjectDialogOpen(true); }}
           >
             <Plus className="size-4" />
-            Add Project
+            Add Field
           </button>
         </div>
       )}
@@ -383,7 +383,7 @@ export default function MastersPage() {
           <DialogHeader>
             <DialogTitle>Confirm Delete</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete project &quot;{confirmDeleteProject?.name}&quot;?
+              Are you sure you want to delete field &quot;{confirmDeleteProject?.name}&quot;?
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

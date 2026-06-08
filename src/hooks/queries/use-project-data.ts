@@ -2,7 +2,10 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 import { rpc, unwrap, type RpcData } from "@/lib/rpc-client";
 
-export type Project = RpcData<typeof rpc.api.v1.projects.$get>["data"][number];
+// Phase 3c.2: /api/v1/projects → /api/v1/fields に透過的にスワップ。
+// field.id === project.id (Phase 1 backfill) なので consumer 側の id は無修正で動く。
+// Project type alias は consumer 互換のため維持 (= Field と同 shape)。
+export type Project = RpcData<typeof rpc.api.v1.fields.$get>["data"][number];
 export type LookupItem = RpcData<typeof rpc.api.v1.projects[":id"]["subjects"]["$get"]>["data"][number];
 export type StatusItem = RpcData<typeof rpc.api.v1.statuses.$get>["data"][number];
 
@@ -18,7 +21,7 @@ export function useProjects() {
   return useQuery({
     queryKey: projectKeys.projects(),
     queryFn: async () => {
-      const json = await unwrap(rpc.api.v1.projects.$get());
+      const json = await unwrap(rpc.api.v1.fields.$get());
       return json.data;
     },
     staleTime: 5 * 60_000,
@@ -77,7 +80,7 @@ export function useCreateProject() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (payload: { code: string; name: string; color?: string | null }) =>
-      unwrap(rpc.api.v1.projects.$post({ json: payload })),
+      unwrap(rpc.api.v1.fields.$post({ json: payload })),
     onSuccess: () => qc.invalidateQueries({ queryKey: projectKeys.projects() }),
   });
 }
@@ -86,7 +89,7 @@ export function useUpdateProject() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (vars: { id: string; payload: { code?: string; name?: string; color?: string | null; sort_order?: number } }) =>
-      unwrap(rpc.api.v1.projects[":id"].$put({ param: { id: vars.id }, json: vars.payload })),
+      unwrap(rpc.api.v1.fields[":id"].$put({ param: { id: vars.id }, json: vars.payload })),
     onSuccess: () => qc.invalidateQueries({ queryKey: projectKeys.projects() }),
   });
 }
@@ -94,7 +97,7 @@ export function useUpdateProject() {
 export function useDeleteProject() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => unwrap(rpc.api.v1.projects[":id"].$delete({ param: { id } })),
+    mutationFn: (id: string) => unwrap(rpc.api.v1.fields[":id"].$delete({ param: { id } })),
     onSuccess: () => qc.invalidateQueries({ queryKey: projectKeys.projects() }),
   });
 }
@@ -102,7 +105,7 @@ export function useDeleteProject() {
 export function useReorderProjects() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (ids: string[]) => unwrap(rpc.api.v1.projects.reorder.$patch({ json: { ids } })),
+    mutationFn: (ids: string[]) => unwrap(rpc.api.v1.fields.reorder.$patch({ json: { ids } })),
     onMutate: async (ids) => {
       await qc.cancelQueries({ queryKey: projectKeys.projects() });
       const previous = qc.getQueryData<Project[]>(projectKeys.projects());

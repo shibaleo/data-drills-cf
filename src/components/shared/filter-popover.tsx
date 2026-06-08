@@ -41,11 +41,11 @@ export function FilterPopover() {
         <DialogContent className="max-w-xs">
           <DialogHeader>
             <DialogTitle>Filter</DialogTitle>
-            <DialogDescription className="sr-only">Select project</DialogDescription>
+            <DialogDescription className="sr-only">Select field</DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
             <div className="space-y-1">
-              <Label className="text-xs">Project</Label>
+              <Label className="text-xs">Field</Label>
               <Select
                 value={currentProject?.id ?? ""}
                 onValueChange={(id) => {
@@ -53,7 +53,7 @@ export function FilterPopover() {
                   if (p) setCurrentProject(p);
                 }}
               >
-                <SelectTrigger><SelectValue placeholder="Select project" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="Select field" /></SelectTrigger>
                 <SelectContent>
                   {projects.map((p) => (
                     <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
