@@ -76,8 +76,27 @@ psql "$NEON_URL" -f drizzle/manual/005_phase4_drop_old.sql
 
 #### 4.3 旧 backlog 経由箇所の scopes API への移行
 
-`scopes/$scopeId` ページ (= 旧 backlog detail UI) は現状 `rpc.api.v1.backlog[":id"]` を叩く。
-Phase 4 前に scopes/:id/detail + 新 milestone CRUD endpoint に移行する必要あり。
+進捗状況:
+
+| consumer | 旧 hook | 新 hook | 状態 |
+|---|---|---|---|
+| `/scopes` list | `useBacklogList` | `useScopes` | ✅ `712b756` |
+| `/scopes/new` | `useCreateBacklog` | `useCreateScope` | ✅ `712b756` |
+| `/plan` | `useBacklogList` + backlog/:id | `useScopes` + scopes/:id/detail | ✅ `287adf4` |
+| `/scopes/$id` detail | `useBacklog`, `useBacklogRevisions`, `useBacklogBatchSave`, `useArchiveBacklog` | TODO: 全部 scope 版に | ⏳ |
+| `/digest/$id` | `useBacklogList` + backlog/:id | TODO: `useScopes` + scopes/:id/detail | ⏳ |
+| sidebar Badge | `useBacklogTodayCount` | TODO: `useScopeTodayCount` (新 endpoint 要) | ⏳ |
+
+残作業:
+
+1. **scope batch endpoint** を `src/routes/scopes.ts` に追加
+   - `POST /api/v1/scopes/:id/batch` — backlog batch のコピーで `scope` table + `goal_*.scope_id` 経由に書き換え
+   - schemas は `src/lib/schemas/backlog.ts` の `*BatchSchema` を scope-version で複製 (backlog_id → scope_id)
+2. **`useScopeBatchSave`** hook を `src/hooks/queries/use-scopes.ts` に追加
+3. **scopes/$id page** の useBacklog* を useScope* に置換 (shape 差: `data.backlog` → `data.scope`, `useBacklogRevisions` → `useScopeRevisions`)
+4. **scope today-count endpoint** を追加 (allocator を scope filter で実行)
+5. **sidebar Badge** を `useBacklogTodayCount` → `useScopeTodayCount` に
+6. **digest/$id** で backlog 依存を scopes API に
 
 ### Phase 5: 仕上げ + 本番デプロイ
 
