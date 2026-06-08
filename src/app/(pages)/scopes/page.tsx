@@ -2,7 +2,7 @@
 import { useMemo } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useField } from "@/hooks/use-field";
-import { useBacklogList } from "@/hooks/queries/use-backlog";
+import { useScopes } from "@/hooks/queries/use-scopes";
 import { useProblemsList } from "@/hooks/queries/use-problems";
 import { usePageTitle } from "@/lib/page-context";
 import { Plus } from "lucide-react";
@@ -11,28 +11,33 @@ export default function ScopesPage() {
   usePageTitle("Scopes");
   const { currentField } = useField();
   const navigate = useNavigate();
-  const { data: backlogs = [], isLoading } = useBacklogList(currentField?.id);
+  const { data: scopes = [], isLoading } = useScopes();
   const { data: allProblems = [] } = useProblemsList(currentField?.id);
 
-  // 各 backlog の filter で members を絞り、進捗 (done / total) を出す。
-  // 中間 map 作成を避け、1パス per backlog で直接判定 (allocation 不要)
-  const progressByBacklog = useMemo(() => {
+  // 各 scope の filter で members を絞り、進捗 (done / total) を出す。
+  // 中間 map 作成を避け、1パス per scope で直接判定 (allocation 不要)
+  const progressByScope = useMemo(() => {
     const m = new Map<string, { done: number; total: number }>();
-    for (const b of backlogs) {
-      const subjectSet = b.filter.subjectIds?.length ? new Set(b.filter.subjectIds) : null;
-      const levelSet = b.filter.levelIds?.length ? new Set(b.filter.levelIds) : null;
+    for (const s of scopes) {
+      const filter = (s.filter ?? {}) as { fieldIds?: string[]; subjectIds?: string[]; levelIds?: string[] };
+      // 注: useProblemsList は project_id しか返さないが field.id === project.id なので
+      // fieldIds 判定にもそのまま使える (Phase 4 で problems-list に field_id を追加予定)
+      const fieldSet = filter.fieldIds?.length ? new Set(filter.fieldIds) : null;
+      const subjectSet = filter.subjectIds?.length ? new Set(filter.subjectIds) : null;
+      const levelSet = filter.levelIds?.length ? new Set(filter.levelIds) : null;
       let total = 0;
       let done = 0;
       for (const p of allProblems) {
+        if (fieldSet && (!p.project_id || !fieldSet.has(p.project_id))) continue;
         if (subjectSet && (!p.subject_id || !subjectSet.has(p.subject_id))) continue;
         if (levelSet && (!p.level_id || !levelSet.has(p.level_id))) continue;
         total++;
         if (p.answers.length > 0) done++;
       }
-      m.set(b.id, { done, total });
+      m.set(s.id, { done, total });
     }
     return m;
-  }, [backlogs, allProblems]);
+  }, [scopes, allProblems]);
 
   if (!currentField) return <div className="p-6 text-muted-foreground">Please select a project</div>;
 
@@ -41,13 +46,13 @@ export default function ScopesPage() {
       {isLoading && <div>Loading...</div>}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {backlogs.map((b) => {
-          const prog = progressByBacklog.get(b.id) ?? { done: 0, total: 0 };
+        {scopes.map((s) => {
+          const prog = progressByScope.get(s.id) ?? { done: 0, total: 0 };
           const pct = prog.total > 0 ? Math.round((prog.done * 100) / prog.total) : 0;
           return (
-            <Link key={b.id} to="/scopes/$scope_id" params={{ scope_id: b.id }}
+            <Link key={s.id} to="/scopes/$scope_id" params={{ scope_id: s.id }}
               className="block border rounded p-4 hover:bg-accent transition space-y-2">
-              <div className="font-semibold">{b.name}</div>
+              <div className="font-semibold">{s.name}</div>
               <div className="flex items-center gap-2">
                 <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
                   <div className="h-full bg-green-500 transition-all" style={{ width: `${pct}%` }}/>
@@ -57,7 +62,7 @@ export default function ScopesPage() {
                 </div>
               </div>
               <div className="text-xs text-muted-foreground">
-                {b.daily_minutes} min/day · revision {b.revision}
+                {s.daily_minutes} min/day · revision {s.revision}
               </div>
             </Link>
           );

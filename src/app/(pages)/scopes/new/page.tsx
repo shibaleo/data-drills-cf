@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useField } from "@/hooks/use-field";
-import { useCreateBacklog } from "@/hooks/queries/use-backlog";
+import { useCreateScope } from "@/hooks/queries/use-scopes";
 import { MemberFilterPicker } from "@/components/member-filter-picker";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -12,24 +12,24 @@ import type { MemberFilterInput } from "@/lib/schemas/member-filter";
 export default function ScopeNewPage() {
   const { currentField } = useField();
   const navigate = useNavigate();
-  const create = useCreateBacklog(currentField?.id);
+  const create = useCreateScope();
 
   const [name, setName] = useState("");
   const [dailyMinutes, setDailyMinutes] = useState(60);
   const [timeMultiplier, setTimeMultiplier] = useState(1.0);
   const [filter, setFilter] = useState<MemberFilterInput>({});
 
-  if (!currentField) return <div className="p-6 text-muted-foreground">Please select a project</div>;
+  if (!currentField) return <div className="p-6 text-muted-foreground">Please select a field</div>;
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!name.trim()) return;
     const res = await create.mutateAsync({
-      project_id: currentField!.id,
       name: name.trim(),
       daily_minutes: dailyMinutes,
       time_multiplier_pct: Math.round(timeMultiplier * 100),
       weekday_weights: [1, 1, 1, 1, 1, 1, 1],
+      status_stabilities: {},
       filter,
     });
     navigate({ to: "/scopes/$scope_id" as string, params: { scope_id: res.data.id } });
@@ -37,7 +37,7 @@ export default function ScopeNewPage() {
 
   return (
     <form onSubmit={onSubmit} className="p-4 md:p-6 space-y-6 max-w-4xl">
-      <h1 className="text-2xl font-semibold">Create new backlog</h1>
+      <h1 className="text-2xl font-semibold">Create new scope</h1>
 
       <div className="space-y-2">
         <Label>Name</Label>
