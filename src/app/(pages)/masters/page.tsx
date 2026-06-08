@@ -37,11 +37,11 @@ import { usePageTitle } from "@/lib/page-context";
 import { randomCode } from "@/lib/utils";
 import { MasterList, type MasterSavePayload } from "@/components/shared/master-list-ui";
 import {
-  useProjects,
-  useReorderProjects,
-  useCreateProject,
-  useUpdateProject,
-  useDeleteProject,
+  useFields,
+  useReorderFields,
+  useCreateField,
+  useUpdateField,
+  useDeleteField,
   type Project,
 } from "@/hooks/queries/use-project-data";
 import {
@@ -278,11 +278,11 @@ function ProjectDialog({
 
 export default function MastersPage() {
   usePageTitle("Masters");
-  const { data: projects = [], isLoading } = useProjects();
-  const reorderProjects = useReorderProjects();
-  const createProject = useCreateProject();
-  const updateProject = useUpdateProject();
-  const deleteProject = useDeleteProject();
+  const { data: projects = [], isLoading } = useFields();
+  const reorderProjects = useReorderFields();
+  const createProject = useCreateField();
+  const updateProject = useUpdateField();
+  const deleteProject = useDeleteField();
 
   // Project create/edit dialog
   const [projectDialogOpen, setProjectDialogOpen] = useState(false);

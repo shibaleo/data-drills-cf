@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { useProject } from "@/hooks/use-project";
+import { useField } from "@/hooks/use-project";
 import { useCreateBacklog } from "@/hooks/queries/use-backlog";
 import { MemberFilterPicker } from "@/components/member-filter-picker";
 import { Input } from "@/components/ui/input";
@@ -10,22 +10,22 @@ import { Label } from "@/components/ui/label";
 import type { MemberFilterInput } from "@/lib/schemas/member-filter";
 
 export default function ScopeNewPage() {
-  const { currentProject } = useProject();
+  const { currentField } = useField();
   const navigate = useNavigate();
-  const create = useCreateBacklog(currentProject?.id);
+  const create = useCreateBacklog(currentField?.id);
 
   const [name, setName] = useState("");
   const [dailyMinutes, setDailyMinutes] = useState(60);
   const [timeMultiplier, setTimeMultiplier] = useState(1.0);
   const [filter, setFilter] = useState<MemberFilterInput>({});
 
-  if (!currentProject) return <div className="p-6 text-muted-foreground">Please select a project</div>;
+  if (!currentField) return <div className="p-6 text-muted-foreground">Please select a project</div>;
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!name.trim()) return;
     const res = await create.mutateAsync({
-      project_id: currentProject!.id,
+      project_id: currentField!.id,
       name: name.trim(),
       daily_minutes: dailyMinutes,
       time_multiplier_pct: Math.round(timeMultiplier * 100),
@@ -57,7 +57,7 @@ export default function ScopeNewPage() {
 
       <div className="space-y-2">
         <Label>Member filter (empty category = all)</Label>
-        <MemberFilterPicker projectId={currentProject.id} value={filter} onChange={setFilter} />
+        <MemberFilterPicker projectId={currentField.id} value={filter} onChange={setFilter} />
       </div>
 
       <div className="text-xs text-muted-foreground italic">

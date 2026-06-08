@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { rpc, unwrap, type RpcData } from "@/lib/rpc-client";
-import { projectKeys } from "@/hooks/queries/use-project-data";
+import { fieldKeys } from "@/hooks/queries/use-project-data";
 
 export type LevelRow = RpcData<typeof rpc.api.v1.projects[":id"]["levels"]["$get"]>["data"][number];
 
@@ -24,7 +24,7 @@ export function useLevelsList(projectId: string | undefined) {
 
 function invalidateLevels(qc: ReturnType<typeof useQueryClient>, projectId: string) {
   qc.invalidateQueries({ queryKey: levelsKeys.list(projectId) });
-  qc.invalidateQueries({ queryKey: projectKeys.levels(projectId) });
+  qc.invalidateQueries({ queryKey: fieldKeys.levels(projectId) });
 }
 
 export function useCreateLevel(projectId: string | undefined) {

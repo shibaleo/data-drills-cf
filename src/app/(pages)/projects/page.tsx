@@ -2,19 +2,19 @@
 
 import { MasterPageUI, type MasterSavePayload } from "@/components/shared/master-list-ui";
 import {
-  useProjects,
-  useCreateProject,
-  useUpdateProject,
-  useDeleteProject,
-  useReorderProjects,
+  useFields,
+  useCreateField,
+  useUpdateField,
+  useDeleteField,
+  useReorderFields,
 } from "@/hooks/queries/use-project-data";
 
 export default function ProjectsPage() {
-  const { data: projects = [], isLoading } = useProjects();
-  const create = useCreateProject();
-  const update = useUpdateProject();
-  const remove = useDeleteProject();
-  const reorder = useReorderProjects();
+  const { data: projects = [], isLoading } = useFields();
+  const create = useCreateField();
+  const update = useUpdateField();
+  const remove = useDeleteField();
+  const reorder = useReorderFields();
 
   return (
     <MasterPageUI

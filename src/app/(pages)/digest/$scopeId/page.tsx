@@ -5,7 +5,7 @@ import { Markdown } from "@/components/markdown";
 import { ChevronLeft, ChevronRight, Clock, ChevronDown, ChevronUp, MessageSquareText, Layers, ArrowUpRight, AlertTriangle, ArrowLeft } from "lucide-react";
 import { Link, useParams } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useProject } from "@/hooks/use-project";
+import { useField } from "@/hooks/use-project";
 import { useThroughputList } from "@/hooks/queries/use-throughput";
 import { useProblemsList } from "@/hooks/queries/use-problems";
 import { useReviewList } from "@/hooks/queries/use-review";
@@ -48,13 +48,13 @@ export default function DigestPage() {
   const { data: scopeData } = useDigestScope(scopeId);
   const scope = scopeData?.scope;
   usePageTitle(scope?.name ? `Digest · ${scope.name}` : "Digest");
-  const { currentProject, statuses, subjects, levels } = useProject();
+  const { currentField, statuses, subjects, levels } = useField();
   const subjectMap = useMemo(() => new Map(subjects.map((s) => [s.id, s])), [subjects]);
   const levelMap = useMemo(() => new Map(levels.map((l) => [l.id, l])), [levels]);
   const [date, setDate] = useState<string>(todayJST());
 
-  const { data: rowsAll = [] } = useThroughputList(currentProject?.id);
-  const { data: allProblemsAll = [] } = useProblemsList(currentProject?.id);
+  const { data: rowsAll = [] } = useThroughputList(currentField?.id);
+  const { data: allProblemsAll = [] } = useProblemsList(currentField?.id);
 
   // scope.filter で scope 配下の problem set を確定 → throughput rows と allProblems を絞り込む
   const scopedProblemIds = useMemo(() => {
@@ -107,7 +107,7 @@ export default function DigestPage() {
   };
 
   // Flashcard reviews on D
-  const { reviews: fcReviews, cards: fcCards } = useFlashcardsData(currentProject?.id);
+  const { reviews: fcReviews, cards: fcCards } = useFlashcardsData(currentField?.id);
   const flashcardsById = useMemo(
     () => new Map(fcCards.map((c) => [c.id, c])),
     [fcCards],
@@ -167,7 +167,7 @@ export default function DigestPage() {
 
   // Review schedule as of yesterday EOD → nextReview === D が今日 due、< D が overdue
   // 未回答 (answerCount === 0) は Review ページと同様に対象外 (= まだ復習対象ではない)
-  const { data: reviewYesterdayRaw = [] } = useReviewList(currentProject?.id, yesterday);
+  const { data: reviewYesterdayRaw = [] } = useReviewList(currentField?.id, yesterday);
   // scope filter を適用 (= scope 配下の problem だけを Review 予実の対象にする)
   const reviewYesterday = useMemo(
     () => scopedProblemIds ? reviewYesterdayRaw.filter((r) => scopedProblemIds.has(r.problemId)) : reviewYesterdayRaw,
@@ -188,7 +188,7 @@ export default function DigestPage() {
   );
 
   // Backlog: active な backlog 全部を D-1 snapshot で取り、allocate(today=D) で D 割当を抽出
-  const { data: backlogs = [] } = useBacklogList(currentProject?.id);
+  const { data: backlogs = [] } = useBacklogList(currentField?.id);
   const activeBacklogs = useMemo(
     () => backlogs.filter((b) => b.is_active && !b.valid_to),
     [backlogs],
@@ -208,7 +208,7 @@ export default function DigestPage() {
       }
       return out;
     },
-    enabled: !!currentProject && activeBacklogs.length > 0,
+    enabled: !!currentField && activeBacklogs.length > 0,
     staleTime: 5 * 60_000,
   });
 
@@ -402,7 +402,7 @@ export default function DigestPage() {
       : { label: `${pct}% vs 7d`, color: "text-red-500" };
   };
 
-  if (!currentProject) return <div className="p-6 text-muted-foreground">Please select a project</div>;
+  if (!currentField) return <div className="p-6 text-muted-foreground">Please select a project</div>;
 
   const sortedStatuses = [...statuses].sort((a, b) => a.sortOrder - b.sortOrder);
 

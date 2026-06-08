@@ -19,7 +19,7 @@ import {
   Tag,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useProject } from "@/hooks/use-project";
+import { useField } from "@/hooks/use-project";
 import { useReviewList } from "@/hooks/queries/use-review";
 import { useFilterPrefs } from "@/hooks/queries/use-filter-prefs";
 import { useBacklogTodayCount } from "@/hooks/queries/use-backlog";
@@ -41,10 +41,10 @@ interface NavItem {
 /* ── Overdue badge ── */
 
 function OverdueBadge() {
-  const { currentProject } = useProject();
+  const { currentField } = useField();
   const qc = useQueryClient();
-  const { data = [] } = useReviewList(currentProject?.id);
-  const { data: prefs } = useFilterPrefs(currentProject?.id);
+  const { data = [] } = useReviewList(currentField?.id);
+  const { data: prefs } = useFilterPrefs(currentField?.id);
   const rev = prefs?.review ?? {};
   const subjSet = new Set(rev.subjectIds ?? []);
   const lvlSet = new Set(rev.levelIds ?? []);
@@ -59,13 +59,13 @@ function OverdueBadge() {
 
   useEffect(() => {
     const invalidate = () => {
-      if (currentProject) {
-        qc.invalidateQueries({ queryKey: reviewKeys.list(currentProject.id) });
+      if (currentField) {
+        qc.invalidateQueries({ queryKey: reviewKeys.list(currentField.id) });
       }
     };
     window.addEventListener("review-changed", invalidate);
     return () => window.removeEventListener("review-changed", invalidate);
-  }, [qc, currentProject]);
+  }, [qc, currentField]);
 
   if (count <= 0) return null;
   return (
@@ -76,8 +76,8 @@ function OverdueBadge() {
 }
 
 function BacklogBadge() {
-  const { currentProject } = useProject();
-  const { data: count = 0 } = useBacklogTodayCount(currentProject?.id);
+  const { currentField } = useField();
+  const { data: count = 0 } = useBacklogTodayCount(currentField?.id);
   if (count <= 0) return null;
   return (
     <span className="absolute -right-2 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-0.5 text-[10px] font-bold leading-none text-destructive-foreground">

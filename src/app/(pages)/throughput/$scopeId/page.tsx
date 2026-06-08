@@ -1,6 +1,6 @@
 "use client";
 import { useMemo, useRef, useEffect, useState, useCallback } from "react";
-import { useProject } from "@/hooks/use-project";
+import { useField } from "@/hooks/use-project";
 import { useThroughputList, type ThroughputRow } from "@/hooks/queries/use-throughput";
 import { useProblemsList } from "@/hooks/queries/use-problems";
 import { useProblemDialogs } from "@/hooks/use-problem-dialogs";
@@ -51,14 +51,14 @@ export default function ThroughputPage() {
   const { scope_id: scopeId } = useParams({ strict: false }) as { scope_id: string };
   const navigate = useNavigate();
   usePageBack(useCallback(() => navigate({ to: "/throughput" as string }), [navigate]));
-  const { currentProject, subjects, levels, statuses } = useProject();
+  const { currentField, subjects, levels, statuses } = useField();
   const subjectMap = useMemo(() => new Map(subjects.map((s) => [s.id, s])), [subjects]);
   const levelMap = useMemo(() => new Map(levels.map((l) => [l.id, l])), [levels]);
 
   const scopeQuery = useThroughputScope(scopeId);
   const revisionsQuery = useThroughputScopeRevisions(scopeId);
-  const updateScope = useUpdateThroughputScope(scopeId, currentProject?.id);
-  const archiveScope = useArchiveThroughputScope(currentProject?.id);
+  const updateScope = useUpdateThroughputScope(scopeId, currentField?.id);
+  const archiveScope = useArchiveThroughputScope(currentField?.id);
 
   const [asOf, setAsOf] = useState<string | null>(null);
   const [localName, setLocalName] = useState("");
@@ -83,7 +83,7 @@ export default function ThroughputPage() {
   }, [scopeQuery.data]);
 
   // 常に全データを fetch、asOf によるフィルタはクライアントで適用 (= アニメーション再生に必要)。
-  const { data: rawRows = [], isLoading } = useThroughputList(currentProject?.id);
+  const { data: rawRows = [], isLoading } = useThroughputList(currentField?.id);
   const rows = useMemo(() => {
     let base = rawRows;
     if (asOf) base = base.filter((r) => r.date <= asOf);
@@ -96,7 +96,7 @@ export default function ThroughputPage() {
     }
     return base;
   }, [rawRows, asOf, localFilter]);
-  const allProblems = useProblemsList(currentProject?.id).data ?? [];
+  const allProblems = useProblemsList(currentField?.id).data ?? [];
   const { openDetail, renderDialogs } = useProblemDialogs({ allProblems, onDataChanged: () => {} });
   const tableRef = useRef<HTMLDivElement>(null);
 
@@ -111,11 +111,11 @@ export default function ThroughputPage() {
   const [sortState, setSortState] = useState<SortState>({ key: "date", dir: "desc" });
 
   // Filter prefs persistence
-  const filterPrefsQuery = useFilterPrefs(currentProject?.id);
-  const saveFilterPrefs = useSaveFilterPrefs(currentProject?.id);
+  const filterPrefsQuery = useFilterPrefs(currentField?.id);
+  const saveFilterPrefs = useSaveFilterPrefs(currentField?.id);
   const prefsLoadedRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!currentProject || prefsLoadedRef.current === currentProject.id) return;
+    if (!currentField || prefsLoadedRef.current === currentField.id) return;
     if (filterPrefsQuery.data === undefined) return;
     const p = filterPrefsQuery.data?.throughput;
     if (p) {
@@ -124,11 +124,11 @@ export default function ThroughputPage() {
       setFilterPrevStatuses(new Set(p.prevStatuses ?? []));
       if (p.maxRowsCap !== undefined) setMaxRowsCap(p.maxRowsCap);
     }
-    prefsLoadedRef.current = currentProject.id;
-  }, [currentProject, filterPrefsQuery.data]);
+    prefsLoadedRef.current = currentField.id;
+  }, [currentField, filterPrefsQuery.data]);
   const lastSavedPrefsRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!currentProject || prefsLoadedRef.current !== currentProject.id) return;
+    if (!currentField || prefsLoadedRef.current !== currentField.id) return;
     const snapshot = JSON.stringify({
       s: [...filterSubjects].sort(),
       l: [...filterLevels].sort(),
@@ -264,7 +264,7 @@ export default function ThroughputPage() {
     return entries;
   }, [statuses, filterPrevStatuses, togglePrevStatus]);
 
-  if (!currentProject) return <div className="p-6 text-muted-foreground">Please select a project</div>;
+  if (!currentField) return <div className="p-6 text-muted-foreground">Please select a project</div>;
 
   const activeFilterCount = filterSubjects.size + filterLevels.size + filterPrevStatuses.size;
 
@@ -396,7 +396,7 @@ export default function ThroughputPage() {
             <X className="size-3.5"/>
           </button>
           <MemberFilterPicker
-            projectId={currentProject.id}
+            projectId={currentField.id}
             value={localFilter}
             onChange={setLocalFilter}
             trailing={

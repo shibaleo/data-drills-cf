@@ -12,7 +12,7 @@ import type { MemberFilterInput } from "@/lib/schemas/member-filter";
 import { applyMemberFilter } from "@/lib/member-filter";
 import { MemberFilterPicker } from "@/components/member-filter-picker";
 import { StabilitySlider } from "@/components/stability-slider";
-import { useProject } from "@/hooks/use-project";
+import { useField } from "@/hooks/use-project";
 import { useProblemsList } from "@/hooks/queries/use-problems";
 import { useProblemDialogs } from "@/hooks/use-problem-dialogs";
 import { useQueryClient } from "@tanstack/react-query";
@@ -45,7 +45,7 @@ import { useScope, useScopeRevisions, useUpdateScope } from "@/hooks/queries/use
 
 export default function ScopeDetailPage() {
   const { scope_id: scopeId } = useParams({ strict: false }) as { scope_id: string };
-  const { currentProject, subjects, levels, statuses } = useProject();
+  const { currentField, subjects, levels, statuses } = useField();
   const subjectMap = useMemo(() => new Map(subjects.map((s) => [s.id, s])), [subjects]);
   const levelMap = useMemo(() => new Map(levels.map((l) => [l.id, l])), [levels]);
   const navigate = useNavigate();
@@ -55,8 +55,8 @@ export default function ScopeDetailPage() {
   // (asOf がエンティティ作成より古い場合に server 側の bitemporal WHERE で 404 になる問題回避)
   const { data, isLoading } = useBacklog(scopeId);
   const revisionsQuery = useBacklogRevisions(scopeId);
-  const archive = useArchiveBacklog(currentProject?.id);
-  const batchSave = useBacklogBatchSave(scopeId, currentProject?.id);
+  const archive = useArchiveBacklog(currentField?.id);
+  const batchSave = useBacklogBatchSave(scopeId, currentField?.id);
   // Phase 3c: 並走する新 scope エンティティから status_stabilities を読み書き。
   // 旧 backlog テーブルが Phase 4 で削除されるまでは並列に保持する。
   const scopeQuery = useScope(scopeId);
@@ -107,14 +107,14 @@ export default function ScopeDetailPage() {
   const [exportSelected, setExportSelected] = useState<Set<string>>(new Set());
   const [exporting, setExporting] = useState(false);
   const [exportPhase, setExportPhase] = useState<"waking" | "generating" | "downloading" | null>(null);
-  const { data: topics = [] } = useTopicsList(currentProject?.id);
+  const { data: topics = [] } = useTopicsList(currentField?.id);
 
   // Filter prefs persistence
-  const filterPrefsQuery = useFilterPrefs(currentProject?.id);
-  const saveFilterPrefs = useSaveFilterPrefs(currentProject?.id);
+  const filterPrefsQuery = useFilterPrefs(currentField?.id);
+  const saveFilterPrefs = useSaveFilterPrefs(currentField?.id);
   const prefsLoadedRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!currentProject || prefsLoadedRef.current === currentProject.id) return;
+    if (!currentField || prefsLoadedRef.current === currentField.id) return;
     if (filterPrefsQuery.data === undefined) return;
     const p = filterPrefsQuery.data?.backlog;
     if (p) {
@@ -126,11 +126,11 @@ export default function ScopeDetailPage() {
       setOverflowOnly(!!p.overflowOnly);
       setHiddenLayerIds(new Set(p.hiddenLayerIds ?? []));
     }
-    prefsLoadedRef.current = currentProject.id;
-  }, [currentProject, filterPrefsQuery.data]);
+    prefsLoadedRef.current = currentField.id;
+  }, [currentField, filterPrefsQuery.data]);
   const lastSavedPrefsRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!currentProject || prefsLoadedRef.current !== currentProject.id) return;
+    if (!currentField || prefsLoadedRef.current !== currentField.id) return;
     const snapshot = JSON.stringify({
       s: [...filterSubjects].sort(),
       l: [...filterLevels].sort(),
@@ -158,15 +158,15 @@ export default function ScopeDetailPage() {
   }, [filterSubjects, filterLevels, filterTopics, hideFirst, hideFuture, overflowOnly, hiddenLayerIds]);
 
   const qc = useQueryClient();
-  const allProblems = useProblemsList(currentProject?.id).data ?? [];
+  const allProblems = useProblemsList(currentField?.id).data ?? [];
   const tableRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<BacklogChartHandle>(null);
   const handleDataChanged = useCallback(() => {
-    if (currentProject) {
+    if (currentField) {
       qc.invalidateQueries({ queryKey: backlogKeys.detail(scopeId) });
-      qc.invalidateQueries({ queryKey: problemsKeys.list(currentProject.id) });
+      qc.invalidateQueries({ queryKey: problemsKeys.list(currentField.id) });
     }
-  }, [qc, currentProject, scopeId]);
+  }, [qc, currentField, scopeId]);
   const { openDetail, renderDialogs } = useProblemDialogs({ allProblems, onDataChanged: handleDataChanged });
   const handleSelect = useCallback((problemId: string) => {
     setSelectedId((prev) => (prev === problemId ? null : problemId));
@@ -579,7 +579,7 @@ export default function ScopeDetailPage() {
         </div>
       )}
 
-      {membersOpen && !readOnly && currentProject && (
+      {membersOpen && !readOnly && currentField && (
         <div className={`relative rounded-md border ${filterDirty ? "border-primary/40 bg-primary/5" : ""} px-3 py-2 text-xs space-y-2`}>
           <button type="button" onClick={() => setMembersEditorOpen(false)} disabled={filterDirty}
             title="Close"
@@ -587,7 +587,7 @@ export default function ScopeDetailPage() {
             <X className="size-3.5"/>
           </button>
           <MemberFilterPicker
-            projectId={currentProject.id}
+            projectId={currentField.id}
             value={localFilter}
             onChange={setLocalFilter}
             trailing={

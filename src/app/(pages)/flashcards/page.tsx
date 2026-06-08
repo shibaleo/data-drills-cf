@@ -15,7 +15,7 @@ import {
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ApiError } from "@/lib/api-client";
-import { useProject } from "@/hooks/use-project";
+import { useField } from "@/hooks/use-project";
 import {
   useFlashcardsData,
   useCreateFlashcard,
@@ -86,11 +86,11 @@ function cardRetention(reviews: FlashcardReviewRow[], now: Date) {
 
 export default function FlashcardsPage() {
   usePageTitle("Flashcards");
-  const { currentProject, statuses } = useProject();
-  const { cards: rawCards, reviews, topics, isLoading } = useFlashcardsData(currentProject?.id);
-  const createCard = useCreateFlashcard(currentProject?.id);
-  const updateCard = useUpdateFlashcard(currentProject?.id);
-  const deleteCard = useDeleteFlashcard(currentProject?.id);
+  const { currentField, statuses } = useField();
+  const { cards: rawCards, reviews, topics, isLoading } = useFlashcardsData(currentField?.id);
+  const createCard = useCreateFlashcard(currentField?.id);
+  const updateCard = useUpdateFlashcard(currentField?.id);
+  const deleteCard = useDeleteFlashcard(currentField?.id);
   const rateCard = useRateFlashcard();
   const isSaving = createCard.isPending || updateCard.isPending;
 
@@ -161,7 +161,7 @@ export default function FlashcardsPage() {
       updateCard.mutate({ id: editItem.id, payload: base }, onDone);
     } else {
       createCard.mutate(
-        { ...base, project_id: currentProject!.id, code: randomCode() },
+        { ...base, project_id: currentField!.id, code: randomCode() },
         onDone,
       );
     }
@@ -196,7 +196,7 @@ export default function FlashcardsPage() {
     });
   };
 
-  if (!currentProject) {
+  if (!currentField) {
     return (
       <div className="p-4 md:p-6">
         <div className="text-center py-12 text-muted-foreground">Please select a project</div>

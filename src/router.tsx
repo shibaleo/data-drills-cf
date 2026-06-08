@@ -7,7 +7,7 @@ import {
   Outlet,
 } from "@tanstack/react-router";
 import { AuthGate } from "@/components/auth/auth-gate";
-import { ProjectProvider } from "@/hooks/use-project";
+import { FieldProvider } from "@/hooks/use-project";
 import { AppLayout } from "@/components/layout/app-layout";
 import { AuthenticateWithRedirectCallback } from "@clerk/react";
 
@@ -47,19 +47,19 @@ const rootRoute = createRootRoute({
   component: () => <Outlet />,
 });
 
-// Authenticated layout (AuthGate + ProjectProvider + AppLayout)
+// Authenticated layout (AuthGate + FieldProvider + AppLayout)
 const authLayout = createRoute({
   getParentRoute: () => rootRoute,
   id: "authenticated",
   component: () => (
     <AuthGate>
-      <ProjectProvider>
+      <FieldProvider>
         <AppLayout>
           <Suspense>
             <Outlet />
           </Suspense>
         </AppLayout>
-      </ProjectProvider>
+      </FieldProvider>
     </AuthGate>
   ),
 });

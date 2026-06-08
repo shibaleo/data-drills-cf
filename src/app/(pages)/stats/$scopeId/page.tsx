@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { useProject } from "@/hooks/use-project";
+import { useField } from "@/hooks/use-project";
 import { useThroughputList } from "@/hooks/queries/use-throughput";
 import { useProblemsList } from "@/hooks/queries/use-problems";
 import { useProblemDialogs } from "@/hooks/use-problem-dialogs";
@@ -30,11 +30,11 @@ export default function StatsDetailPage() {
   const { scope_id: scopeId } = useParams({ strict: false }) as { scope_id: string };
   const navigate = useNavigate();
   usePageBack(useCallback(() => navigate({ to: "/stats" as string }), [navigate]));
-  const { currentProject, statuses } = useProject();
+  const { currentField, statuses } = useField();
 
   const scopeQuery = useStatsScope(scopeId);
-  const updateScope = useUpdateStatsScope(scopeId, currentProject?.id);
-  const archiveScope = useArchiveStatsScope(currentProject?.id);
+  const updateScope = useUpdateStatsScope(scopeId, currentField?.id);
+  const archiveScope = useArchiveStatsScope(currentField?.id);
 
   const [localName, setLocalName] = useState("");
   const [localFilter, setLocalFilter] = useState<MemberFilterInput>({});
@@ -58,8 +58,8 @@ export default function StatsDetailPage() {
     }
   }, [scopeQuery.data]);
 
-  const { data: rawRows = [] } = useThroughputList(currentProject?.id);
-  const { data: allProblems = [] } = useProblemsList(currentProject?.id);
+  const { data: rawRows = [] } = useThroughputList(currentField?.id);
+  const { data: allProblems = [] } = useProblemsList(currentField?.id);
   // scope の member filter を throughput rows と problems の両方に適用
   const rows = useMemo(() => {
     if (!localFilter.subjectIds?.length && !localFilter.levelIds?.length) return rawRows;
@@ -107,7 +107,7 @@ export default function StatsDetailPage() {
     navigate({ to: "/stats" as string });
   }
 
-  if (!currentProject) return <div className="p-6 text-muted-foreground">Please select a project</div>;
+  if (!currentField) return <div className="p-6 text-muted-foreground">Please select a project</div>;
 
   return (
     <div className="p-3 md:p-4 flex flex-col gap-2 max-w-4xl">
@@ -172,7 +172,7 @@ export default function StatsDetailPage() {
             <X className="size-3.5"/>
           </button>
           <MemberFilterPicker
-            projectId={currentProject.id}
+            projectId={currentField.id}
             value={localFilter}
             onChange={setLocalFilter}
             trailing={

@@ -4,7 +4,7 @@ import { useState, useCallback, type ReactNode } from "react";
 import { toast } from "sonner";
 import { ApiError } from "@/lib/api-client";
 import { rpc, unwrap } from "@/lib/rpc-client";
-import { useProject } from "@/hooks/use-project";
+import { useField } from "@/hooks/use-project";
 import { useAnswerForm, useEditAnswerForm } from "@/hooks/use-answer-form";
 import { ProblemDetailDialog } from "@/components/problem-detail-dialog";
 import { ProblemEditDialog } from "@/components/problem-edit-dialog";
@@ -25,7 +25,7 @@ export function useProblemDialogs({
   allProblems: ProblemWithAnswers[];
   onDataChanged: () => void;
 }) {
-  const { currentProject, subjects, levels } = useProject();
+  const { currentField, subjects, levels } = useField();
 
   // Detail dialog
   const [detailOpen, setDetailOpen] = useState(false);
@@ -77,7 +77,7 @@ export function useProblemDialogs({
   }, [notifyAndRefresh]);
 
   const renderDialogs = useCallback((): ReactNode => {
-    if (!currentProject) return null;
+    if (!currentField) return null;
     return (
       <>
         <ProblemDetailDialog
@@ -110,7 +110,7 @@ export function useProblemDialogs({
             checkpoint: editProblem.checkpoint,
             standardTime: editProblem.standard_time,
           } : null}
-          projectId={currentProject.id}
+          projectId={currentField.id}
           subjects={subjects}
           levels={levels}
           onSaved={() => { setEditDialogOpen(false); notifyAndRefresh(); }}
@@ -146,7 +146,7 @@ export function useProblemDialogs({
       </>
     );
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentProject, detailOpen, detailProblem, editDialogOpen, editProblem,
+  }, [currentField, detailOpen, detailProblem, editDialogOpen, editProblem,
       answerForm, editForm, subjects, levels, handleEditProblem, handleDeleteProblem,
       notifyAndRefresh, openCreate]);
 

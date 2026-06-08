@@ -2,7 +2,7 @@
 import { useMemo, useState, useEffect } from "react";
 import { useQueries } from "@tanstack/react-query";
 import { useSearch, useNavigate } from "@tanstack/react-router";
-import { useProject } from "@/hooks/use-project";
+import { useField } from "@/hooks/use-project";
 import { useReviewList } from "@/hooks/queries/use-review";
 import { usePageTitle } from "@/lib/page-context";
 import { rpc, unwrap } from "@/lib/rpc-client";
@@ -95,8 +95,8 @@ function addDays(s: string, n: number): string {
 
 export default function PlanPage() {
   usePageTitle("Plan");
-  const { currentProject, statuses } = useProject();
-  const projectId = currentProject?.id;
+  const { currentField, statuses } = useField();
+  const projectId = currentField?.id;
   const today = todayJST();
   const [hideFirst, setHideFirst] = useState(false);
   const [hideFuture, setHideFuture] = useState(false);
@@ -370,7 +370,7 @@ export default function PlanPage() {
     return entries;
   }, [hideFirst, hideFuture, hiddenStatuses, overBudgetOnly, overflowOnly, statuses]);
 
-  if (!currentProject) return <div className="p-6 text-muted-foreground">Please select a project</div>;
+  if (!currentField) return <div className="p-6 text-muted-foreground">Please select a project</div>;
 
   return (
     <div className="p-3 md:p-4 flex flex-col gap-3">

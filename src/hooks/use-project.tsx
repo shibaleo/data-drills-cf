@@ -2,11 +2,11 @@
 
 import { createContext, useContext, useState, useEffect, useCallback, useMemo, type ReactNode } from "react";
 import {
-  useProjects,
+  useFields,
   useSubjects,
   useLevels,
   useStatuses,
-  useInvalidateProjectData,
+  useInvalidateFieldData,
   type Project,
   type LookupItem,
   type StatusItem,
@@ -14,9 +14,9 @@ import {
 
 export type { StatusItem };
 
-interface ProjectContextValue {
+interface FieldContextValue {
   projects: Project[];
-  currentProject: Project | null;
+  currentField: Project | null;
   setCurrentProject: (p: Project) => void;
   refresh: () => Promise<void>;
   subjects: LookupItem[];
@@ -28,17 +28,17 @@ interface ProjectContextValue {
   setFilterLevelId: (id: string | null) => void;
 }
 
-const ProjectContext = createContext<ProjectContextValue | null>(null);
+const FieldContext = createContext<FieldContextValue | null>(null);
 
-export function useProject() {
-  const ctx = useContext(ProjectContext);
-  if (!ctx) throw new Error("useProject must be used within ProjectProvider");
+export function useField() {
+  const ctx = useContext(FieldContext);
+  if (!ctx) throw new Error("useField must be used within FieldProvider");
   return ctx;
 }
 
 /** Lookup helpers for level/subject by id (same API as LD) */
 export function useLookup() {
-  const ctx = useContext(ProjectContext);
+  const ctx = useContext(FieldContext);
   const subjects = ctx?.subjects ?? [];
   const levels = ctx?.levels ?? [];
   const statuses = ctx?.statuses ?? [];
@@ -55,26 +55,26 @@ export function useLookup() {
 
 const STORAGE_KEY = "dd_current_project";
 
-export function ProjectProvider({ children }: { children: ReactNode }) {
-  const [currentProject, setCurrentProjectState] = useState<Project | null>(null);
+export function FieldProvider({ children }: { children: ReactNode }) {
+  const [currentField, setCurrentProjectState] = useState<Project | null>(null);
   const [filterSubjectId, setFilterSubjectId] = useState<string | null>(null);
   const [filterLevelId, setFilterLevelId] = useState<string | null>(null);
 
-  const projectsQuery = useProjects();
-  const subjectsQuery = useSubjects(currentProject?.id);
-  const levelsQuery = useLevels(currentProject?.id);
+  const projectsQuery = useFields();
+  const subjectsQuery = useSubjects(currentField?.id);
+  const levelsQuery = useLevels(currentField?.id);
   const statusesQuery = useStatuses();
-  const invalidate = useInvalidateProjectData();
+  const invalidate = useInvalidateFieldData();
 
   const projects = projectsQuery.data ?? [];
 
   // Pick initial project from localStorage once the list loads
   useEffect(() => {
-    if (currentProject || projects.length === 0) return;
+    if (currentField || projects.length === 0) return;
     const savedId = typeof window !== "undefined" ? localStorage.getItem(STORAGE_KEY) : null;
     const saved = savedId ? projects.find((p) => p.id === savedId) : null;
     setCurrentProjectState(saved ?? projects[0]);
-  }, [projects, currentProject]);
+  }, [projects, currentField]);
 
   const setCurrentProject = useCallback((p: Project) => {
     setCurrentProjectState(p);
@@ -89,9 +89,9 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
     invalidate();
   }, [invalidate]);
 
-  const value = useMemo<ProjectContextValue>(() => ({
+  const value = useMemo<FieldContextValue>(() => ({
     projects,
-    currentProject,
+    currentField,
     setCurrentProject,
     refresh,
     subjects: subjectsQuery.data ?? [],
@@ -103,7 +103,7 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
     setFilterLevelId,
   }), [
     projects,
-    currentProject,
+    currentField,
     setCurrentProject,
     refresh,
     subjectsQuery.data,
@@ -113,5 +113,5 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
     filterLevelId,
   ]);
 
-  return <ProjectContext.Provider value={value}>{children}</ProjectContext.Provider>;
+  return <FieldContext.Provider value={value}>{children}</FieldContext.Provider>;
 }

@@ -2,24 +2,26 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 import { rpc, unwrap, type RpcData } from "@/lib/rpc-client";
 
-// Phase 3c.2: /api/v1/projects → /api/v1/fields に透過的にスワップ。
-// field.id === project.id (Phase 1 backfill) なので consumer 側の id は無修正で動く。
-// Project type alias は consumer 互換のため維持 (= Field と同 shape)。
-export type Project = RpcData<typeof rpc.api.v1.fields.$get>["data"][number];
+// Field CRUD + subjects/levels/statuses lookup hooks。
+// Phase 3c.2 で /api/v1/projects → /api/v1/fields に透過スワップ済。
+// 旧 use-fields.ts は同等機能のため Phase で削除、ここに統合。
+export type Field = RpcData<typeof rpc.api.v1.fields.$get>["data"][number];
+/** consumer 互換のため旧名 Project を Field の alias として残す。 */
+export type Project = Field;
 export type LookupItem = RpcData<typeof rpc.api.v1.projects[":id"]["subjects"]["$get"]>["data"][number];
 export type StatusItem = RpcData<typeof rpc.api.v1.statuses.$get>["data"][number];
 
-export const projectKeys = {
-  all: ["project-data"] as const,
-  projects: () => [...projectKeys.all, "projects"] as const,
-  subjects: (projectId: string) => [...projectKeys.all, "subjects", projectId] as const,
-  levels: (projectId: string) => [...projectKeys.all, "levels", projectId] as const,
-  statuses: () => [...projectKeys.all, "statuses"] as const,
+export const fieldKeys = {
+  all: ["field-data"] as const,
+  fields: () => [...fieldKeys.all, "fields"] as const,
+  subjects: (fieldId: string) => [...fieldKeys.all, "subjects", fieldId] as const,
+  levels: (fieldId: string) => [...fieldKeys.all, "levels", fieldId] as const,
+  statuses: () => [...fieldKeys.all, "statuses"] as const,
 };
 
-export function useProjects() {
+export function useFields() {
   return useQuery({
-    queryKey: projectKeys.projects(),
+    queryKey: fieldKeys.fields(),
     queryFn: async () => {
       const json = await unwrap(rpc.api.v1.fields.$get());
       return json.data;
@@ -28,37 +30,37 @@ export function useProjects() {
   });
 }
 
-export function useSubjects(projectId: string | undefined) {
+export function useSubjects(fieldId: string | undefined) {
   return useQuery({
-    queryKey: projectId ? projectKeys.subjects(projectId) : projectKeys.all,
+    queryKey: fieldId ? fieldKeys.subjects(fieldId) : fieldKeys.all,
     queryFn: async () => {
       const json = await unwrap(
-        rpc.api.v1.projects[":id"].subjects.$get({ param: { id: projectId! } }),
+        rpc.api.v1.projects[":id"].subjects.$get({ param: { id: fieldId! } }),
       );
       return json.data;
     },
-    enabled: !!projectId,
+    enabled: !!fieldId,
     staleTime: 5 * 60_000,
   });
 }
 
-export function useLevels(projectId: string | undefined) {
+export function useLevels(fieldId: string | undefined) {
   return useQuery({
-    queryKey: projectId ? projectKeys.levels(projectId) : projectKeys.all,
+    queryKey: fieldId ? fieldKeys.levels(fieldId) : fieldKeys.all,
     queryFn: async () => {
       const json = await unwrap(
-        rpc.api.v1.projects[":id"].levels.$get({ param: { id: projectId! } }),
+        rpc.api.v1.projects[":id"].levels.$get({ param: { id: fieldId! } }),
       );
       return json.data;
     },
-    enabled: !!projectId,
+    enabled: !!fieldId,
     staleTime: 5 * 60_000,
   });
 }
 
 export function useStatuses() {
   return useQuery({
-    queryKey: projectKeys.statuses(),
+    queryKey: fieldKeys.statuses(),
     queryFn: async () => {
       const json = await unwrap(rpc.api.v1.statuses.$get());
       return json.data;
@@ -67,60 +69,60 @@ export function useStatuses() {
   });
 }
 
-export function useInvalidateProjectData() {
+export function useInvalidateFieldData() {
   const qc = useQueryClient();
   return useCallback(() => {
-    qc.invalidateQueries({ queryKey: projectKeys.all });
+    qc.invalidateQueries({ queryKey: fieldKeys.all });
   }, [qc]);
 }
 
-/* ── Project mutations ── */
+/* ── Field mutations ── */
 
-export function useCreateProject() {
+export function useCreateField() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (payload: { code: string; name: string; color?: string | null }) =>
       unwrap(rpc.api.v1.fields.$post({ json: payload })),
-    onSuccess: () => qc.invalidateQueries({ queryKey: projectKeys.projects() }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: fieldKeys.fields() }),
   });
 }
 
-export function useUpdateProject() {
+export function useUpdateField() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (vars: { id: string; payload: { code?: string; name?: string; color?: string | null; sort_order?: number } }) =>
       unwrap(rpc.api.v1.fields[":id"].$put({ param: { id: vars.id }, json: vars.payload })),
-    onSuccess: () => qc.invalidateQueries({ queryKey: projectKeys.projects() }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: fieldKeys.fields() }),
   });
 }
 
-export function useDeleteProject() {
+export function useDeleteField() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => unwrap(rpc.api.v1.fields[":id"].$delete({ param: { id } })),
-    onSuccess: () => qc.invalidateQueries({ queryKey: projectKeys.projects() }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: fieldKeys.fields() }),
   });
 }
 
-export function useReorderProjects() {
+export function useReorderFields() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (ids: string[]) => unwrap(rpc.api.v1.fields.reorder.$patch({ json: { ids } })),
     onMutate: async (ids) => {
-      await qc.cancelQueries({ queryKey: projectKeys.projects() });
-      const previous = qc.getQueryData<Project[]>(projectKeys.projects());
+      await qc.cancelQueries({ queryKey: fieldKeys.fields() });
+      const previous = qc.getQueryData<Field[]>(fieldKeys.fields());
       if (previous) {
         const indexMap = new Map(ids.map((id, i) => [id, i]));
         qc.setQueryData(
-          projectKeys.projects(),
+          fieldKeys.fields(),
           [...previous].sort((a, b) => (indexMap.get(a.id) ?? 0) - (indexMap.get(b.id) ?? 0)),
         );
       }
       return { previous };
     },
     onError: (_err, _vars, ctx) => {
-      if (ctx?.previous) qc.setQueryData(projectKeys.projects(), ctx.previous);
+      if (ctx?.previous) qc.setQueryData(fieldKeys.fields(), ctx.previous);
     },
-    onSettled: () => qc.invalidateQueries({ queryKey: projectKeys.projects() }),
+    onSettled: () => qc.invalidateQueries({ queryKey: fieldKeys.fields() }),
   });
 }

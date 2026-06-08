@@ -1,7 +1,7 @@
 "use client";
 import { useMemo } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { useProject } from "@/hooks/use-project";
+import { useField } from "@/hooks/use-project";
 import { useBacklogList } from "@/hooks/queries/use-backlog";
 import { useProblemsList } from "@/hooks/queries/use-problems";
 import { usePageTitle } from "@/lib/page-context";
@@ -9,10 +9,10 @@ import { Plus } from "lucide-react";
 
 export default function ScopesPage() {
   usePageTitle("Scopes");
-  const { currentProject } = useProject();
+  const { currentField } = useField();
   const navigate = useNavigate();
-  const { data: backlogs = [], isLoading } = useBacklogList(currentProject?.id);
-  const { data: allProblems = [] } = useProblemsList(currentProject?.id);
+  const { data: backlogs = [], isLoading } = useBacklogList(currentField?.id);
+  const { data: allProblems = [] } = useProblemsList(currentField?.id);
 
   // 各 backlog の filter で members を絞り、進捗 (done / total) を出す。
   // 中間 map 作成を避け、1パス per backlog で直接判定 (allocation 不要)
@@ -34,7 +34,7 @@ export default function ScopesPage() {
     return m;
   }, [backlogs, allProblems]);
 
-  if (!currentProject) return <div className="p-6 text-muted-foreground">Please select a project</div>;
+  if (!currentField) return <div className="p-6 text-muted-foreground">Please select a project</div>;
 
   return (
     <div className="p-3 md:p-4 flex flex-col gap-2">

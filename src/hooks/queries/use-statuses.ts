@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { rpc, unwrap, type RpcData } from "@/lib/rpc-client";
-import { projectKeys } from "@/hooks/queries/use-project-data";
+import { fieldKeys } from "@/hooks/queries/use-project-data";
 
 export type StatusItem = RpcData<typeof rpc.api.v1.statuses.$get>["data"][number];
 
@@ -22,7 +22,7 @@ export function useStatusesList() {
 
 function invalidateAll(qc: ReturnType<typeof useQueryClient>) {
   qc.invalidateQueries({ queryKey: statusesKeys.list() });
-  qc.invalidateQueries({ queryKey: projectKeys.statuses() });
+  qc.invalidateQueries({ queryKey: fieldKeys.statuses() });
 }
 
 export function useCreateStatus() {

@@ -25,7 +25,7 @@ import {
 } from "@tanstack/react-table";
 import { useQueryClient } from "@tanstack/react-query";
 import { rpc } from "@/lib/rpc-client";
-import { useProject } from "@/hooks/use-project";
+import { useField } from "@/hooks/use-project";
 import { useFilterPrefs, useSaveFilterPrefs } from "@/hooks/queries/use-filter-prefs";
 import { usePageTitle, useHeaderSlot, usePageBack } from "@/lib/page-context";
 import { OpaqueTag } from "@/components/problem-card";
@@ -346,15 +346,15 @@ export default function SchedulePage() {
   const { scope_id: scopeId } = useParams({ strict: false }) as { scope_id: string };
   const navigate = useNavigate();
   usePageBack(useCallback(() => navigate({ to: "/review" as string }), [navigate]));
-  const { currentProject, subjects, levels, statuses } = useProject();
+  const { currentField, subjects, levels, statuses } = useField();
 
   const [asOf, setAsOf] = useState<string | null>(null);
   const readOnly = asOf != null;
   // 注: asOf はチャート側の client-side フィルタ専用にし、エンティティ取得は常に最新を引く。
   const scopeQuery = useReviewScope(scopeId);
   const revisionsQuery = useReviewScopeRevisions(scopeId);
-  const updateScope = useUpdateReviewScope(scopeId, currentProject?.id);
-  const archiveScope = useArchiveReviewScope(currentProject?.id);
+  const updateScope = useUpdateReviewScope(scopeId, currentField?.id);
+  const archiveScope = useArchiveReviewScope(currentField?.id);
 
   // Local editable state (backlog ミラー)
   const [localName, setLocalName] = useState("");
@@ -389,13 +389,13 @@ export default function SchedulePage() {
   const qc = useQueryClient();
 
   // /problems-list — full problem + answer data (for client-side asOf recomputation)
-  const dialogProblemsQuery = useProblemsList(currentProject?.id);
+  const dialogProblemsQuery = useProblemsList(currentField?.id);
   const allProblems = dialogProblemsQuery.data ?? [];
 
   // Fast path: /api/v1/review (driven by TanStack Query)
   // 注: asOf を渡さない。asOf 適用はクライアント計算で行い、アニメーション再生時の
   // サーバ往復を回避する。
-  const scheduleQuery = useReviewList(currentProject?.id);
+  const scheduleQuery = useReviewList(currentField?.id);
   const serverRows = useMemo<ScheduleRow[]>(() => {
     // Review は forecast view: cursor (asOf) を過去にすると「その時点で
     // 知っていた answer だけで再計算した schedule」を見せる。
@@ -535,24 +535,24 @@ export default function SchedulePage() {
   const [filterLevels, setFilterLevels] = useState<Set<string>>(new Set());
   const [filterLastStatuses, setFilterLastStatuses] = useState<Set<string>>(new Set());
   // DB 永続化
-  const filterPrefsQuery = useFilterPrefs(currentProject?.id);
-  const saveFilterPrefs = useSaveFilterPrefs(currentProject?.id);
+  const filterPrefsQuery = useFilterPrefs(currentField?.id);
+  const saveFilterPrefs = useSaveFilterPrefs(currentField?.id);
   const prefsLoadedRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!currentProject || prefsLoadedRef.current === currentProject.id) return;
+    if (!currentField || prefsLoadedRef.current === currentField.id) return;
     const data = filterPrefsQuery.data?.review;
     if (data) {
       setFilterSubjects(new Set(data.subjectIds ?? []));
       setFilterLevels(new Set(data.levelIds ?? []));
       setFilterLastStatuses(new Set(data.lastStatuses ?? []));
     }
-    prefsLoadedRef.current = currentProject.id;
-  }, [filterPrefsQuery.data, currentProject]);
+    prefsLoadedRef.current = currentField.id;
+  }, [filterPrefsQuery.data, currentField]);
   // 変更時に save (debounce 不要、変化が低頻度)。
   // 直前の snapshot と一致するなら server と同期済み → 冗長な PUT を防ぐ。
   const lastSavedPrefsRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!currentProject || prefsLoadedRef.current !== currentProject.id) return;
+    if (!currentField || prefsLoadedRef.current !== currentField.id) return;
     const snapshot = JSON.stringify({
       s: [...filterSubjects].sort(),
       l: [...filterLevels].sort(),
@@ -615,10 +615,10 @@ export default function SchedulePage() {
   }, [serverRows, stabilityOverrides, statuses, todayStr]);
 
   const handleDataChanged = useCallback(() => {
-    if (!currentProject) return;
-    qc.invalidateQueries({ queryKey: reviewKeys.list(currentProject.id) });
-    qc.invalidateQueries({ queryKey: problemsKeys.list(currentProject.id) });
-  }, [qc, currentProject]);
+    if (!currentField) return;
+    qc.invalidateQueries({ queryKey: reviewKeys.list(currentField.id) });
+    qc.invalidateQueries({ queryKey: problemsKeys.list(currentField.id) });
+  }, [qc, currentField]);
 
   const { openDetail, renderDialogs } = useProblemDialogs({
     allProblems,
@@ -765,7 +765,7 @@ export default function SchedulePage() {
     navigate({ to: "/review" as string });
   }
 
-  if (!currentProject) {
+  if (!currentField) {
     return (
       <div className="p-4 md:p-6">
         <div className="text-center py-12 text-muted-foreground">
@@ -887,7 +887,7 @@ export default function SchedulePage() {
             <X className="size-3.5"/>
           </button>
           <MemberFilterPicker
-            projectId={currentProject.id}
+            projectId={currentField.id}
             value={localFilter}
             onChange={setLocalFilter}
             trailing={

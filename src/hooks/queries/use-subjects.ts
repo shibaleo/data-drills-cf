@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { rpc, unwrap, type RpcData } from "@/lib/rpc-client";
-import { projectKeys } from "@/hooks/queries/use-project-data";
+import { fieldKeys } from "@/hooks/queries/use-project-data";
 
 export type SubjectRow = RpcData<typeof rpc.api.v1.projects[":id"]["subjects"]["$get"]>["data"][number];
 
@@ -24,7 +24,7 @@ export function useSubjectsList(projectId: string | undefined) {
 
 function invalidateSubjects(qc: ReturnType<typeof useQueryClient>, projectId: string) {
   qc.invalidateQueries({ queryKey: subjectsKeys.list(projectId) });
-  qc.invalidateQueries({ queryKey: projectKeys.subjects(projectId) });
+  qc.invalidateQueries({ queryKey: fieldKeys.subjects(projectId) });
 }
 
 export function useCreateSubject(projectId: string | undefined) {

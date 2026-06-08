@@ -7,7 +7,7 @@ import { REVIEW_TYPES } from '@/lib/types'
 import { StatusTag } from '@/components/color-tags'
 import { Markdown } from '@/components/markdown'
 import { CodeCombobox } from '@/components/code-combobox'
-import { useProject } from '@/hooks/use-project'
+import { useField } from '@/hooks/use-project'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { MarkdownEditor } from '@/components/markdown-editor'
@@ -46,7 +46,7 @@ export function AnswerDialog({
   saveLabel,
   onSave,
 }: AnswerDialogProps) {
-  const { currentProject, subjects, levels, statuses } = useProject()
+  const { currentField, subjects, levels, statuses } = useField()
   const [saving, setSaving] = useState(false)
 
   const code = form.watch('code')
@@ -61,7 +61,7 @@ export function AnswerDialog({
     }
   }
 
-  if (!currentProject) return null
+  if (!currentField) return null
 
   const cpName = nameMap[code]
   const cpText = checkpointMap[code]
