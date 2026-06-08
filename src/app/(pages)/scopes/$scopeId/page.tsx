@@ -35,7 +35,7 @@ import { FilterSection } from "@/components/filter-section";
 import { useFilterPrefs, useSaveFilterPrefs } from "@/hooks/queries/use-filter-prefs";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Filter, SlidersHorizontal, ArrowLeft, Archive, Save, RotateCcw, Loader2, Download, History, ListFilter, MoreVertical, Check, X } from "lucide-react";
+import { Filter, SlidersHorizontal, Activity, ArrowLeft, Archive, Save, RotateCcw, Loader2, Download, History, ListFilter, MoreVertical, Check, X } from "lucide-react";
 import { AsOfControls } from "@/components/as-of-controls";
 import { useTopicsList } from "@/hooks/queries/use-topics";
 import { usePageTitle, useHeaderSlot, usePageBack } from "@/lib/page-context";
@@ -78,6 +78,7 @@ export default function ScopeDetailPage() {
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showMilestonePins, setShowMilestonePins] = useState(false);
+  const [showFSRS, setShowFSRS] = useState(false);
   const [hideFirst, setHideFirst] = useState(false);
   const [hideFuture, setHideFuture] = useState(false);
   const [overflowOnly, setOverflowOnly] = useState(false);
@@ -676,6 +677,17 @@ export default function ScopeDetailPage() {
             <span className="text-xs text-muted-foreground tabular-nums">{visibleMembers.length} / {memberCount}</span>
           </div>
           <div className="flex items-center gap-2">
+            {scopeQuery.data && (
+              <button type="button"
+                title="FSRS override (stability slider)" aria-pressed={showFSRS}
+                className={`relative inline-flex items-center justify-center size-[26px] rounded-md border transition-colors ${showFSRS ? "bg-accent text-accent-foreground border-accent-foreground/20" : "text-muted-foreground hover:bg-muted"}`}
+                onClick={() => setShowFSRS((p) => !p)}>
+                <Activity className="size-3"/>
+                {Object.keys(scopeQuery.data.status_stabilities ?? {}).length > 0 && (
+                  <span className="absolute -top-1 -right-1 size-2 rounded-full bg-primary"/>
+                )}
+              </button>
+            )}
             <button type="button"
               title="Toggle milestone pins" aria-pressed={milestonePinsVisible}
               className={`inline-flex items-center justify-center size-[26px] rounded-md border transition-colors ${milestonePinsVisible ? "bg-accent text-accent-foreground border-accent-foreground/20" : "text-muted-foreground hover:bg-muted"}`}
@@ -684,6 +696,18 @@ export default function ScopeDetailPage() {
             </button>
           </div>
         </div>
+        {showFSRS && scopeQuery.data && (
+          <div className="px-3 pb-2 -mt-1">
+            <FSRSStabilitiesSliderEditor
+              statuses={statuses}
+              current={scopeQuery.data.status_stabilities ?? {}}
+              disabled={readOnly}
+              onSave={(next) =>
+                updateScope.mutateAsync({ id: scopeId, payload: { status_stabilities: next } })
+              }
+            />
+          </div>
+        )}
         <BacklogChart
           ref={chartRef}
           realToday={todayJST()}
@@ -742,18 +766,6 @@ export default function ScopeDetailPage() {
                   })}
                 </div>
               </div>
-              {/* Phase 3c: FSRS パラメタ override (status name → 次回 review までの基準日数)。
-                  visual slider 版。空 (= 未指定) は global stability_days にフォールバック。 */}
-              {scopeQuery.data && (
-                <FSRSStabilitiesSliderEditor
-                  statuses={statuses}
-                  current={scopeQuery.data.status_stabilities ?? {}}
-                  disabled={readOnly}
-                  onSave={(next) =>
-                    updateScope.mutateAsync({ id: scopeId, payload: { status_stabilities: next } })
-                  }
-                />
-              )}
             </div>
           }
           items={visibleAllocated}
