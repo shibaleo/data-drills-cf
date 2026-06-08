@@ -9,6 +9,7 @@ import { rpc, unwrap } from "@/lib/rpc-client";
 import { allocate, type MemberInput, type Milestone } from "@/lib/backlog-allocate";
 import { blockColor, blockBorder, COLOR_PLANNED, COLOR_FIRST_ATTEMPT } from "@/lib/block-color";
 import { todayJST } from "@/lib/date-utils";
+import { computeNextReview } from "@/lib/review-scoring";
 import { formatRelDay } from "@/lib/relative-day";
 import { ChartShell, DEFAULT_TOP_AXIS_H, DEFAULT_BOTTOM_AXIS_H } from "@/components/chart-shell";
 import { CELL, STEP, MIN_ROWS } from "@/lib/chart-constants";
@@ -16,6 +17,58 @@ import { BlockLegend, type LegendEntry } from "@/components/block-legend";
 
 const PAD_BEFORE = 7;
 const PAD_AFTER = 14;
+
+/** 順調な status 進行順 (= 各 review を smooth に通した場合の遷移) */
+const SMOOTH_CHAIN = ["Rough", "Fair", "Fluent", "Done"] as const;
+/** Done の繰り返しはこの期間まで */
+const PROJECTION_HORIZON_DAYS = 365 * 2;
+
+/** 順調進行を仮定して将来 review 日を生成する。
+ *  - currentStatus が SMOOTH_CHAIN に無ければ (First / Miss など) → chain 先頭から開始
+ *  - Done に到達後はそのまま Done インターバルで horizon までループ
+ */
+function projectSmoothFuture(args: {
+  problemId: string;
+  code: string;
+  name: string | null;
+  startDate: string;
+  startStatus: string;
+  standardTimeSec: number | null;
+  lastDurationSec: number | null;
+  statusByName: Map<string, { stabilityDays: number; color: string | null }>;
+  horizonDate: string;
+}): Block[] {
+  const out: Block[] = [];
+  let date = args.startDate;
+  let chainIdx = SMOOTH_CHAIN.indexOf(args.startStatus as (typeof SMOOTH_CHAIN)[number]);
+  // chain に無い (First / Miss) → 次は Rough
+  let safety = 200;
+  while (safety-- > 0) {
+    const nextIdx = Math.min(chainIdx + 1, SMOOTH_CHAIN.length - 1);
+    const nextStatusName = SMOOTH_CHAIN[nextIdx];
+    const info = args.statusByName.get(nextStatusName);
+    if (!info || info.stabilityDays <= 0) break;
+    const projected = computeNextReview(date, info.stabilityDays, args.standardTimeSec, args.lastDurationSec);
+    if (projected <= date) break; // 進まないなら無限ループ防止
+    if (projected > args.horizonDate) break;
+    out.push({
+      problemId: args.problemId,
+      code: args.code,
+      name: args.name,
+      date: projected,
+      color: info.color ?? "#a3a3a3",
+      border: null,
+      source: "review",
+      isFuture: false,
+      overflow: false,
+      overBudget: false,
+      statusName: nextStatusName,
+    });
+    date = projected;
+    chainIdx = nextIdx; // Done に達したら chainIdx は max のまま固定 → 同じインターバルで繰り返す
+  }
+  return out;
+}
 
 type Block = {
   problemId: string;
@@ -67,9 +120,19 @@ export default function PlanPage() {
     })),
   });
 
+  const statusByName = useMemo(() => {
+    const m = new Map<string, { stabilityDays: number; color: string | null }>();
+    for (const s of statuses) {
+      m.set(s.name, { stabilityDays: s.stabilityDays, color: s.color ?? null });
+    }
+    return m;
+  }, [statuses]);
+
+  const horizonDate = useMemo(() => addDays(today, PROJECTION_HORIZON_DAYS), [today]);
+
   const blocks = useMemo<Block[]>(() => {
     const out: Block[] = [];
-    // Backlog future blocks
+    // Backlog blocks (past first-attempt + future allocator)
     for (const q of detailQueries) {
       const d = q.data;
       if (!d) continue;
@@ -86,6 +149,8 @@ export default function PlanPage() {
         id: m.id,
         layer_id: m.layer_id,
       }));
+      const memberStd = new Map<string, number | null>();
+      for (const m of d.members) memberStd.set(m.id, m.standard_time);
       const alloc = allocate(
         members,
         milestones,
@@ -111,9 +176,26 @@ export default function PlanPage() {
           overBudget: a.overBudget,
           statusName: null,
         });
+        // backlog 未来 (= 初回予定日) からは smooth-future を投影
+        // (duration がまだ無いので status の素 stabilityDays を使う)
+        if (a.side === "future") {
+          out.push(
+            ...projectSmoothFuture({
+              problemId: a.problemId,
+              code: a.code,
+              name: a.name,
+              startDate: a.date,
+              startStatus: "First", // chain に無いので Rough から始まる
+              standardTimeSec: memberStd.get(a.problemId) ?? null,
+              lastDurationSec: null,
+              statusByName,
+              horizonDate,
+            }),
+          );
+        }
       }
     }
-    // Review blocks (overdue は元の nextReview 日に置く = 過去側に出る)
+    // Review blocks + smooth-future projection
     for (const r of reviewQuery.data ?? []) {
       if (r.answerCount === 0) continue;
       out.push({
@@ -129,9 +211,22 @@ export default function PlanPage() {
         overBudget: false,
         statusName: r.lastStatus,
       });
+      out.push(
+        ...projectSmoothFuture({
+          problemId: r.problemId,
+          code: r.code,
+          name: r.name,
+          startDate: r.nextReview,
+          startStatus: r.lastStatus,
+          standardTimeSec: r.standardTime ?? null,
+          lastDurationSec: r.lastDuration ?? null,
+          statusByName,
+          horizonDate,
+        }),
+      );
     }
     return out;
-  }, [detailQueries, reviewQuery.data, today]);
+  }, [detailQueries, reviewQuery.data, today, statusByName, horizonDate]);
 
   const visibleBlocks = useMemo(() => {
     return blocks.filter((b) => {

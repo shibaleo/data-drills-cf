@@ -537,6 +537,7 @@ export default function SchedulePage() {
             daysUntil,
             reviewCount: eligible.length,
             standardTime: p.standard_time,
+            lastDuration: latest.duration_sec ?? null,
             answerHistory: history,
           } satisfies ScheduleRow;
         })
@@ -561,6 +562,7 @@ export default function SchedulePage() {
       daysUntil: r.daysUntil,
       reviewCount: r.answerCount,
       standardTime: r.standardTime,
+      lastDuration: r.lastDuration,
       answerHistory: r.answerHistory,
     }));
     return applyMemberFilter(

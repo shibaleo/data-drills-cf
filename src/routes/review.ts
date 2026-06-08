@@ -123,6 +123,7 @@ const app = new Hono<Env>()
         daysUntil,
         answerCount: answerCounts.get(p.id) ?? 0,
         standardTime: p.standardTime,
+        lastDuration: latest?.duration ?? null,
         answerHistory: answerHistoryMap.get(p.id) ?? [],
         color: problemColor(p.code, p.name ?? "", subj?.color ?? null),
       };
