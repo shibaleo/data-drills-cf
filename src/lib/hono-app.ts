@@ -29,6 +29,10 @@ import filterPrefs from "@/routes/filter-prefs";
 import googleAuth from "@/routes/google-auth";
 import drive from "@/routes/drive";
 import toggl from "@/routes/toggl";
+// Phase 2: 新エンティティ routes (旧 projects/tags/backlog と並走)
+import fields from "@/routes/fields";
+import reviewTypes from "@/routes/review-types";
+import scopes from "@/routes/scopes";
 
 /* ── V1 API sub-app ──
  *
@@ -84,6 +88,10 @@ const v1 = new Hono<Env>()
   .route("/digest-scopes", digestScopes)
   .route("/filter-prefs", filterPrefs)
   .route("/toggl", toggl)
+  // Phase 2: 新エンティティ
+  .route("/fields", fields)
+  .route("/review-types", reviewTypes)
+  .route("/scopes", scopes)
   // /me endpoint — return authenticated user info
   .get("/me", (c) => {
     const authResult = c.get("authResult");
