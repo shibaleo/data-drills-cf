@@ -6,7 +6,6 @@ import { SITE_NAME } from "@/lib/site";
 import { Sidebar, SidebarNav } from "./sidebar";
 import { Sheet, SheetTrigger, SheetContent } from "@/components/ui/sheet";
 import { UserMenu } from "./user-menu";
-import { FilterPopover } from "@/components/shared/filter-popover";
 import { PageProvider, usePageContext } from "@/lib/page-context";
 
 function LayoutInner({ children }: { children: React.ReactNode }) {
@@ -51,7 +50,6 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
         <div className="ml-auto flex items-center gap-1">
           {subtitle && <span className="text-xs text-muted-foreground">{subtitle}</span>}
           {headerSlot}
-          <FilterPopover />
           <UserMenu collapsed />
         </div>
       </header>
@@ -76,7 +74,6 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
           {/* Portal target: detail pages inject their top-bar content here via useHeaderSlot(). */}
           <div ref={setHeaderSlotNode} className="flex-1 min-w-0 flex items-center gap-2"/>
           {subtitle && <span className="text-xs text-muted-foreground">{subtitle}</span>}
-          <FilterPopover />
         </div>
         {children}
       </main>
