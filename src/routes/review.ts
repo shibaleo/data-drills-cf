@@ -2,8 +2,8 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { problem, answer, answerStatus, subject, level } from "@/lib/db/schema";
-import { and, eq, inArray, lte, sql } from "drizzle-orm";
+import { problem, answer, answerStatus, subject, level, scope } from "@/lib/db/schema";
+import { and, desc, eq, inArray, isNull, lte, sql } from "drizzle-orm";
 import { computeNextReview, computeDaysOverdue } from "@/lib/review-scoring";
 import { toJSTDateString } from "@/lib/date-utils";
 import { problemColor } from "@/lib/problem-color";
@@ -22,10 +22,27 @@ const app = new Hono<Env>()
   .get("/", zValidator("query", z.object({
     project_id: z.string().uuid(),
     as_of: z.string().optional(),
+    /** Phase 2: 指定すると scope.status_stabilities で status 別 stability を override */
+    scope_id: z.string().uuid().optional(),
   })), async (c) => {
     const userId = c.get("authResult").userId;
-    const { project_id: projectId, as_of: asOfStr } = c.req.valid("query");
+    const { project_id: projectId, as_of: asOfStr, scope_id: scopeId } = c.req.valid("query");
     if (!(await ownsProject(projectId, userId))) return c.json({ data: [], next_cursor: null });
+
+    // scope_id 指定時: status_stabilities override map を引く (空ならグローバル fallback)
+    let statusStabilityOverride: Record<string, number> = {};
+    if (scopeId) {
+      const [scopeRow] = await db.select().from(scope)
+        .where(and(
+          eq(scope.id, scopeId),
+          eq(scope.userId, userId),
+          isNull(scope.validTo),
+          eq(scope.isActive, true),
+        ))
+        .orderBy(desc(scope.revision))
+        .limit(1);
+      if (scopeRow) statusStabilityOverride = scopeRow.statusStabilities ?? {};
+    }
 
     const problems = await db.select().from(problem)
       .where(eq(problem.projectId, projectId))
@@ -98,8 +115,12 @@ const app = new Hono<Env>()
         if (latest.answerStatusId) {
           statusRow = statusMap.get(latest.answerStatusId) ?? defaultStatus;
         }
+        // scope override > global stability_days
+        const baseStability = (statusRow && statusStabilityOverride[statusRow.name] !== undefined)
+          ? statusStabilityOverride[statusRow.name]
+          : (statusRow?.stabilityDays ?? 0);
         nextReview = computeNextReview(
-          latest.date, statusRow?.stabilityDays ?? 0, p.standardTime, latest.duration,
+          latest.date, baseStability, p.standardTime, latest.duration,
         );
         daysUntil = -computeDaysOverdue(nextReview, today);
       }
