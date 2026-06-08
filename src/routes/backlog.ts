@@ -44,6 +44,7 @@ async function fetchMembers(projectId: string, filter: MemberFilter) {
     code: problem.code,
     name: problem.name,
     standardTime: problem.standardTime,
+    fieldId: problem.fieldId,
     subjectId: problem.subjectId,
     levelId: problem.levelId,
     topicId: problem.topicId,

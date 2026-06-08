@@ -38,6 +38,7 @@ async function fetchMembers(projectId: string, filter: MemberFilter) {
     id: problem.id,
     code: problem.code,
     name: problem.name,
+    fieldId: problem.fieldId,
     subjectId: problem.subjectId,
     levelId: problem.levelId,
   }).from(problem).where(eq(problem.projectId, projectId))

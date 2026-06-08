@@ -6,6 +6,7 @@
  */
 import { useSubjectsList } from "@/hooks/queries/use-subjects";
 import { useLevelsList } from "@/hooks/queries/use-levels";
+import { useFields } from "@/hooks/queries/use-fields";
 import { OpaqueTag } from "@/components/problem-card";
 import type { MemberFilterInput } from "@/lib/schemas/member-filter";
 
@@ -20,6 +21,7 @@ type Props = {
 export function MemberFilterPicker({ projectId, value, onChange, trailing }: Props) {
   const { data: subjects = [] } = useSubjectsList(projectId);
   const { data: levels = [] } = useLevelsList(projectId);
+  const { data: fields = [] } = useFields();
 
   function toggle(field: keyof MemberFilterInput, id: string) {
     const cur = value[field] ?? [];
@@ -29,6 +31,14 @@ export function MemberFilterPicker({ projectId, value, onChange, trailing }: Pro
 
   return (
     <div className="space-y-1.5">
+      {fields.length > 1 && (
+        <ChipRow
+          label="Field"
+          items={fields.map((f) => ({ id: f.id, name: f.name, color: f.color ?? null }))}
+          selectedIds={value.fieldIds ?? []}
+          onToggle={(id) => toggle("fieldIds", id)}
+        />
+      )}
       <ChipRow
         label="Subject"
         items={subjects.map((s) => ({ id: s.id, name: s.name, color: s.color ?? null }))}
