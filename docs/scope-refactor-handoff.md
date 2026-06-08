@@ -46,32 +46,23 @@
 
 **注意**: DB の drop と本番デプロイは同じ作業日にまとめる。事前に DB バックアップを取る。
 
-#### 4.1 DB SQL migration (新規 `drizzle/manual/005_phase4_drop_old.sql`)
+#### 4.1 DB SQL migration
 
-```sql
--- 旧テーブル削除
-DROP TABLE IF EXISTS data_drills.problem_tag CASCADE;
-DROP TABLE IF EXISTS data_drills.topic CASCADE;
-DROP TABLE IF EXISTS data_drills.backlog CASCADE;
-DROP TABLE IF EXISTS data_drills.project CASCADE;
-DROP TABLE IF EXISTS data_drills.tag CASCADE;
--- 旧 FK カラム削除
-ALTER TABLE data_drills.subject DROP COLUMN project_id;
-ALTER TABLE data_drills.level DROP COLUMN project_id;
-ALTER TABLE data_drills.problem DROP COLUMN project_id;
-ALTER TABLE data_drills.problem DROP COLUMN topic_id;
-ALTER TABLE data_drills.flashcard DROP COLUMN project_id;
-ALTER TABLE data_drills.flashcard DROP COLUMN topic_id;
-ALTER TABLE data_drills.goal_layer DROP COLUMN backlog_id;
-ALTER TABLE data_drills.goal_milestone DROP COLUMN backlog_id;
--- NOT NULL 化
-ALTER TABLE data_drills.subject ALTER COLUMN field_id SET NOT NULL;
-ALTER TABLE data_drills.level ALTER COLUMN field_id SET NOT NULL;
-ALTER TABLE data_drills.problem ALTER COLUMN field_id SET NOT NULL;
-ALTER TABLE data_drills.flashcard ALTER COLUMN field_id SET NOT NULL;
-ALTER TABLE data_drills.goal_layer ALTER COLUMN scope_id SET NOT NULL;
-ALTER TABLE data_drills.goal_milestone ALTER COLUMN scope_id SET NOT NULL;
+**完成済**: [`drizzle/manual/005_phase4_drop_old.sql`](../drizzle/manual/005_phase4_drop_old.sql)
+
+実行前チェックリスト:
+- [ ] Neon snapshot を取得済
+- [ ] taxtant Python 側の field_id 切替 PR を main に merge 済 (Phase 5.1 完了)
+- [ ] data-drills-cf の Phase 4.2 / 4.3 コード変更を main に push 済 (CF Workers にデプロイ済)
+- [ ] dev で `pnpm dev` → 全ページ動作確認済
+
+実行:
+```bash
+psql "$NEON_URL" -f drizzle/manual/005_phase4_drop_old.sql
 ```
+
+ロールバックは `BEGIN; ... COMMIT;` のためトランザクション内で完結。失敗したら
+`ROLLBACK;` で安全に戻る。COMMIT 後の取り消しは snapshot からの restore のみ。
 
 #### 4.2 コード削除
 
