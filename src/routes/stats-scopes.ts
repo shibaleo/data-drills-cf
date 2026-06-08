@@ -49,6 +49,7 @@ function scopeToApi(row: typeof statsScope.$inferSelect) {
     project_id: row.projectId,
     name: row.name,
     filter: row.filter,
+    scope_id: row.scopeId ?? null,
     is_active: row.isActive,
     valid_from: (row.validFrom as Date | string).toString(),
     valid_to: row.validTo ? (row.validTo as Date | string).toString() : null,
@@ -148,6 +149,7 @@ const app = new Hono<Env>()
         projectId: current.projectId,
         name: body.name ?? current.name,
         filter: body.filter ?? current.filter,
+        scopeId: body.scope_id !== undefined ? body.scope_id : current.scopeId,
         isActive: current.isActive,
       }).returning();
       return row;
@@ -169,6 +171,7 @@ const app = new Hono<Env>()
         projectId: current.projectId,
         name: current.name,
         filter: current.filter,
+        scopeId: current.scopeId,
         isActive: false,
       }).returning();
       return row;

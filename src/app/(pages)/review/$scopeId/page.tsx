@@ -5,8 +5,7 @@ import { toast } from "sonner";
 import { useParams, useNavigate } from "@tanstack/react-router";
 import { Download, Filter, Loader2, RotateCcw, Save, SlidersHorizontal, ArrowLeft, Archive, History, ListFilter, MoreVertical, Check, X } from "lucide-react";
 import { useReviewScope, useReviewScopeRevisions, useUpdateReviewScope, useArchiveReviewScope } from "@/hooks/queries/use-review-scopes";
-import { useScopes } from "@/hooks/queries/use-scopes";
-import { Link } from "@tanstack/react-router";
+import { ScopePickerBar } from "@/components/scope-picker-bar";
 import { applyMemberFilter } from "@/lib/member-filter";
 import { MemberFilterPicker } from "@/components/member-filter-picker";
 import { AsOfControls } from "@/components/as-of-controls";
@@ -457,7 +456,6 @@ export default function SchedulePage() {
   const [localName, setLocalName] = useState("");
   const [localFilter, setLocalFilter] = useState<MemberFilterInput>({});
   const [localScopeId, setLocalScopeId] = useState<string | null>(null);
-  const { data: scopes = [] } = useScopes();
   const [membersEditorOpen, setMembersEditorOpen] = useState(false);
   const [historyPanelOpen, setHistoryPanelOpen] = useState(false);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
@@ -936,30 +934,7 @@ export default function SchedulePage() {
       </>
       )}
 
-      {/* Scope picker: filter spec を共有 scope 経由で管理する切替 */}
-      <div className={`rounded-md border px-3 py-1.5 text-xs flex items-center gap-2 ${scopeIdDirty ? "border-primary/40 bg-primary/5" : ""}`}>
-        <span className="text-[10px] text-muted-foreground">Scope:</span>
-        <select
-          className="text-[11px] rounded border bg-background px-2 py-0.5"
-          value={localScopeId ?? ""}
-          onChange={(e) => setLocalScopeId(e.target.value || null)}
-          disabled={readOnly}
-        >
-          <option value="">— inline filter (legacy)</option>
-          {scopes.map((s) => (
-            <option key={s.id} value={s.id}>{s.name}</option>
-          ))}
-        </select>
-        {localScopeId && (
-          <Link
-            to={"/scopes/$scopeId" as string}
-            params={{ scopeId: localScopeId }}
-            className="text-[10px] text-primary hover:underline"
-          >
-            Edit scope →
-          </Link>
-        )}
-      </div>
+      <ScopePickerBar value={localScopeId} onChange={setLocalScopeId} dirty={scopeIdDirty} disabled={readOnly} />
 
       {/* History panel */}
       {historyOpen && (

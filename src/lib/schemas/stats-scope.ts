@@ -11,5 +11,6 @@ export type StatsScopeCreateInput = z.infer<typeof statsScopeCreateInputSchema>;
 export const statsScopeUpdateInputSchema = z.object({
   name: z.string().min(1).optional(),
   filter: memberFilterSchema.optional(),
+  scope_id: z.string().uuid().nullable().optional(),
 });
 export type StatsScopeUpdateInput = z.infer<typeof statsScopeUpdateInputSchema>;

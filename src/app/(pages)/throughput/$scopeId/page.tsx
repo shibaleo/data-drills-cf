@@ -15,6 +15,7 @@ import { AsOfControls } from "@/components/as-of-controls";
 import { Input } from "@/components/ui/input";
 import { applyMemberFilter } from "@/lib/member-filter";
 import { MemberFilterPicker } from "@/components/member-filter-picker";
+import { ScopePickerBar } from "@/components/scope-picker-bar";
 import { useThroughputScope, useThroughputScopeRevisions, useUpdateThroughputScope, useArchiveThroughputScope } from "@/hooks/queries/use-throughput-scopes";
 import type { MemberFilterInput } from "@/lib/schemas/member-filter";
 import { Button } from "@/components/ui/button";
@@ -62,6 +63,7 @@ export default function ThroughputPage() {
   const [asOf, setAsOf] = useState<string | null>(null);
   const [localName, setLocalName] = useState("");
   const [localFilter, setLocalFilter] = useState<MemberFilterInput>({});
+  const [localScopeId, setLocalScopeId] = useState<string | null>(null);
   const [membersEditorOpen, setMembersEditorOpen] = useState(false);
   const [historyPanelOpen, setHistoryPanelOpen] = useState(false);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
@@ -73,6 +75,7 @@ export default function ThroughputPage() {
     lastSyncRevRef.current = sc.revision;
     setLocalName(sc.name);
     setLocalFilter(sc.filter ?? {});
+    setLocalScopeId((sc as { scope_id?: string | null }).scope_id ?? null);
   }, [scopeQuery.data]);
 
   // 常に全データを fetch、asOf によるフィルタはクライアントで適用 (= アニメーション再生に必要)。
@@ -266,7 +269,8 @@ export default function ThroughputPage() {
   const synced = !!scope && lastSyncRevRef.current === scope.revision;
   const filterDirty = synced && JSON.stringify(localFilter) !== JSON.stringify(scope!.filter ?? {});
   const nameDirty = synced && localName !== scope!.name;
-  const dirty = filterDirty || nameDirty;
+  const scopeIdDirty = synced && localScopeId !== ((scope as { scope_id?: string | null }).scope_id ?? null);
+  const dirty = filterDirty || nameDirty || scopeIdDirty;
   const membersOpen = membersEditorOpen || filterDirty;
   // history panel は明示的に ⋮ メニューで開いた時のみ。
   const historyOpen = historyPanelOpen;
@@ -276,6 +280,7 @@ export default function ThroughputPage() {
     await updateScope.mutateAsync({
       ...(nameDirty && { name: localName }),
       ...(filterDirty && { filter: localFilter }),
+      ...(scopeIdDirty && { scope_id: localScopeId }),
     });
     lastSyncRevRef.current = null;
     toast.success("Saved");
@@ -296,7 +301,7 @@ export default function ThroughputPage() {
         {dirty && (
           <div className="ml-auto flex items-center gap-2">
             <button type="button"
-              onClick={() => { if (scope) { setLocalName(scope.name); setLocalFilter(scope.filter ?? {}); } }}
+              onClick={() => { if (scope) { setLocalName(scope.name); setLocalFilter(scope.filter ?? {}); setLocalScopeId((scope as { scope_id?: string | null }).scope_id ?? null); } }}
               disabled={updateScope.isPending}
               className="inline-flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground disabled:opacity-50"
               title="Discard changes"><RotateCcw className="size-3"/>Reset</button>
@@ -345,6 +350,8 @@ export default function ThroughputPage() {
         </Popover>
       </>
       )}
+
+      <ScopePickerBar value={localScopeId} onChange={setLocalScopeId} dirty={scopeIdDirty} />
 
       {/* History panel */}
       {historyOpen && (

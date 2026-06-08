@@ -11,5 +11,6 @@ export type ThroughputScopeCreateInput = z.infer<typeof throughputScopeCreateInp
 export const throughputScopeUpdateInputSchema = z.object({
   name: z.string().min(1).optional(),
   filter: memberFilterSchema.optional(),
+  scope_id: z.string().uuid().nullable().optional(),
 });
 export type ThroughputScopeUpdateInput = z.infer<typeof throughputScopeUpdateInputSchema>;

@@ -11,5 +11,6 @@ export type DigestScopeCreateInput = z.infer<typeof digestScopeCreateInputSchema
 export const digestScopeUpdateInputSchema = z.object({
   name: z.string().min(1).optional(),
   filter: memberFilterSchema.optional(),
+  scope_id: z.string().uuid().nullable().optional(),
 });
 export type DigestScopeUpdateInput = z.infer<typeof digestScopeUpdateInputSchema>;
