@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo } from "react"
-import { useField } from "./use-project"
+import { useField } from "./use-field"
 
 /**
  * Apply the global subject/level filter (from FieldContext) to a list.

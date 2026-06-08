@@ -6,7 +6,7 @@
  */
 import { useSubjectsList } from "@/hooks/queries/use-subjects";
 import { useLevelsList } from "@/hooks/queries/use-levels";
-import { useFields } from "@/hooks/queries/use-project-data";
+import { useFields } from "@/hooks/queries/use-field-data";
 import { OpaqueTag } from "@/components/problem-card";
 import type { MemberFilterInput } from "@/lib/schemas/member-filter";
 

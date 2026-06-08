@@ -7,7 +7,7 @@ import {
   Outlet,
 } from "@tanstack/react-router";
 import { AuthGate } from "@/components/auth/auth-gate";
-import { FieldProvider } from "@/hooks/use-project";
+import { FieldProvider } from "@/hooks/use-field";
 import { AppLayout } from "@/components/layout/app-layout";
 import { AuthenticateWithRedirectCallback } from "@clerk/react";
 

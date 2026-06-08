@@ -25,7 +25,7 @@ import {
 } from "@tanstack/react-table";
 import { useQueryClient } from "@tanstack/react-query";
 import { rpc } from "@/lib/rpc-client";
-import { useField } from "@/hooks/use-project";
+import { useField } from "@/hooks/use-field";
 import { useFilterPrefs, useSaveFilterPrefs } from "@/hooks/queries/use-filter-prefs";
 import { usePageTitle, useHeaderSlot, usePageBack } from "@/lib/page-context";
 import { OpaqueTag } from "@/components/problem-card";

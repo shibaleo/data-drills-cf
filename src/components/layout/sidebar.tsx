@@ -19,7 +19,7 @@ import {
   Tag,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useField } from "@/hooks/use-project";
+import { useField } from "@/hooks/use-field";
 import { useReviewList } from "@/hooks/queries/use-review";
 import { useFilterPrefs } from "@/hooks/queries/use-filter-prefs";
 import { useBacklogTodayCount } from "@/hooks/queries/use-backlog";

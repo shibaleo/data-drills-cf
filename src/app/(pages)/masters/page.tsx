@@ -43,7 +43,7 @@ import {
   useUpdateField,
   useDeleteField,
   type Project,
-} from "@/hooks/queries/use-project-data";
+} from "@/hooks/queries/use-field-data";
 import {
   useStatusesList,
   useCreateStatus,

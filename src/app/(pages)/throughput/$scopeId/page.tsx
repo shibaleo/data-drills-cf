@@ -1,6 +1,6 @@
 "use client";
 import { useMemo, useRef, useEffect, useState, useCallback } from "react";
-import { useField } from "@/hooks/use-project";
+import { useField } from "@/hooks/use-field";
 import { useThroughputList, type ThroughputRow } from "@/hooks/queries/use-throughput";
 import { useProblemsList } from "@/hooks/queries/use-problems";
 import { useProblemDialogs } from "@/hooks/use-problem-dialogs";

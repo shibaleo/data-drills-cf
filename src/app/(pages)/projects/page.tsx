@@ -7,7 +7,7 @@ import {
   useUpdateField,
   useDeleteField,
   useReorderFields,
-} from "@/hooks/queries/use-project-data";
+} from "@/hooks/queries/use-field-data";
 
 export default function ProjectsPage() {
   const { data: projects = [], isLoading } = useFields();

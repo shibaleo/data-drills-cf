@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { useField } from "@/hooks/use-project";
+import { useField } from "@/hooks/use-field";
 import { useCreateStatsScope } from "@/hooks/queries/use-stats-scopes";
 import { MemberFilterPicker } from "@/components/member-filter-picker";
 import { Input } from "@/components/ui/input";

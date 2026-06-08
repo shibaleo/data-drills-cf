@@ -6,7 +6,7 @@
 
 import { useEffect } from "react";
 import { Link, useSearch, useNavigate } from "@tanstack/react-router";
-import { useField } from "@/hooks/use-project";
+import { useField } from "@/hooks/use-field";
 import { useThroughputScopesList } from "@/hooks/queries/use-throughput-scopes";
 import { usePageTitle } from "@/lib/page-context";
 

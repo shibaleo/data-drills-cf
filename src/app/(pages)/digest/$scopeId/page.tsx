@@ -5,7 +5,7 @@ import { Markdown } from "@/components/markdown";
 import { ChevronLeft, ChevronRight, Clock, ChevronDown, ChevronUp, MessageSquareText, Layers, ArrowUpRight, AlertTriangle, ArrowLeft } from "lucide-react";
 import { Link, useParams } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useField } from "@/hooks/use-project";
+import { useField } from "@/hooks/use-field";
 import { useThroughputList } from "@/hooks/queries/use-throughput";
 import { useProblemsList } from "@/hooks/queries/use-problems";
 import { useReviewList } from "@/hooks/queries/use-review";

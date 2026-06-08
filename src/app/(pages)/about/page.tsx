@@ -5,7 +5,7 @@ import katex from "katex";
 import "katex/dist/katex.min.css";
 import { toast } from "sonner";
 import { usePageTitle } from "@/lib/page-context";
-import { useField } from "@/hooks/use-project";
+import { useField } from "@/hooks/use-field";
 import { useUpdateStatus } from "@/hooks/queries/use-statuses";
 import { COLOR_PLANNED, COLOR_FIRST_ATTEMPT } from "@/lib/block-color";
 

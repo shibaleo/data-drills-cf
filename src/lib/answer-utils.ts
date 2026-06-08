@@ -1,4 +1,4 @@
-import type { StatusItem } from '@/hooks/use-project'
+import type { StatusItem } from '@/hooks/use-field'
 
 /**
  * Determine the suggested next status based on the most recent answer.

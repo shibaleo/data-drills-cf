@@ -12,7 +12,7 @@ import type { MemberFilterInput } from "@/lib/schemas/member-filter";
 import { applyMemberFilter } from "@/lib/member-filter";
 import { MemberFilterPicker } from "@/components/member-filter-picker";
 import { StabilitySlider } from "@/components/stability-slider";
-import { useField } from "@/hooks/use-project";
+import { useField } from "@/hooks/use-field";
 import { useProblemsList } from "@/hooks/queries/use-problems";
 import { useProblemDialogs } from "@/hooks/use-problem-dialogs";
 import { useQueryClient } from "@tanstack/react-query";

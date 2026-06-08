@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { rpc, unwrap, type RpcData } from "@/lib/rpc-client";
-import { fieldKeys } from "@/hooks/queries/use-project-data";
+import { fieldKeys } from "@/hooks/queries/use-field-data";
 
 export type StatusItem = RpcData<typeof rpc.api.v1.statuses.$get>["data"][number];
 

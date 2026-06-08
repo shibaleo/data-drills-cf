@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { useField } from "@/hooks/use-project";
+import { useField } from "@/hooks/use-field";
 import { useThroughputList } from "@/hooks/queries/use-throughput";
 import { useProblemsList } from "@/hooks/queries/use-problems";
 import { useProblemDialogs } from "@/hooks/use-problem-dialogs";

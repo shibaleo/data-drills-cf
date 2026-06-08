@@ -15,7 +15,7 @@ import {
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ApiError } from "@/lib/api-client";
-import { useField } from "@/hooks/use-project";
+import { useField } from "@/hooks/use-field";
 import {
   useFlashcardsData,
   useCreateFlashcard,
