@@ -45,7 +45,7 @@ const app = new Hono<Env>()
     }
 
     const problems = await db.select().from(problem)
-      .where(eq(problem.projectId, projectId))
+      .where(eq(problem.fieldId, projectId))
       .orderBy(problem.createdAt);
 
     const problemIds = problems.map((p) => p.id);
@@ -66,8 +66,8 @@ const app = new Hono<Env>()
               .where(answerWhere)
               .orderBy(answer.date, answer.createdAt),
             db.select().from(answerStatus).orderBy(answerStatus.sortOrder),
-            db.select().from(subject).where(eq(subject.projectId, projectId)),
-            db.select().from(level).where(eq(level.projectId, projectId)),
+            db.select().from(subject).where(eq(subject.fieldId, projectId)),
+            db.select().from(level).where(eq(level.fieldId, projectId)),
           ]);
 
     const statusMap = new Map(statuses.map((s) => [s.id, s]));

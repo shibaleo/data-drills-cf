@@ -22,10 +22,8 @@ const StatsNewPage = lazy(() => import("./app/(pages)/stats/new/page"));
 const StatsDetailPage = lazy(() => import("./app/(pages)/stats/$scopeId/page"));
 const ThroughputPage = lazy(() => import("./app/(pages)/throughput/page"));
 const FlashcardsPage = lazy(() => import("./app/(pages)/flashcards/page"));
-const TagsPage = lazy(() => import("./app/(pages)/tags/page"));
 const SubjectsPage = lazy(() => import("./app/(pages)/subjects/page"));
 const LevelsPage = lazy(() => import("./app/(pages)/levels/page"));
-const ProjectsPage = lazy(() => import("./app/(pages)/projects/page"));
 const StatusesPage = lazy(() => import("./app/(pages)/statuses/page"));
 const UsersPage = lazy(() => import("./app/(pages)/users/page"));
 const ApiKeysPage = lazy(() => import("./app/(pages)/api-keys/page"));
@@ -145,10 +143,8 @@ const statsDetailRoute = createRoute({
   ),
 });
 const flashcardsRoute = lazyRoute("/flashcards", FlashcardsPage);
-const tagsRoute = lazyRoute("/tags", TagsPage);
 const subjectsRoute = lazyRoute("/subjects", SubjectsPage);
 const levelsRoute = lazyRoute("/levels", LevelsPage);
-const projectsRoute = lazyRoute("/projects", ProjectsPage);
 const statusesRoute = lazyRoute("/statuses", StatusesPage);
 const usersRoute = lazyRoute("/users", UsersPage);
 const apiKeysRoute = lazyRoute("/api-keys", ApiKeysPage);
@@ -200,10 +196,8 @@ const routeTree = rootRoute.addChildren([
     reviewNewRoute,
     reviewDetailRoute,
     flashcardsRoute,
-    tagsRoute,
     subjectsRoute,
     levelsRoute,
-    projectsRoute,
     statusesRoute,
     usersRoute,
     apiKeysRoute,

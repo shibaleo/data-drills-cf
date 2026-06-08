@@ -17,6 +17,7 @@ BEGIN;
 -- -----------------------------------------------------------------------------
 -- 1. 旧 FK カラム drop
 --    新カラム (field_id / scope_id) は backfill 済前提。
+--    旧 column に依存する uniqueIndex は CASCADE で自動 drop される (Postgres 動作)。
 -- -----------------------------------------------------------------------------
 
 ALTER TABLE data_drills.subject     DROP COLUMN IF EXISTS project_id;
@@ -25,8 +26,24 @@ ALTER TABLE data_drills.problem     DROP COLUMN IF EXISTS project_id;
 ALTER TABLE data_drills.problem     DROP COLUMN IF EXISTS topic_id;
 ALTER TABLE data_drills.flashcard   DROP COLUMN IF EXISTS project_id;
 ALTER TABLE data_drills.flashcard   DROP COLUMN IF EXISTS topic_id;
+-- goal_layer / goal_milestone は Phase 1 で scope_id を backfill したが、その後
+-- 旧 backlog batch handler (Phase 4.3 swap 前) で作られた行は scope_id が NULL のまま。
+-- backlog_id drop の前に最後の取りこぼし backfill を回す。
+UPDATE data_drills.goal_layer       SET scope_id = backlog_id WHERE scope_id IS NULL;
+UPDATE data_drills.goal_milestone   SET scope_id = backlog_id WHERE scope_id IS NULL;
+
 ALTER TABLE data_drills.goal_layer       DROP COLUMN IF EXISTS backlog_id;
 ALTER TABLE data_drills.goal_milestone   DROP COLUMN IF EXISTS backlog_id;
+
+-- 1b. 旧 unique index は column drop で自動消滅。新 (field_id, code, …) 再作成。
+CREATE UNIQUE INDEX IF NOT EXISTS subject_field_code_key
+  ON data_drills.subject (field_id, code);
+CREATE UNIQUE INDEX IF NOT EXISTS level_field_code_key
+  ON data_drills.level (field_id, code);
+CREATE UNIQUE INDEX IF NOT EXISTS problem_field_code_key
+  ON data_drills.problem (field_id, code, subject_id, level_id);
+CREATE UNIQUE INDEX IF NOT EXISTS flashcard_field_code_key
+  ON data_drills.flashcard (field_id, code);
 
 -- -----------------------------------------------------------------------------
 -- 2. *_scope (review/throughput/stats/digest) を canonical scope に統合する場合、
@@ -85,6 +102,40 @@ ALTER TABLE data_drills.flashcard
 -- goal_layer / goal_milestone の scope_id は scope (revision PK の id 列) を指す。
 -- scope は (id, revision) PK なので id 単体には UNIQUE 制約がない → FK は張れない。
 -- 整合性は application 側で保証する (= scope.id INSERT 時に revision=1 を必ず作る)。
+
+-- 5b. project drop で失った FK を field に張り直す。
+--     これらの table は project_id 列名のままだが、参照先のみ field(id) に切り替え。
+--     (option C: 列名は据え置きで wire 互換維持、後日 B フェーズで rename)
+ALTER TABLE data_drills.filter_pref
+  ADD CONSTRAINT filter_pref_project_id_fk
+  FOREIGN KEY (project_id) REFERENCES data_drills.field(id) ON DELETE CASCADE;
+
+ALTER TABLE data_drills.review_scope
+  ADD CONSTRAINT review_scope_project_id_fk
+  FOREIGN KEY (project_id) REFERENCES data_drills.field(id) ON DELETE CASCADE;
+
+ALTER TABLE data_drills.throughput_scope
+  ADD CONSTRAINT throughput_scope_project_id_fk
+  FOREIGN KEY (project_id) REFERENCES data_drills.field(id) ON DELETE CASCADE;
+
+ALTER TABLE data_drills.stats_scope
+  ADD CONSTRAINT stats_scope_project_id_fk
+  FOREIGN KEY (project_id) REFERENCES data_drills.field(id) ON DELETE CASCADE;
+
+ALTER TABLE data_drills.digest_scope
+  ADD CONSTRAINT digest_scope_project_id_fk
+  FOREIGN KEY (project_id) REFERENCES data_drills.field(id) ON DELETE CASCADE;
+
+-- 5c. tag drop で失った FK を review_type に張り直す。
+--     review_tag / flashcard_tag は tag_id 列名のまま、参照先のみ review_type(id) に。
+--     (Phase 1 SQL で review_type.id = tag.id で backfill 済なので既存 row の整合性 OK)
+ALTER TABLE data_drills.review_tag
+  ADD CONSTRAINT review_tag_review_type_id_fk
+  FOREIGN KEY (tag_id) REFERENCES data_drills.review_type(id) ON DELETE CASCADE;
+
+ALTER TABLE data_drills.flashcard_tag
+  ADD CONSTRAINT flashcard_tag_review_type_id_fk
+  FOREIGN KEY (tag_id) REFERENCES data_drills.review_type(id) ON DELETE CASCADE;
 
 -- -----------------------------------------------------------------------------
 -- 6. 検証クエリ (本番では実行不要、適用後に手動で確認)

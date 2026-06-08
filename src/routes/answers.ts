@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { db } from "@/lib/db";
-import { answer, problem, project } from "@/lib/db/schema";
+import { answer, problem, field } from "@/lib/db/schema";
 import { and, eq } from "drizzle-orm";
 import { toJSTDateString } from "@/lib/date-utils";
 import {
@@ -32,8 +32,8 @@ const app = new Hono<Env>()
     }
     const rows = await db.select({ a: answer }).from(answer)
       .innerJoin(problem, eq(answer.problemId, problem.id))
-      .innerJoin(project, eq(problem.projectId, project.id))
-      .where(eq(project.userId, userId)).orderBy(answer.date, answer.createdAt);
+      .innerJoin(field, eq(problem.fieldId, field.id))
+      .where(eq(field.userId, userId)).orderBy(answer.date, answer.createdAt);
     return c.json({ data: rows.map((r) => toRow(r.a)), next_cursor: null });
   })
   .post("/", zValidator("json", answerCreateInputSchema), async (c) => {

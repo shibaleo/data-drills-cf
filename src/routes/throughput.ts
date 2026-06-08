@@ -24,7 +24,6 @@ type Row = {
   standard_time: number | null;
   subject_id: string | null;
   level_id: string | null;
-  topic_id: string | null;
 };
 
 /**
@@ -59,12 +58,11 @@ const app = new Hono<Env>()
         p.name,
         p.standard_time,
         p.subject_id,
-        p.level_id,
-        p.topic_id
+        p.level_id
       FROM data_drills.answer a
       JOIN data_drills.problem p ON p.id = a.problem_id
       LEFT JOIN data_drills.answer_status s ON s.id = a.answer_status_id
-      WHERE p.project_id = ${projectId}
+      WHERE p.field_id = ${projectId}
       ${asOfCond}
       ORDER BY a.date ASC, a.created_at ASC
     `);
@@ -85,7 +83,7 @@ const app = new Hono<Env>()
         standardTime: r.standard_time,
         subjectId: r.subject_id,
         levelId: r.level_id,
-        topicId: r.topic_id,
+        topicId: null as string | null,
       })),
     });
   });

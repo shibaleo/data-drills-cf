@@ -13,14 +13,12 @@ import reviews from "@/routes/reviews";
 import apiKeys from "@/routes/api-keys";
 import users from "@/routes/users";
 import statuses from "@/routes/statuses";
-import tags from "@/routes/tags";
 import reviewTags from "@/routes/review-tags";
 import problemFiles from "@/routes/problem-files";
 import problemsList from "@/routes/problems-list";
 import review from "@/routes/review";
 import throughput from "@/routes/throughput";
 import pdfExport from "@/routes/pdf-export";
-import backlog from "@/routes/backlog";
 import reviewScopes from "@/routes/review-scopes";
 import throughputScopes from "@/routes/throughput-scopes";
 import statsScopes from "@/routes/stats-scopes";
@@ -74,14 +72,12 @@ const v1 = new Hono<Env>()
   .route("/api-keys", apiKeys)
   .route("/users", users)
   .route("/statuses", statuses)
-  .route("/tags", tags)
   .route("/review-tags", reviewTags)
   .route("/problem-files", problemFiles)
   .route("/problems-list", problemsList)
   .route("/review", review)
   .route("/throughput", throughput)
   .route("/pdf-export", pdfExport)
-  .route("/backlog", backlog)
   .route("/review-scopes", reviewScopes)
   .route("/throughput-scopes", throughputScopes)
   .route("/stats-scopes", statsScopes)

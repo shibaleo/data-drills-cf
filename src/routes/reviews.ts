@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { db } from "@/lib/db";
-import { review, reviewTag, answer, problem, project } from "@/lib/db/schema";
+import { review, reviewTag, answer, problem, field } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 import {
   reviewCreateInputSchema,
@@ -27,8 +27,8 @@ const app = new Hono<Env>()
     const rows = await db.select({ r: review }).from(review)
       .innerJoin(answer, eq(review.answerId, answer.id))
       .innerJoin(problem, eq(answer.problemId, problem.id))
-      .innerJoin(project, eq(problem.projectId, project.id))
-      .where(eq(project.userId, userId)).orderBy(review.createdAt);
+      .innerJoin(field, eq(problem.fieldId, field.id))
+      .where(eq(field.userId, userId)).orderBy(review.createdAt);
     return c.json({ data: rows.map((r) => r.r), next_cursor: null });
   })
   .post("/", zValidator("json", reviewCreateInputSchema), async (c) => {

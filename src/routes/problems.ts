@@ -1,13 +1,12 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { db } from "@/lib/db";
-import { problem, problemTag, problemFile, project } from "@/lib/db/schema";
-import { eq, and } from "drizzle-orm";
+import { problem, problemFile, field } from "@/lib/db/schema";
+import { eq } from "drizzle-orm";
 import { randomCode } from "@/lib/utils";
 import {
   problemCreateInputSchema,
   problemUpdateInputSchema,
-  problemTagCreateInputSchema,
   problemFileCreateInputSchema,
 } from "@/lib/schemas/problem";
 import { z } from "zod";
@@ -23,13 +22,13 @@ const app = new Hono<Env>()
     if (projectId) {
       if (!(await ownsProject(projectId, userId))) return c.json({ data: [], next_cursor: null });
       const rows = await db.select().from(problem)
-        .where(eq(problem.projectId, projectId)).orderBy(problem.createdAt);
+        .where(eq(problem.fieldId, projectId)).orderBy(problem.createdAt);
       return c.json({ data: rows, next_cursor: null });
     }
     // 全件は user の全 project を JOIN で絞り込み
     const rows = await db.select({ p: problem }).from(problem)
-      .innerJoin(project, eq(problem.projectId, project.id))
-      .where(eq(project.userId, userId)).orderBy(problem.createdAt);
+      .innerJoin(field, eq(problem.fieldId, field.id))
+      .where(eq(field.userId, userId)).orderBy(problem.createdAt);
     return c.json({ data: rows.map((r) => r.p), next_cursor: null });
   })
   .post("/", zValidator("json", problemCreateInputSchema), async (c) => {
@@ -38,10 +37,9 @@ const app = new Hono<Env>()
     if (!(await ownsProject(body.project_id, userId))) return c.json({ error: "Not found" }, 404);
     const values = {
       code: body.code || randomCode(),
-      projectId: body.project_id,
+      fieldId: body.project_id,
       subjectId: body.subject_id ?? null,
       levelId: body.level_id ?? null,
-      topicId: body.topic_id ?? null,
       name: body.name ?? null,
       checkpoint: body.checkpoint ?? null,
       standardTime: body.standard_time ?? null,
@@ -69,7 +67,6 @@ const app = new Hono<Env>()
     if (body.checkpoint !== undefined) updates.checkpoint = body.checkpoint;
     if (body.subject_id !== undefined) updates.subjectId = body.subject_id;
     if (body.level_id !== undefined) updates.levelId = body.level_id;
-    if (body.topic_id !== undefined) updates.topicId = body.topic_id;
     if (body.standard_time !== undefined) updates.standardTime = body.standard_time;
     const [row] = await db.update(problem).set(updates).where(eq(problem.id, id)).returning();
     if (!row) return c.json({ error: "Not found" }, 404);
@@ -82,31 +79,6 @@ const app = new Hono<Env>()
     const [row] = await db.delete(problem).where(eq(problem.id, id)).returning();
     if (!row) return c.json({ error: "Not found" }, 404);
     return c.json({ data: row });
-  })
-  // ── Problem Tags ──
-  .get("/:id/tags", async (c) => {
-    const userId = c.get("authResult").userId;
-    if (!(await ownsProblem(c.req.param("id"), userId))) return c.json({ data: [] });
-    const rows = await db.select().from(problemTag).where(eq(problemTag.problemId, c.req.param("id")));
-    return c.json({ data: rows });
-  })
-  .post("/:id/tags", zValidator("json", problemTagCreateInputSchema), async (c) => {
-    const userId = c.get("authResult").userId;
-    if (!(await ownsProblem(c.req.param("id"), userId))) return c.json({ error: "Not found" }, 404);
-    const body = c.req.valid("json");
-    const [row] = await db.insert(problemTag).values({
-      problemId: c.req.param("id"),
-      tagId: body.tag_id,
-    }).returning();
-    return c.json({ data: row }, 201);
-  })
-  .delete("/:id/tags/:tagId", async (c) => {
-    const userId = c.get("authResult").userId;
-    if (!(await ownsProblem(c.req.param("id"), userId))) return c.json({ error: "Not found" }, 404);
-    await db.delete(problemTag).where(
-      and(eq(problemTag.problemId, c.req.param("id")), eq(problemTag.tagId, c.req.param("tagId"))),
-    );
-    return c.json({ data: { ok: true } });
   })
   // ── Problem Files ──
   .get("/:id/files", async (c) => {

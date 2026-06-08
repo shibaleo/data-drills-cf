@@ -93,7 +93,6 @@ const navItems: NavItem[] = [
   { href: "/stats", label: "Stats", icon: BarChart2 },
   { href: "/digest", label: "Digest", icon: CalendarDays, dividerAfter: true },
   { href: "/flashcards", label: "Flashcards", icon: Layers },
-  { href: "/tags", label: "Tags", icon: Tag, dividerAfter: true },
   { href: "/masters", label: "Masters", icon: LayoutGrid },
   { href: "/about", label: "About", icon: Info },
 ];

@@ -155,7 +155,6 @@ const app = new Hono<Env>()
       fieldId: problem.fieldId,
       subjectId: problem.subjectId,
       levelId: problem.levelId,
-      topicId: problem.topicId,
     }).from(problem)
       .innerJoin(field, eq(field.id, problem.fieldId))
       .where(eq(field.userId, userId))
@@ -190,7 +189,7 @@ const app = new Hono<Env>()
           standard_time: m.standardTime,
           subject_id: m.subjectId,
           level_id: m.levelId,
-          topic_id: m.topicId,
+          topic_id: null as string | null,
           first_answer_date: firstAnswers.get(m.id) ?? null,
         })),
         layers: layers.map((l) => ({
@@ -379,7 +378,7 @@ const app = new Hono<Env>()
           .where(and(eq(goalLayer.id, lid), eq(goalLayer.revision, cur.revision)));
         await tx.insert(goalLayer).values({
           id: lid, revision: cur.revision + 1,
-          backlogId: cur.backlogId, scopeId: cur.scopeId ?? scopeId,
+          scopeId: cur.scopeId ?? scopeId,
           name: cur.name, color: cur.color,
           opacityPct: cur.opacityPct, lineStyle: cur.lineStyle, lineWidth: cur.lineWidth,
           sortOrder: cur.sortOrder, isActive: false,
@@ -392,7 +391,7 @@ const app = new Hono<Env>()
         layerIdMap[l.temp_id] = realId;
         await tx.insert(goalLayer).values({
           id: realId, revision: 1,
-          backlogId: l.scope_id, scopeId: l.scope_id,
+          scopeId: l.scope_id,
           name: l.name,
           color: l.color ?? null,
           opacityPct: l.opacity_pct ?? null,
@@ -413,7 +412,7 @@ const app = new Hono<Env>()
           .where(and(eq(goalLayer.id, u.id), eq(goalLayer.revision, cur.revision)));
         await tx.insert(goalLayer).values({
           id: u.id, revision: cur.revision + 1,
-          backlogId: cur.backlogId, scopeId: cur.scopeId ?? scopeId,
+          scopeId: cur.scopeId ?? scopeId,
           name: u.payload.name ?? cur.name,
           color: u.payload.color !== undefined ? u.payload.color : cur.color,
           opacityPct: u.payload.opacity_pct !== undefined ? u.payload.opacity_pct : cur.opacityPct,
@@ -435,7 +434,7 @@ const app = new Hono<Env>()
           .where(and(eq(goalMilestone.id, mid), eq(goalMilestone.revision, cur.revision)));
         await tx.insert(goalMilestone).values({
           id: mid, revision: cur.revision + 1,
-          backlogId: cur.backlogId, scopeId: cur.scopeId ?? scopeId,
+          scopeId: cur.scopeId ?? scopeId,
           layerId: cur.layerId, target: cur.target,
           date: typeof cur.date === "string" ? cur.date : (cur.date as Date).toISOString().slice(0, 10),
           isActive: false,
@@ -449,7 +448,7 @@ const app = new Hono<Env>()
         const resolvedLayerId = layerIdMap[m.layer_id] ?? m.layer_id;
         await tx.insert(goalMilestone).values({
           id: realId, revision: 1,
-          backlogId: m.scope_id, scopeId: m.scope_id,
+          scopeId: m.scope_id,
           layerId: resolvedLayerId, target: m.target, date: m.date,
         });
       }
@@ -465,7 +464,7 @@ const app = new Hono<Env>()
           .where(and(eq(goalMilestone.id, u.id), eq(goalMilestone.revision, cur.revision)));
         await tx.insert(goalMilestone).values({
           id: u.id, revision: cur.revision + 1,
-          backlogId: cur.backlogId, scopeId: cur.scopeId ?? scopeId,
+          scopeId: cur.scopeId ?? scopeId,
           layerId: u.payload.layer_id ?? cur.layerId,
           target: u.payload.target ?? cur.target,
           date: u.payload.date ?? (typeof cur.date === "string" ? cur.date : (cur.date as Date).toISOString().slice(0, 10)),

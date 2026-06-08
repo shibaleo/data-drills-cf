@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { flashcardReview, flashcard, project } from "@/lib/db/schema";
+import { flashcardReview, flashcard, field } from "@/lib/db/schema";
 import { and, eq } from "drizzle-orm";
 import { ownsFlashcard } from "@/lib/ownership";
 import type { AuthResult } from "@/lib/auth";
@@ -21,8 +21,8 @@ const app = new Hono<Env>()
     }
     const rows = await db.select({ fr: flashcardReview }).from(flashcardReview)
       .innerJoin(flashcard, eq(flashcardReview.flashcardId, flashcard.id))
-      .innerJoin(project, eq(flashcard.projectId, project.id))
-      .where(eq(project.userId, userId)).orderBy(flashcardReview.reviewedAt);
+      .innerJoin(field, eq(flashcard.fieldId, field.id))
+      .where(eq(field.userId, userId)).orderBy(flashcardReview.reviewedAt);
     return c.json({ data: rows.map((r) => r.fr), next_cursor: null });
   })
   .delete("/:id", async (c) => {
@@ -31,8 +31,8 @@ const app = new Hono<Env>()
     const [check] = await db.select({ id: flashcardReview.id })
       .from(flashcardReview)
       .innerJoin(flashcard, eq(flashcardReview.flashcardId, flashcard.id))
-      .innerJoin(project, eq(flashcard.projectId, project.id))
-      .where(and(eq(flashcardReview.id, c.req.param("id")), eq(project.userId, userId)))
+      .innerJoin(field, eq(flashcard.fieldId, field.id))
+      .where(and(eq(flashcardReview.id, c.req.param("id")), eq(field.userId, userId)))
       .limit(1);
     if (!check) return c.json({ error: "Not found" }, 404);
     const [row] = await db.delete(flashcardReview).where(eq(flashcardReview.id, c.req.param("id"))).returning();

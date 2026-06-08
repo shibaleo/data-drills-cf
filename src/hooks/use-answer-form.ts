@@ -89,9 +89,9 @@ function useCodeSuggestions(projectId: string | undefined, subject: string, leve
 
 function useTagMap() {
   const { data: tags = [] } = useQuery({
-    queryKey: ['tags-map'],
+    queryKey: ['review-types-map'],
     queryFn: async () => {
-      const json = await unwrap(rpc.api.v1.tags.$get())
+      const json = await unwrap(rpc.api.v1["review-types"].$get())
       return json.data
     },
     staleTime: 5 * 60_000,

@@ -16,7 +16,7 @@ const app = new Hono<Env>()
     const userId = c.get("authResult").userId;
     const projectId = c.req.param("id")!;
     if (!(await ownsProject(projectId, userId))) return c.json({ data: [], next_cursor: null });
-    const rows = await db.select().from(level).where(eq(level.projectId, projectId)).orderBy(level.sortOrder);
+    const rows = await db.select().from(level).where(eq(level.fieldId, projectId)).orderBy(level.sortOrder);
     return c.json({ data: rows, next_cursor: null });
   })
   .post("/", zValidator("json", masterCreateInputSchema), async (c) => {
@@ -27,7 +27,7 @@ const app = new Hono<Env>()
     const values = {
       code: body.code || randomCode(),
       name: body.name,
-      projectId,
+      fieldId: projectId,
       color: body.color ?? null,
       sortOrder: body.sort_order ?? 0,
       ...(body.id ? { id: body.id } : {}),
@@ -43,7 +43,7 @@ const app = new Hono<Env>()
     await Promise.all(
       ids.map((id, i) =>
         db.update(level).set({ sortOrder: i, updatedAt: new Date() })
-          .where(and(eq(level.id, id), eq(level.projectId, projectId))),
+          .where(and(eq(level.id, id), eq(level.fieldId, projectId))),
       ),
     );
     return c.json({ ok: true });
@@ -59,7 +59,7 @@ const app = new Hono<Env>()
     if (body.color !== undefined) updates.color = body.color;
     if (body.sort_order !== undefined) updates.sortOrder = body.sort_order;
     const [row] = await db.update(level).set(updates)
-      .where(and(eq(level.id, c.req.param("entityId")), eq(level.projectId, projectId))).returning();
+      .where(and(eq(level.id, c.req.param("entityId")), eq(level.fieldId, projectId))).returning();
     if (!row) return c.json({ error: "Not found" }, 404);
     return c.json({ data: row });
   })
@@ -68,7 +68,7 @@ const app = new Hono<Env>()
     const projectId = c.req.param("id")!;
     if (!(await ownsProject(projectId, userId))) return c.json({ error: "Not found" }, 404);
     const [row] = await db.delete(level)
-      .where(and(eq(level.id, c.req.param("entityId")), eq(level.projectId, projectId))).returning();
+      .where(and(eq(level.id, c.req.param("entityId")), eq(level.fieldId, projectId))).returning();
     if (!row) return c.json({ error: "Not found" }, 404);
     return c.json({ data: row });
   });

@@ -1,76 +1,22 @@
+/**
+ * Phase 4: topic table 廃止後の stub。
+ * UI/hooks (useTopicsList, useFlashcards) がまだこの endpoint を叩くため、
+ * wire 互換維持のために空配列を返す。B フェーズで完全削除予定。
+ */
+
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
-import { db } from "@/lib/db";
-import { topic } from "@/lib/db/schema";
-import { and, eq } from "drizzle-orm";
-import { randomCode } from "@/lib/utils";
 import { masterCreateInputSchema, masterUpdateInputSchema } from "@/lib/schemas/project";
 import { reorderInputSchema } from "@/lib/schemas/common";
-import { ownsProject } from "@/lib/ownership";
 import type { AuthResult } from "@/lib/auth";
 
 type Env = { Variables: { authResult: AuthResult } };
 
 const app = new Hono<Env>()
-  .get("/", async (c) => {
-    const userId = c.get("authResult").userId;
-    const projectId = c.req.param("id")!;
-    if (!(await ownsProject(projectId, userId))) return c.json({ data: [], next_cursor: null });
-    const rows = await db.select().from(topic).where(eq(topic.projectId, projectId)).orderBy(topic.sortOrder);
-    return c.json({ data: rows, next_cursor: null });
-  })
-  .post("/", zValidator("json", masterCreateInputSchema), async (c) => {
-    const userId = c.get("authResult").userId;
-    const projectId = c.req.param("id")!;
-    if (!(await ownsProject(projectId, userId))) return c.json({ error: "Not found" }, 404);
-    const body = c.req.valid("json");
-    const values = {
-      code: body.code || randomCode(),
-      name: body.name,
-      projectId,
-      color: body.color ?? null,
-      sortOrder: body.sort_order ?? 0,
-      ...(body.id ? { id: body.id } : {}),
-    };
-    const [row] = await db.insert(topic).values(values).returning();
-    return c.json({ data: row }, 201);
-  })
-  .patch("/reorder", zValidator("json", reorderInputSchema), async (c) => {
-    const userId = c.get("authResult").userId;
-    const projectId = c.req.param("id")!;
-    if (!(await ownsProject(projectId, userId))) return c.json({ ok: false }, 404);
-    const { ids } = c.req.valid("json");
-    await Promise.all(
-      ids.map((id, i) =>
-        db.update(topic).set({ sortOrder: i, updatedAt: new Date() })
-          .where(and(eq(topic.id, id), eq(topic.projectId, projectId))),
-      ),
-    );
-    return c.json({ ok: true });
-  })
-  .put("/:entityId", zValidator("json", masterUpdateInputSchema), async (c) => {
-    const userId = c.get("authResult").userId;
-    const projectId = c.req.param("id")!;
-    if (!(await ownsProject(projectId, userId))) return c.json({ error: "Not found" }, 404);
-    const body = c.req.valid("json");
-    const updates: Record<string, unknown> = { updatedAt: new Date() };
-    if (body.code !== undefined) updates.code = body.code;
-    if (body.name !== undefined) updates.name = body.name;
-    if (body.color !== undefined) updates.color = body.color;
-    if (body.sort_order !== undefined) updates.sortOrder = body.sort_order;
-    const [row] = await db.update(topic).set(updates)
-      .where(and(eq(topic.id, c.req.param("entityId")), eq(topic.projectId, projectId))).returning();
-    if (!row) return c.json({ error: "Not found" }, 404);
-    return c.json({ data: row });
-  })
-  .delete("/:entityId", async (c) => {
-    const userId = c.get("authResult").userId;
-    const projectId = c.req.param("id")!;
-    if (!(await ownsProject(projectId, userId))) return c.json({ error: "Not found" }, 404);
-    const [row] = await db.delete(topic)
-      .where(and(eq(topic.id, c.req.param("entityId")), eq(topic.projectId, projectId))).returning();
-    if (!row) return c.json({ error: "Not found" }, 404);
-    return c.json({ data: row });
-  });
+  .get("/", (c) => c.json({ data: [] as { id: string; code: string; name: string; color: string | null; sortOrder: number }[], next_cursor: null }))
+  .post("/", zValidator("json", masterCreateInputSchema), (c) => c.json({ error: "topic is deprecated" }, 410))
+  .patch("/reorder", zValidator("json", reorderInputSchema), (c) => c.json({ ok: false }, 410))
+  .put("/:entityId", zValidator("json", masterUpdateInputSchema), (c) => c.json({ error: "topic is deprecated" }, 410))
+  .delete("/:entityId", (c) => c.json({ error: "topic is deprecated" }, 410));
 
 export default app;

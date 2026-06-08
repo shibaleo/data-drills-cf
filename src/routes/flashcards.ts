@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { db } from "@/lib/db";
-import { flashcard, flashcardTag, flashcardProblem, flashcardReview, project } from "@/lib/db/schema";
+import { flashcard, flashcardTag, flashcardProblem, flashcardReview, field } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 import { randomCode } from "@/lib/utils";
 import {
@@ -24,12 +24,12 @@ const app = new Hono<Env>()
     if (projectId) {
       if (!(await ownsProject(projectId, userId))) return c.json({ data: [], next_cursor: null });
       const rows = await db.select().from(flashcard)
-        .where(eq(flashcard.projectId, projectId)).orderBy(flashcard.createdAt);
+        .where(eq(flashcard.fieldId, projectId)).orderBy(flashcard.createdAt);
       return c.json({ data: rows, next_cursor: null });
     }
     const rows = await db.select({ f: flashcard }).from(flashcard)
-      .innerJoin(project, eq(flashcard.projectId, project.id))
-      .where(eq(project.userId, userId)).orderBy(flashcard.createdAt);
+      .innerJoin(field, eq(flashcard.fieldId, field.id))
+      .where(eq(field.userId, userId)).orderBy(flashcard.createdAt);
     return c.json({ data: rows.map((r) => r.f), next_cursor: null });
   })
   .post("/", zValidator("json", flashcardCreateInputSchema), async (c) => {
@@ -38,8 +38,7 @@ const app = new Hono<Env>()
     if (!(await ownsProject(body.project_id, userId))) return c.json({ error: "Not found" }, 404);
     const values = {
       code: body.code || randomCode(),
-      projectId: body.project_id,
-      topicId: body.topic_id ?? null,
+      fieldId: body.project_id,
       front: body.front,
       back: body.back,
       ...(body.id ? { id: body.id } : {}),
@@ -63,7 +62,6 @@ const app = new Hono<Env>()
     const updates: Record<string, unknown> = { updatedAt: new Date() };
     if (body.front !== undefined) updates.front = body.front;
     if (body.back !== undefined) updates.back = body.back;
-    if (body.topic_id !== undefined) updates.topicId = body.topic_id;
     const [row] = await db.update(flashcard).set(updates).where(eq(flashcard.id, id)).returning();
     if (!row) return c.json({ error: "Not found" }, 404);
     return c.json({ data: row });

@@ -136,7 +136,7 @@ export default function FlashcardsPage() {
     setEditItem(card);
     setFormFront(card.front);
     setFormBack(card.back);
-    setFormTopicId(card.topicId ?? "__none__");
+    setFormTopicId("__none__");
     setDialogOpen(true);
   }
 
@@ -215,7 +215,7 @@ export default function FlashcardsPage() {
           {cards.map((card) => {
             const info = cardRetention(card.reviews, now);
             const revealed = revealedIds.has(card.id);
-            const topic = topics.find((t) => t.id === card.topicId);
+            const topic = undefined as { id: string; name: string; color: string | null } | undefined;
             return (
               <FlipCard
                 key={card.id}

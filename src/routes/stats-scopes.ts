@@ -37,7 +37,7 @@ async function fetchMembers(projectId: string, filter: MemberFilter) {
     fieldId: problem.fieldId,
     subjectId: problem.subjectId,
     levelId: problem.levelId,
-  }).from(problem).where(eq(problem.projectId, projectId))
+  }).from(problem).where(eq(problem.fieldId, projectId))
     .orderBy(asc(problem.code), asc(problem.id));
   return applyMemberFilter(rows, filter);
 }

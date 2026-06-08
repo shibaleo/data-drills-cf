@@ -30,89 +30,38 @@ const timestamps = () => ({
 });
 
 // =============================================================================
-// 1. Project
+// 1. Subject (field 配下)
 // =============================================================================
-
-export const project = pgTable("project", {
-  id: id(),
-  userId: uuid("user_id").notNull(),  // FK は user 定義より下なので constraint は SQL 側
-  code: code(),
-  name: name(),
-  color: text("color"),
-  gdriveFolderId: text("gdrive_folder_id"),
-  sortOrder: integer("sort_order").notNull().default(0),
-  ...timestamps(),
-}, (t) => [
-  uniqueIndex("project_user_code_key").on(t.userId, t.code),
-]);
-
-// =============================================================================
-// 2. Subject
-// =============================================================================
+//
+// Phase 4 で project / topic / tag は廃止。subject/level/problem/flashcard は
+// field を直接親に持つ。
 
 export const subject = pgTable("subject", {
   id: id(),
   code: code(),
   name: name(),
-  projectId: uuid("project_id").notNull().references(() => project.id, { onDelete: "cascade" }),
-  // Phase 1 追加: 新 owner。Phase 4 で project_id を drop して NOT NULL 化
-  fieldId: uuid("field_id"),
+  fieldId: uuid("field_id").notNull().references(() => field.id, { onDelete: "cascade" }),
   color: text("color"),
   sortOrder: integer("sort_order").notNull().default(0),
   ...timestamps(),
 }, (t) => [
-  uniqueIndex("subject_project_code_key").on(t.projectId, t.code),
-  index("subject_field_idx").on(t.fieldId),
+  uniqueIndex("subject_field_code_key").on(t.fieldId, t.code),
 ]);
 
 // =============================================================================
-// 3. Level
+// 2. Level
 // =============================================================================
 
 export const level = pgTable("level", {
   id: id(),
   code: code(),
   name: name(),
-  projectId: uuid("project_id").notNull().references(() => project.id, { onDelete: "cascade" }),
-  fieldId: uuid("field_id"),
+  fieldId: uuid("field_id").notNull().references(() => field.id, { onDelete: "cascade" }),
   color: text("color"),
   sortOrder: integer("sort_order").notNull().default(0),
   ...timestamps(),
 }, (t) => [
-  uniqueIndex("level_project_code_key").on(t.projectId, t.code),
-  index("level_field_idx").on(t.fieldId),
-]);
-
-// =============================================================================
-// 4. Topic
-// =============================================================================
-
-export const topic = pgTable("topic", {
-  id: id(),
-  code: code(),
-  name: name(),
-  projectId: uuid("project_id").notNull().references(() => project.id, { onDelete: "cascade" }),
-  color: text("color"),
-  sortOrder: integer("sort_order").notNull().default(0),
-  ...timestamps(),
-}, (t) => [
-  uniqueIndex("topic_project_code_key").on(t.projectId, t.code),
-]);
-
-// =============================================================================
-// 5. Tag (project-independent)
-// =============================================================================
-
-export const tag = pgTable("tag", {
-  id: id(),
-  userId: uuid("user_id").notNull(),
-  code: code(),
-  name: name(),
-  color: text("color"),
-  sortOrder: integer("sort_order").notNull().default(0),
-  ...timestamps(),
-}, (t) => [
-  uniqueIndex("tag_user_code_key").on(t.userId, t.code),
+  uniqueIndex("level_field_code_key").on(t.fieldId, t.code),
 ]);
 
 // =============================================================================
@@ -141,29 +90,15 @@ export const answerStatus = pgTable("answer_status", {
 export const problem = pgTable("problem", {
   id: id(),
   code: code(),
-  projectId: uuid("project_id").notNull().references(() => project.id, { onDelete: "cascade" }),
-  fieldId: uuid("field_id"),
+  fieldId: uuid("field_id").notNull().references(() => field.id, { onDelete: "cascade" }),
   subjectId: uuid("subject_id").references(() => subject.id, { onDelete: "set null" }),
   levelId: uuid("level_id").references(() => level.id, { onDelete: "set null" }),
-  topicId: uuid("topic_id").references(() => topic.id, { onDelete: "set null" }),
   name: text("name"),
   checkpoint: text("checkpoint"),
   standardTime: integer("standard_time"),
   ...timestamps(),
 }, (t) => [
-  uniqueIndex("problem_project_code_key").on(t.projectId, t.code, t.subjectId, t.levelId),
-  index("problem_field_idx").on(t.fieldId),
-]);
-
-// =============================================================================
-// 8. ProblemTag (M:N)
-// =============================================================================
-
-export const problemTag = pgTable("problem_tag", {
-  problemId: uuid("problem_id").notNull().references(() => problem.id, { onDelete: "cascade" }),
-  tagId: uuid("tag_id").notNull().references(() => tag.id, { onDelete: "cascade" }),
-}, (t) => [
-  primaryKey({ columns: [t.problemId, t.tagId] }),
+  uniqueIndex("problem_field_code_key").on(t.fieldId, t.code, t.subjectId, t.levelId),
 ]);
 
 // =============================================================================
@@ -207,9 +142,10 @@ export const review = pgTable("review", {
 // 11b. ReviewTag (M:N)
 // =============================================================================
 
+// Phase 4: tag_id column 名は残しつつ、参照先は review_type に切り替え (option C, wire 互換維持)
 export const reviewTag = pgTable("review_tag", {
   reviewId: uuid("review_id").notNull().references(() => review.id, { onDelete: "cascade" }),
-  tagId: uuid("tag_id").notNull().references(() => tag.id, { onDelete: "cascade" }),
+  tagId: uuid("tag_id").notNull().references(() => reviewType.id, { onDelete: "cascade" }),
 }, (t) => [
   primaryKey({ columns: [t.reviewId, t.tagId] }),
 ]);
@@ -221,24 +157,21 @@ export const reviewTag = pgTable("review_tag", {
 export const flashcard = pgTable("flashcard", {
   id: id(),
   code: code(),
-  projectId: uuid("project_id").notNull().references(() => project.id, { onDelete: "cascade" }),
-  fieldId: uuid("field_id"),
-  topicId: uuid("topic_id").references(() => topic.id, { onDelete: "set null" }),
+  fieldId: uuid("field_id").notNull().references(() => field.id, { onDelete: "cascade" }),
   front: text("front").notNull(),
   back: text("back").notNull(),
   ...timestamps(),
 }, (t) => [
-  uniqueIndex("flashcard_project_code_key").on(t.projectId, t.code),
-  index("flashcard_field_idx").on(t.fieldId),
+  uniqueIndex("flashcard_field_code_key").on(t.fieldId, t.code),
 ]);
 
 // =============================================================================
-// 13. FlashcardTag (M:N)
+// 13. FlashcardTag (M:N) — tag_id column 名のまま review_type に向ける (option C)
 // =============================================================================
 
 export const flashcardTag = pgTable("flashcard_tag", {
   flashcardId: uuid("flashcard_id").notNull().references(() => flashcard.id, { onDelete: "cascade" }),
-  tagId: uuid("tag_id").notNull().references(() => tag.id, { onDelete: "cascade" }),
+  tagId: uuid("tag_id").notNull().references(() => reviewType.id, { onDelete: "cascade" }),
 }, (t) => [
   primaryKey({ columns: [t.flashcardId, t.tagId] }),
 ]);
@@ -326,10 +259,11 @@ export const oauthToken = pgTable("oauth_token", {
 // 23. FilterPref
 // =============================================================================
 
+// Phase 4: column 名 project_id のまま field を参照 (option C)
 export const filterPref = pgTable("filter_pref", {
   id: id(),
   userId: uuid("user_id").notNull(),
-  projectId: uuid("project_id").notNull().references(() => project.id, { onDelete: "cascade" }),
+  projectId: uuid("project_id").notNull().references(() => field.id, { onDelete: "cascade" }),
   filters: jsonb("filters").notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
@@ -337,42 +271,18 @@ export const filterPref = pgTable("filter_pref", {
 ]);
 
 // =============================================================================
-// 24. Backlog (bitemporal append-only)
-//
-// 新規問題配分の戦略エンティティ。(id, revision) PK。
-// 編集時は revision+1 を INSERT し、旧 revision の valid_to に NOW() を塗る。
-// archive は is_active=false の新 revision を INSERT。
-// メンバー問題は filter から導出する。
+// 24. MemberFilter (scope の問題集合定義)
 // =============================================================================
 
 export type MemberFilter = {
-  /** Phase 1 追加: field (旧 project) ID 指定で cross-field 横断選択を表現 */
+  /** field ID 指定で cross-field 横断選択を表現 */
   fieldIds?: string[];
   subjectIds?: string[];
   levelIds?: string[];
 };
 
-export const backlog = pgTable("backlog", {
-  id: uuid("id").notNull(),
-  revision: integer("revision").notNull(),
-  projectId: uuid("project_id").notNull().references(() => project.id, { onDelete: "cascade" }),
-  name: text("name").notNull(),
-  dailyMinutes: integer("daily_minutes").notNull(),
-  timeMultiplierPct: integer("time_multiplier_pct").notNull().default(100),
-  weekdayWeights: jsonb("weekday_weights").$type<number[]>().notNull().default([1, 1, 1, 1, 1, 1, 1]),
-  filter: jsonb("filter").$type<MemberFilter>().notNull().default({}),
-  isActive: boolean("is_active").notNull().default(true),
-  validFrom: timestamp("valid_from", { withTimezone: true }).notNull().defaultNow(),
-  validTo: timestamp("valid_to", { withTimezone: true }),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-}, (t) => [
-  primaryKey({ columns: [t.id, t.revision] }),
-  index("backlog_current_idx").on(t.id, t.revision.desc()),
-  index("backlog_project_active_idx").on(t.projectId, t.isActive, t.validTo),
-]);
-
 // =============================================================================
-// 24b. Scope (bitemporal append-only) — Phase 1: 追加のみ
+// 24b. Scope (bitemporal append-only)
 //
 // 各ページ (Review/Plan/Throughput/Stats/Digest) で共有される
 // 「メンバー集合 + スケジューリング設定 + FSRS パラメタ + 目標」のマスターエンティティ。
@@ -451,10 +361,7 @@ export const reviewType = pgTable("review_type", {
 export const goalLayer = pgTable("goal_layer", {
   id: uuid("id").notNull(),
   revision: integer("revision").notNull(),
-  // Phase 1: 旧 backlog_id を残しつつ、scope_id を nullable で追加
-  // (Phase 2 で consumer 切替後、Phase 4 で backlog_id を drop)
-  backlogId: uuid("backlog_id").notNull(),
-  scopeId: uuid("scope_id"),
+  scopeId: uuid("scope_id").notNull(),
   name: text("name").notNull().default(""),
   color: text("color"),
   opacityPct: integer("opacity_pct"),
@@ -468,7 +375,6 @@ export const goalLayer = pgTable("goal_layer", {
 }, (t) => [
   primaryKey({ columns: [t.id, t.revision] }),
   index("goal_layer_current_idx").on(t.id, t.revision.desc()),
-  index("goal_layer_backlog_idx").on(t.backlogId, t.isActive, t.validTo),
   index("goal_layer_scope_idx").on(t.scopeId, t.isActive, t.validTo),
 ]);
 
@@ -479,8 +385,7 @@ export const goalLayer = pgTable("goal_layer", {
 export const goalMilestone = pgTable("goal_milestone", {
   id: uuid("id").notNull(),
   revision: integer("revision").notNull(),
-  backlogId: uuid("backlog_id").notNull(),
-  scopeId: uuid("scope_id"),
+  scopeId: uuid("scope_id").notNull(),
   layerId: uuid("layer_id").notNull(),
   target: integer("target").notNull(),
   date: date("date").notNull(),
@@ -491,7 +396,6 @@ export const goalMilestone = pgTable("goal_milestone", {
 }, (t) => [
   primaryKey({ columns: [t.id, t.revision] }),
   index("goal_milestone_current_idx").on(t.id, t.revision.desc()),
-  index("goal_milestone_backlog_idx").on(t.backlogId, t.isActive, t.validTo),
   index("goal_milestone_scope_idx").on(t.scopeId, t.isActive, t.validTo),
   index("goal_milestone_layer_idx").on(t.layerId),
 ]);
@@ -507,7 +411,7 @@ export const goalMilestone = pgTable("goal_milestone", {
 export const reviewScope = pgTable("review_scope", {
   id: uuid("id").notNull(),
   revision: integer("revision").notNull(),
-  projectId: uuid("project_id").notNull().references(() => project.id, { onDelete: "cascade" }),
+  projectId: uuid("project_id").notNull().references(() => field.id, { onDelete: "cascade" }),
   scopeId: uuid("scope_id"),
   name: text("name").notNull(),
   filter: jsonb("filter").$type<MemberFilter>().notNull().default({}),
@@ -532,7 +436,7 @@ export const reviewScope = pgTable("review_scope", {
 export const throughputScope = pgTable("throughput_scope", {
   id: uuid("id").notNull(),
   revision: integer("revision").notNull(),
-  projectId: uuid("project_id").notNull().references(() => project.id, { onDelete: "cascade" }),
+  projectId: uuid("project_id").notNull().references(() => field.id, { onDelete: "cascade" }),
   scopeId: uuid("scope_id"),
   name: text("name").notNull(),
   filter: jsonb("filter").$type<MemberFilter>().notNull().default({}),
@@ -554,7 +458,7 @@ export const throughputScope = pgTable("throughput_scope", {
 export const statsScope = pgTable("stats_scope", {
   id: uuid("id").notNull(),
   revision: integer("revision").notNull(),
-  projectId: uuid("project_id").notNull().references(() => project.id, { onDelete: "cascade" }),
+  projectId: uuid("project_id").notNull().references(() => field.id, { onDelete: "cascade" }),
   scopeId: uuid("scope_id"),
   name: text("name").notNull(),
   filter: jsonb("filter").$type<MemberFilter>().notNull().default({}),
@@ -572,7 +476,7 @@ export const statsScope = pgTable("stats_scope", {
 export const digestScope = pgTable("digest_scope", {
   id: uuid("id").notNull(),
   revision: integer("revision").notNull(),
-  projectId: uuid("project_id").notNull().references(() => project.id, { onDelete: "cascade" }),
+  projectId: uuid("project_id").notNull().references(() => field.id, { onDelete: "cascade" }),
   scopeId: uuid("scope_id"),
   name: text("name").notNull(),
   filter: jsonb("filter").$type<MemberFilter>().notNull().default({}),
