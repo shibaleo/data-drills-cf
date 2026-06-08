@@ -1,142 +1,128 @@
 # Scope / Field 大改造 — 次セッションへの申し送り
 
 > 作成: 2026-06-08
-> 更新: 2026-06-08 (Phase 3c.1-3, 3d 完了)
+> 更新: 2026-06-08 (Phase 4.2 完了)
 > 関連: [`scope-refactor.md`](./scope-refactor.md) (元の設計プラン)
-> 前回の終端 commit: `287adf4`
+> 前回の終端 commit: `ebefda6`
 
 ## 現在の状態
 
-**Phase 1〜3d 完了 + push 済**。dev・本番 (Workers) の両方が無事動作見込み。
-旧 entity (project/backlog/tag/topic) と新 entity (field/scope/review_type) が **並走**
-している状態。
+**Phase 1〜4.2 完了 + push 済**。コード側は **Phase 4 SQL 適用後の状態を前提** に
+整っている (option C: wire 互換は維持、内部実装のみ field/scope 直叩き)。
+SQL 適用前の今の DB でも動く (新 column はすべて backfill 済、旧 column はまだ存在)。
 
 ### DB 状態
-- Phase 1 SQL (`drizzle/manual/004_phase1_field_scope.sql`) は **Neon に適用済**
-- 旧テーブル / カラムは **すべて生存** (Phase 4 で drop 予定)
+- Phase 1 SQL (`drizzle/manual/004_phase1_field_scope.sql`) は **Neon 適用済**
+- Phase 4 SQL (`drizzle/manual/005_phase4_drop_old.sql`) は **未適用**
+- このセッション中、dev 側 milestone 表示復旧のために以下 2 行を Neon に手動適用済:
+  ```sql
+  UPDATE data_drills.goal_layer     SET scope_id = backlog_id WHERE scope_id IS NULL;
+  UPDATE data_drills.goal_milestone SET scope_id = backlog_id WHERE scope_id IS NULL;
+  ```
+  (= 旧 backlog batch handler が scope_id を書かなかった分の救済。005 SQL 内にも同じ
+   UPDATE を組み込み済なので、再実行しても idempotent。)
 
-### コード状態 (Phase 3c.1-3, 3d 完了時点)
-- 新 API routes: `/api/v1/fields`, `/api/v1/scopes` (`:id/detail` 含む), `/api/v1/review-types`
-- `/api/v1/review` が `scope_id` 任意パラメタ対応
-- 各 *_scope ルート (review/throughput/stats/digest) に `scope_id` 列を expose + PUT で更新可
-- 各 `*_scope` ルートの `fetchMembers` で `problem.fieldId` を select + `applyMemberFilter` が
-  `fieldIds` 判定対応
-- 新 client hooks: `use-fields.ts`, `use-scopes.ts` (+ `useScopeDetail`), `use-review-types.ts`
-- UI:
-  - `(pages)/scopes/` … 旧 backlog API を共有 UUID 戦略で使用 (互換性維持)
-  - `(pages)/review/$scopeId`, `throughput/$scopeId`, `stats/$scopeId` … 上部に共通
-    `ScopePickerBar` を配置、`scope_id` を Save 時に書き戻し、`/scopes/$id` に「Edit scope →」リンク
-  - `(pages)/plan/` … `useScopes` + `/api/v1/scopes/:id/detail` fan-out (旧 backlog 依存解消)
-  - `MemberFilterPicker` に Field 行 (fields が 2 件以上の時のみ表示)
-  - header の `FilterPopover` (project switcher) 削除済
-  - masters ページの UI ラベル "Project" → "Field"
-- `useProjects` / `useCreateProject` / 等は内部的に `/api/v1/fields` を叩く透過スワップ
-  (`field.id === project.id` 戦略)
+### コード状態 (Phase 4.2 完了時点)
 
-### 何が残っているか
-- 内部変数 `currentProject` → `currentField` の機械的 rename (28 ファイル、cosmetic、動作に影響なし)
-- 旧 backlog `/api/v1/backlog` を直接叩く箇所がまだある (scopes ページ等)。Phase 4 で全部 scope API に移行
-- `(pages)/digest/$scopeId` の scope picker (= scope_id 編集) — 現状は scope.filter を直読する
-  read-only ページなので、scope_id rewire の意義が低く後回し
-- taxtant (Python, G:\マイドライブ\root\taxtant) — 何も触っていない
+#### schema.ts
+- Drop した table: `project`, `tag`, `topic`, `backlog`, `problemTag`
+- `subject`/`level`/`problem`/`flashcard`: `projectId`/`topicId` column 削除、
+  `fieldId` を NOT NULL + FK 化、uniqueIndex を `(field_id, code, …)` に
+- `goal_layer`/`goal_milestone`: `backlogId` 削除、`scopeId` を NOT NULL に
+- `reviewTag`/`flashcardTag`: column 名 `tag_id` のまま、参照先のみ `reviewType.id` に
+- `filter_pref`/`*_scope`: column 名 `project_id` のまま、参照先のみ `field.id` に
+  (option C: wire 互換維持)
+
+#### routes
+- 削除: `backlog.ts`, `tags.ts`
+- `project-topics.ts`: stub (空配列を返す) に置き換え。`useTopicsList` 等の hook は
+  動き続けるが、レスポンスは常に `[]`
+- `projects.ts`: 中身を `field` table への透過プロキシに rewrite。sub-route mount
+  (`/:id/subjects`, `/:id/levels`, `/:id/topics`) は維持
+- 各 route の `project` join → `field` join、`problem.projectId` → `problem.fieldId`、
+  `problemTag` 関連 endpoint 削除、`topic_id` 書き込み除去
+- `scopes.ts` batch handler: `backlogId` 書き込み除去 (column drop 想定)
+
+#### 削除した files
+- `src/routes/backlog.ts`, `src/routes/tags.ts`
+- `src/hooks/queries/use-backlog.ts`, `use-tags.ts`
+- `src/lib/schemas/backlog.ts`, `schemas/tag.ts`
+- `(pages)/projects/`, `(pages)/tags/` (UI + router/sidebar 登録解除)
+
+#### option C で **触っていない** もの
+- API wire (`project_id` query param、`/api/v1/projects/:id/...` URL) は据え置き
+- 内部変数 `currentProject` / `projectId` 引数名は ~28 ファイルで生存
+- DB 列名 `project_id` (`filter_pref`, `*_scope`) と `tag_id` (`review_tag`, `flashcard_tag`)
+  は据え置き。FK の参照先のみ field/review_type に切り替え
+
+これらは次セッション (option B、後述) で機械的に rename する。
 
 ## 残作業
 
-### Phase 4: 旧 entity 削除 (= 大物、destructive)
+### Phase 4.1: SQL 適用 + 本番デプロイ
 
-**注意**: DB の drop と本番デプロイは同じ作業日にまとめる。事前に DB バックアップを取る。
-
-#### 4.1 DB SQL migration
-
-**完成済**: [`drizzle/manual/005_phase4_drop_old.sql`](../drizzle/manual/005_phase4_drop_old.sql)
+**注意**: 必ず DB バックアップを取ってから実行する。
 
 実行前チェックリスト:
 - [ ] Neon snapshot を取得済
 - [ ] taxtant Python 側の field_id 切替 PR を main に merge 済 (Phase 5.1 完了)
-- [ ] data-drills-cf の Phase 4.2 / 4.3 コード変更を main に push 済 (CF Workers にデプロイ済)
-- [ ] dev で `pnpm dev` → 全ページ動作確認済
+- [ ] dev で `pnpm dev` → 全ページ動作確認済 (Phase 4.2 push 後、未確認)
+- [ ] CF Workers がデプロイ済 (= push 済の `ebefda6` が反映済)
 
 実行:
 ```bash
 psql "$NEON_URL" -f drizzle/manual/005_phase4_drop_old.sql
 ```
 
-ロールバックは `BEGIN; ... COMMIT;` のためトランザクション内で完結。失敗したら
-`ROLLBACK;` で安全に戻る。COMMIT 後の取り消しは snapshot からの restore のみ。
+005 SQL は `BEGIN; ... COMMIT;` で囲まれているため、失敗したら `ROLLBACK;` で安全に戻る。
+COMMIT 後の取り消しは snapshot からの restore のみ。
 
-#### 4.2 コード削除
-
-- `src/routes/`: `backlog.ts`, `projects.ts`, `project-subjects.ts`, `project-levels.ts`,
-  `project-topics.ts`, `tags.ts` を削除
-- `src/hooks/queries/`: `use-backlog.ts`, `use-projects.ts` 等を削除
-- `src/lib/db/schema.ts`: 旧 entity 定義削除 + 残カラム整理
-- `src/lib/schemas/`: 旧 entity 関連 schema 削除
-- `subject` / `level` / `problem` / `flashcard` の `projectId` カラム参照を `fieldId` に置換
-  (現状は `eq(problem.projectId, projectId)` で動作中だが、列が消えたら build エラー)
-
-#### 4.3 旧 backlog 経由箇所の scopes API への移行
-
-進捗状況:
-
-| consumer | 旧 hook | 新 hook | 状態 |
-|---|---|---|---|
-| `/scopes` list | `useBacklogList` | `useScopes` | ✅ `712b756` |
-| `/scopes/new` | `useCreateBacklog` | `useCreateScope` | ✅ `712b756` |
-| `/plan` | `useBacklogList` + backlog/:id | `useScopes` + scopes/:id/detail | ✅ `287adf4` |
-| `/scopes/$id` detail | `useBacklog`, `useBacklogRevisions`, `useBacklogBatchSave`, `useArchiveBacklog` | `useScopeDetail`, `useScopeHistory`, `useScopeBatchSave`, `useDeleteScope` | ✅ |
-| `/digest/$id` | `useBacklogList` + backlog/:id | `useScopes` + scopes/:id/detail | ✅ |
-| sidebar Badge | `useBacklogTodayCount` | `useScopeTodayCount` | ✅ |
-
-Phase 4.3 完了。**Phase 4 SQL 適用前に dev で /scopes/$id, /digest/$id, sidebar badge の動作確認必須**
-(新 endpoint で path を全部叩いているので、SQL drop 前にも壊れていないか触ること)。
-
-新 endpoint:
-- `GET /api/v1/scopes/today-count` (user 全 active scope に対し allocator を走らせて
-  future-today 件数を合算、5 min server cache)
-- `POST /api/v1/scopes/:id/batch` (scope_update + layer / milestone の create/update/delete を 1 tx)
-- `GET /api/v1/scopes/:id/history` (scope + layer + milestone の全 revision を時系列に混ぜて返す)
-- `GET /api/v1/scopes/:id/detail` … layer に opacity_pct/line_style/line_width を含め、
-  member に topic_id を追加 (旧 backlog detail 互換)
-
-注: Phase 4 SQL 適用後 (= `goal_layer.backlog_id` / `goal_milestone.backlog_id` 列が drop された後)、
-`src/routes/scopes.ts` の batch ハンドラ内 INSERT で `backlogId: ...` を書いている箇所を削除する
-(現状は NOT NULL 制約のため両方書きにしてある)。
-
-### Phase 5: 仕上げ + 本番デプロイ
+### Phase 5: taxtant 連動 + 仕上げ
 
 #### 5.1 taxtant 連動 (`G:\マイドライブ\root\taxtant`)
 
-`drills_client.py` を更新:
-```python
-# Project → Field リネーム
-- find_project_by_code  → find_field_by_code
-- list_subjects(project_id) → list_subjects(field_id)
-- list_levels(project_id) → list_levels(field_id)
-- list_problems_with_files(project_id) → list_problems_with_files(field_id)
-# POST body: "project_id" → "field_id"
-# 内部 Project dataclass → Field
-```
+option C なので wire は `project_id` のまま。taxtant 側で **field_id rename は不要**。
+ただし `tag` table が drop されるので、もし taxtant が `/api/v1/tags` を叩いていれば
+`/api/v1/review-types` に振り替えが必要。確認のみ。
 
 #### 5.2 ドキュメント
-
 - `CLAUDE.md`: アーキテクチャ説明を新 entity ベースに書き換え
 - `docs/scope-refactor.md`: 完了マーク
 - memory 更新 (`MEMORY.md` の Backlog 関連エントリを Scope に書き換え)
 
-#### 5.3 本番デプロイ
+### Phase 6 (= option B): 内部 cosmetic rename
 
-1. Phase 4 SQL を Neon に適用 (旧テーブル / カラム drop)
-2. taxtant の変更を main マージ
-3. CF Workers デプロイ (= main push で auto)
-4. 動作確認
+option C で温存した「中身は field、名前は project」のずれを最後に綺麗にする PR。
+**動作に影響しない、機械的 rename のみ**。一気にやって 1 commit。
+
+- 内部変数 `currentProject` → `currentField` (~28 ファイル)
+- 関数引数 `projectId` → `fieldId`
+- API wire のリネーム (server + client 同時):
+  - Query param `project_id` → `field_id`
+  - URL `/api/v1/projects/:id/subjects` → `/api/v1/fields/:id/subjects`
+    (project-subjects/levels/topics を fields.ts の sub-route に再 mount)
+  - Response field `project_id` → `field_id`
+- DB 列名 rename (option B の方が明らか):
+  - `filter_pref.project_id` → `field_id`
+  - `review_scope.project_id` → `field_id` (同 throughput/stats/digest)
+  - `review_tag.tag_id` → `review_type_id` (同 flashcard_tag)
+- 関連 unique index 名 / FK 名も rename
+
+これは別 SQL migration (`006_phase6_rename.sql`) + schema.ts + routes + hooks の同時
+変更になる。pre-deploy: SQL 流して即 push。
 
 ## Gotchas / 注意点
 
 ### scope.id === backlog.id の共有 UUID 戦略
 Phase 1 SQL 第 3 セクションで `INSERT INTO scope SELECT id, revision FROM backlog`
-としているので、backlog ID と scope ID は **完全に同じ**。
-これにより `/scopes/$scopeId` で旧 backlog API を引き続き呼べる。Phase 4 で旧テーブル
-を消す時、この前提に依存している箇所がないか念のため grep 確認。
+としているので、backlog ID と scope ID は **完全に同じ**。コード上「scope_id を受け取る
+URL に旧 backlog UUID を渡す」操作が動く前提になっている。
+
+### scope_id が NULL の goal_layer / goal_milestone 行
+旧 backlog batch handler は `scope_id` を書かなかった。そのため Phase 1 backfill 後〜
+Phase 4.3 swap (commit `5b314e3`) の間に作られた行は `scope_id IS NULL` のまま。
+**Phase 4.2 push 後、新 scope detail endpoint で読むと「milestone が消えた」ように見える**。
+今セッションで手動 UPDATE で復旧済。005 SQL にも同じ UPDATE を仕込み済 (column drop 前)。
 
 ### Auto-generated scope の重複
 review_scope / throughput_scope / stats_scope / digest_scope は各 entity 1 つにつき
@@ -148,16 +134,17 @@ review_scope / throughput_scope / stats_scope / digest_scope は各 entity 1 つ
 fields 2 件以上で picker に表示される。
 
 ### `currentProject` という名前
-内部変数は `currentProject` のままだが、実体は `/api/v1/fields` から来る field row
-(shape 同一)。次の rename PR で `currentField` 等に整理予定。
+内部変数は `currentProject` のままだが、実体は `field` row (shape 同一)。
+option B (Phase 6) で機械的 rename 予定。
 
 ### コミット履歴
-1 phase 1 commit 厳守。次回再開時は `git log --oneline origin/main..HEAD` で
-追跡 (現在は all in main)。Phase 4 の SQL 適用と本番デプロイは **同じ作業日**。
+Phase 4 の SQL 適用と本番デプロイは **同じ作業日** にまとめる。
 
-## このセッション (2026-06-08 後半) で進めた commit
+## 主要 commit (新しい順)
 
 ```
+ebefda6 refactor(phase 4.2): 旧 project/tag/topic/backlog entity を schema/route から削除
+5b314e3 refactor(phase 4.3): backlog API 依存箇所を scope API に移行
 287adf4 refactor phase 3d: Plan が scope の milestones を読む
 cb63370 refactor phase 3c.3: header の project switcher (FilterPopover) を削除
 9a9bd41 refactor phase 3c.2: use-project-data を /api/v1/fields にスワップ
