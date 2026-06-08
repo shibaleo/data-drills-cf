@@ -130,7 +130,18 @@ const apiKeysRoute = lazyRoute("/api-keys", ApiKeysPage);
 const mastersRoute = lazyRoute("/masters", MastersPage);
 const aboutRoute = lazyRoute("/about", AboutPage);
 const scopesRoute = lazyRoute("/scopes", ScopesPage);
-const planRoute = lazyRoute("/plan", PlanPage);
+const planRoute = createRoute({
+  getParentRoute: () => authLayout,
+  path: "/plan",
+  validateSearch: (search: Record<string, unknown>): { scopeId?: string } => ({
+    scopeId: typeof search.scopeId === "string" ? search.scopeId : undefined,
+  }),
+  component: () => (
+    <Suspense>
+      <PlanPage />
+    </Suspense>
+  ),
+});
 const scopesNewRoute = lazyRoute("/scopes/new", ScopesNewPage);
 const scopesDetailRoute = createRoute({
   getParentRoute: () => authLayout,

@@ -1,6 +1,7 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useQueries } from "@tanstack/react-query";
+import { useSearch, useNavigate } from "@tanstack/react-router";
 import { useProject } from "@/hooks/use-project";
 import { useReviewList } from "@/hooks/queries/use-review";
 import { usePageTitle } from "@/lib/page-context";
@@ -102,21 +103,42 @@ export default function PlanPage() {
   const [hiddenStatuses, setHiddenStatuses] = useState<Set<string>>(new Set());
   const [overflowOnly, setOverflowOnly] = useState(false);
   const [overBudgetOnly, setOverBudgetOnly] = useState(false);
-  // Phase 3c: scope を選ぶと review API に scope_id を渡し、scope.status_stabilities で
-  // FSRS パラメタを override する。未選択ならグローバル fallback (= 従来通り)。
-  const [selectedScopeId, setSelectedScopeId] = useState<string | null>(null);
+  // Phase: scope を URL search param (?scopeId=) で持つ。
+  // 未指定なら全 scope を集約 (legacy 俯瞰)。指定があればその scope だけのビュー。
+  const search = useSearch({ from: "/plan" as never }) as { scopeId?: string };
+  const navigate = useNavigate();
+  const selectedScopeId = search.scopeId ?? null;
+  const setSelectedScopeId = (id: string | null) => {
+    navigate({ to: "/plan" as string, search: id ? { scopeId: id } : {} });
+  };
   const { data: scopes = [] } = useScopes();
   const selectedScope = useMemo(
     () => scopes.find((s) => s.id === selectedScopeId) ?? null,
     [scopes, selectedScopeId],
   );
+  // sidebar 経由で /plan に来た時、前回選択 scope を localStorage から復元
+  useEffect(() => {
+    if (selectedScopeId || scopes.length === 0) return;
+    const saved = typeof window !== "undefined" ? localStorage.getItem("dd_last_scope_id") : null;
+    if (saved && scopes.some((s) => s.id === saved)) {
+      navigate({ to: "/plan" as string, search: { scopeId: saved }, replace: true });
+    }
+  }, [selectedScopeId, scopes, navigate]);
+  useEffect(() => {
+    if (selectedScopeId && typeof window !== "undefined") {
+      localStorage.setItem("dd_last_scope_id", selectedScopeId);
+    }
+  }, [selectedScopeId]);
 
   const reviewQuery = useReviewList(projectId, null, selectedScopeId);
 
-  // Fan-out scope details (= 全 scope の members + milestones を新 endpoint で取得)。
-  // 旧 backlog/:id ベースの fan-out から /api/v1/scopes/:id/detail に置換 (Phase 3d)。
+  // selectedScopeId 指定中はその scope だけ fetch (= per-scope view)。
+  // 未指定は全 scope を fan-out (legacy 俯瞰モード)。
+  const detailScopes = selectedScopeId
+    ? scopes.filter((s) => s.id === selectedScopeId)
+    : scopes;
   const detailQueries = useQueries({
-    queries: scopes.map((s) => ({
+    queries: detailScopes.map((s) => ({
       queryKey: scopesKeys.fullDetail(s.id),
       queryFn: async () => {
         const json = await unwrap(
@@ -364,7 +386,7 @@ export default function PlanPage() {
               value={selectedScopeId ?? ""}
               onChange={(e) => setSelectedScopeId(e.target.value || null)}
             >
-              <option value="">— global (no override)</option>
+              <option value="">— All scopes (aggregate)</option>
               {scopes.map((s) => (
                 <option key={s.id} value={s.id}>{s.name}</option>
               ))}
