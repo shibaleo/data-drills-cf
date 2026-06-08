@@ -9,8 +9,22 @@ export const scopesKeys = {
   all: ["scopes"] as const,
   list: () => [...scopesKeys.all, "list"] as const,
   detail: (id: string) => [...scopesKeys.all, "detail", id] as const,
+  fullDetail: (id: string) => [...scopesKeys.all, "full-detail", id] as const,
   revisions: (id: string) => [...scopesKeys.all, "revisions", id] as const,
 };
+
+export type ScopeDetail = RpcData<typeof rpc.api.v1.scopes[":id"]["detail"]["$get"]>["data"];
+
+export function useScopeDetail(id: string | undefined) {
+  return useQuery({
+    queryKey: id ? scopesKeys.fullDetail(id) : scopesKeys.all,
+    queryFn: async () => {
+      const json = await unwrap(rpc.api.v1.scopes[":id"].detail.$get({ param: { id: id! } }));
+      return json.data;
+    },
+    enabled: !!id,
+  });
+}
 
 export function useScopes() {
   return useQuery({

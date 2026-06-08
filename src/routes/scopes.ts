@@ -13,10 +13,11 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { db } from "@/lib/db";
-import { scope } from "@/lib/db/schema";
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { scope, problem, field, goalLayer, goalMilestone } from "@/lib/db/schema";
+import { and, asc, desc, eq, isNull, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { scopeCreateInputSchema, scopeUpdateInputSchema } from "@/lib/schemas/scope";
+import { applyMemberFilter } from "@/lib/member-filter";
 import type { AuthResult } from "@/lib/auth";
 
 type Env = { Variables: { authResult: AuthResult } };
@@ -67,6 +68,76 @@ const app = new Hono<Env>()
     const row = await fetchCurrent(c.req.param("id"), userId);
     if (!row) return c.json({ error: "Not found" }, 404);
     return c.json({ data: scopeToApi(row) });
+  })
+  // Detail: scope の members + goal_layers + goal_milestones (Plan 用)
+  // backlog/:id の scope 版。Phase 4 で旧 backlog 削除後、Plan はこれを使う。
+  .get("/:id/detail", async (c) => {
+    const userId = c.get("authResult").userId;
+    const scopeId = c.req.param("id");
+    const current = await fetchCurrent(scopeId, userId);
+    if (!current) return c.json({ error: "Not found" }, 404);
+
+    // members: user の所有する field 配下の problem を filter で絞り込む
+    const rows = await db.select({
+      id: problem.id,
+      code: problem.code,
+      name: problem.name,
+      standardTime: problem.standardTime,
+      fieldId: problem.fieldId,
+      subjectId: problem.subjectId,
+      levelId: problem.levelId,
+    }).from(problem)
+      .innerJoin(field, eq(field.id, problem.fieldId))
+      .where(eq(field.userId, userId))
+      .orderBy(asc(problem.code), asc(problem.id));
+    const members = applyMemberFilter(rows, current.filter);
+
+    // first_answer_date を集計
+    const firstAnswers = members.length === 0
+      ? new Map<string, string>()
+      : new Map(
+          (await db.execute<{ problem_id: string; min_date: string }>(sql`
+            SELECT problem_id, MIN((date AT TIME ZONE 'Asia/Tokyo')::date)::text AS min_date
+            FROM data_drills.answer WHERE problem_id IN ${members.map((m) => m.id)}
+            GROUP BY problem_id
+          `)).map((r) => [r.problem_id, r.min_date.slice(0, 10)]),
+        );
+
+    // goal_layer / goal_milestone は scope_id 経由
+    const layers = await db.select().from(goalLayer)
+      .where(and(eq(goalLayer.scopeId, scopeId), isNull(goalLayer.validTo), eq(goalLayer.isActive, true)))
+      .orderBy(asc(goalLayer.sortOrder));
+    const milestones = await db.select().from(goalMilestone)
+      .where(and(eq(goalMilestone.scopeId, scopeId), isNull(goalMilestone.validTo), eq(goalMilestone.isActive, true)));
+
+    return c.json({
+      data: {
+        scope: scopeToApi(current),
+        members: members.map((m) => ({
+          id: m.id,
+          code: m.code,
+          name: m.name,
+          standard_time: m.standardTime,
+          subject_id: m.subjectId,
+          level_id: m.levelId,
+          first_answer_date: firstAnswers.get(m.id) ?? null,
+        })),
+        layers: layers.map((l) => ({
+          id: l.id,
+          revision: l.revision,
+          name: l.name,
+          color: l.color,
+          sort_order: l.sortOrder,
+        })),
+        milestones: milestones.map((m) => ({
+          id: m.id,
+          revision: m.revision,
+          layer_id: m.layerId,
+          target: m.target,
+          date: typeof m.date === "string" ? m.date : (m.date as Date).toISOString().slice(0, 10),
+        })),
+      },
+    });
   })
   // Revisions: 履歴 (bitemporal viewing)
   .get("/:id/revisions", async (c) => {

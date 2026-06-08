@@ -2,7 +2,6 @@
 import { useMemo, useState } from "react";
 import { useQueries } from "@tanstack/react-query";
 import { useProject } from "@/hooks/use-project";
-import { useBacklogList, backlogKeys } from "@/hooks/queries/use-backlog";
 import { useReviewList } from "@/hooks/queries/use-review";
 import { usePageTitle } from "@/lib/page-context";
 import { rpc, unwrap } from "@/lib/rpc-client";
@@ -10,7 +9,7 @@ import { allocate, type MemberInput, type Milestone } from "@/lib/backlog-alloca
 import { blockColor, blockBorder, COLOR_PLANNED, COLOR_FIRST_ATTEMPT } from "@/lib/block-color";
 import { todayJST } from "@/lib/date-utils";
 import { computeNextReview } from "@/lib/review-scoring";
-import { useScopes } from "@/hooks/queries/use-scopes";
+import { useScopes, scopesKeys } from "@/hooks/queries/use-scopes";
 import { formatRelDay } from "@/lib/relative-day";
 import { ChartShell, DEFAULT_TOP_AXIS_H, DEFAULT_BOTTOM_AXIS_H } from "@/components/chart-shell";
 import { CELL, STEP, MIN_ROWS } from "@/lib/chart-constants";
@@ -112,16 +111,16 @@ export default function PlanPage() {
     [scopes, selectedScopeId],
   );
 
-  const { data: backlogs = [] } = useBacklogList(projectId);
   const reviewQuery = useReviewList(projectId, null, selectedScopeId);
 
-  // Fan-out backlog details.
+  // Fan-out scope details (= 全 scope の members + milestones を新 endpoint で取得)。
+  // 旧 backlog/:id ベースの fan-out から /api/v1/scopes/:id/detail に置換 (Phase 3d)。
   const detailQueries = useQueries({
-    queries: backlogs.map((b) => ({
-      queryKey: [...backlogKeys.detail(b.id), { asOf: null }],
+    queries: scopes.map((s) => ({
+      queryKey: scopesKeys.fullDetail(s.id),
       queryFn: async () => {
         const json = await unwrap(
-          rpc.api.v1.backlog[":id"].$get({ param: { id: b.id }, query: {} }),
+          rpc.api.v1.scopes[":id"].detail.$get({ param: { id: s.id } }),
         );
         return json.data;
       },
@@ -166,10 +165,10 @@ export default function PlanPage() {
       const alloc = allocate(
         members,
         milestones,
-        d.backlog.daily_minutes,
+        d.scope.daily_minutes,
         today,
-        d.backlog.time_multiplier_pct,
-        d.backlog.weekday_weights,
+        d.scope.time_multiplier_pct,
+        d.scope.weekday_weights,
       );
       for (const a of alloc) {
         const kind = a.side === "future"
