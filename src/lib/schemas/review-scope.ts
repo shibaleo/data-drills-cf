@@ -13,5 +13,6 @@ export type ReviewScopeCreateInput = z.infer<typeof reviewScopeCreateInputSchema
 export const reviewScopeUpdateInputSchema = z.object({
   name: z.string().min(1).optional(),
   filter: memberFilterSchema.optional(),
+  scope_id: z.string().uuid().nullable().optional(),
 });
 export type ReviewScopeUpdateInput = z.infer<typeof reviewScopeUpdateInputSchema>;
