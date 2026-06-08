@@ -15,6 +15,16 @@ import {
 } from "@codemirror/view";
 import { RangeSetBuilder } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
+import katex from "katex";
+
+function renderMath(source: string, displayMode: boolean): string {
+  try {
+    return katex.renderToString(source, { displayMode, throwOnError: false, strict: "ignore" });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return `<span class="cm-math-error" title="${msg.replace(/"/g, "&quot;")}">⚠ math</span>`;
+  }
+}
 
 /* ── Dark theme overrides ── */
 
@@ -49,6 +59,22 @@ export const darkThemeOverrides = EditorView.theme({
     display: "block",
     borderTop: "1px solid #a1a1aa44",
     margin: "0.5em 0",
+  },
+  /* dollar math widgets */
+  ".cm-dollar-math-inline": {
+    /* inline で baseline 揃え。前後に半角スペース 1/2 分の余白を入れる */
+    display: "inline",
+    margin: "0 0.25em",
+  },
+  ".cm-dollar-math-block": {
+    display: "block",
+    textAlign: "center",
+    margin: "0.5em 0",
+  },
+  ".cm-math-error": {
+    color: "#ef4444",
+    fontFamily: "monospace",
+    fontSize: "0.85em",
   },
 });
 
@@ -222,6 +248,103 @@ export const horizontalRulePlugin = ViewPlugin.fromClass(
           builder.add(node.from, node.to, hrReplace);
         },
       });
+      return builder.finish();
+    }
+  },
+  { decorations: (v) => v.decorations },
+);
+
+/* ── Dollar math plugin: $...$ / $$...$$ ──
+ *
+ * `dollarMathExtension` (Lezer MarkdownConfig) が構文木に `InlineMath` /
+ * `BlockMath` ノードを生やしてくれる前提で、それらを KaTeX 描画する。
+ *
+ *  - カーソルが触れている行は raw を表示 (= 編集可能)
+ *  - エスケープ / コードブロック内 / 境界条件は parser 側で済んでいる
+ */
+
+class InlineMathWidget extends WidgetType {
+  constructor(readonly source: string) {
+    super();
+  }
+  toDOM() {
+    const span = document.createElement("span");
+    span.className = "cm-dollar-math-inline";
+    span.innerHTML = renderMath(this.source, false);
+    return span;
+  }
+  eq(other: InlineMathWidget) {
+    return other.source === this.source;
+  }
+}
+
+class BlockMathWidget extends WidgetType {
+  constructor(readonly source: string) {
+    super();
+  }
+  toDOM() {
+    const div = document.createElement("div");
+    div.className = "cm-dollar-math-block";
+    div.innerHTML = renderMath(this.source, true);
+    return div;
+  }
+  eq(other: BlockMathWidget) {
+    return other.source === this.source;
+  }
+}
+
+export const dollarMathPlugin = ViewPlugin.fromClass(
+  class {
+    decorations: DecorationSet;
+    constructor(view: EditorView) {
+      this.decorations = this.build(view);
+    }
+    update(update: ViewUpdate) {
+      if (update.docChanged || update.viewportChanged || update.selectionSet) {
+        this.decorations = this.build(update.view);
+      }
+    }
+    build(view: EditorView): DecorationSet {
+      const state = view.state;
+      // math 範囲そのものに選択 range が触れていれば raw を表示。
+      // カーソルが同じ "行" 内でも、math の外なら描画する (Obsidian よりゆるい挙動)。
+      const isTouched = (from: number, to: number): boolean => {
+        for (const range of state.selection.ranges) {
+          if (range.to >= from && range.from <= to) return true;
+        }
+        return false;
+      };
+
+      const decos: { from: number; to: number; deco: Decoration }[] = [];
+      syntaxTree(state).iterate({
+        enter(node) {
+          if (node.name !== "InlineMath" && node.name !== "BlockMath") return;
+          if (isTouched(node.from, node.to)) return;
+          const raw = state.doc.sliceString(node.from, node.to);
+          if (node.name === "InlineMath") {
+            // $...$ → 中身は最初と最後の $ を除いた部分
+            const source = raw.slice(1, -1);
+            if (!source.trim()) return;
+            decos.push({
+              from: node.from,
+              to: node.to,
+              deco: Decoration.replace({ widget: new InlineMathWidget(source) }),
+            });
+          } else {
+            // BlockMath: $$ ... $$ (改行跨ぎ可)。$$ 2 つを剥がす
+            const inner = raw.replace(/^\$\$/, "").replace(/\$\$$/, "").trim();
+            if (!inner) return;
+            decos.push({
+              from: node.from,
+              to: node.to,
+              deco: Decoration.replace({ widget: new BlockMathWidget(inner), block: true }),
+            });
+          }
+        },
+      });
+      decos.sort((a, b) => a.from - b.from);
+      const builder = new RangeSetBuilder<Decoration>();
+      for (const d of decos) builder.add(d.from, d.to, d.deco);
       return builder.finish();
     }
   },

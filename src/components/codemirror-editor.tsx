@@ -2,6 +2,7 @@
 
 import CodeMirror from "@uiw/react-codemirror";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
+import { dollarMathExtension } from "@/lib/dollar-math-markdown";
 import { EditorView, keymap } from "@codemirror/view";
 import {
   defaultKeymap,
@@ -30,6 +31,7 @@ import {
   horizontalRulePlugin,
   syntaxTreeKicker,
   tableMarkdownPlugin,
+  dollarMathPlugin,
 } from "@/lib/codemirror-extensions";
 
 interface Props {
@@ -51,7 +53,7 @@ export default function CodemirrorEditor({ defaultValue, onChange, placeholder, 
 
   const extensions = useMemo(
     () => [
-      markdown({ base: markdownLanguage }),
+      markdown({ base: markdownLanguage, extensions: [dollarMathExtension] }),
       collapseOnSelectionFacet.of(true),
       history(),
       indentUnit.of("    "),
@@ -75,6 +77,7 @@ export default function CodemirrorEditor({ defaultValue, onChange, placeholder, 
       bulletPlugin,
       horizontalRulePlugin,
       tableMarkdownPlugin,
+      dollarMathPlugin,
       darkThemeOverrides,
 
       // Content min height
