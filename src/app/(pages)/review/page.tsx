@@ -21,7 +21,7 @@ const LAST_SCOPE_LS_KEY = "dd_last_scope_id";
 export default function ReviewEntryPage() {
   usePageTitle("Review");
   const { currentProject } = useProject();
-  const search = useSearch({ from: "/review" as never }) as { scope_id?: string };
+  const search = useSearch({ strict: false }) as { scope_id?: string };
   const navigate = useNavigate();
   const { data: reviewScopes = [], isLoading } = useReviewScopesList(currentProject?.id);
 

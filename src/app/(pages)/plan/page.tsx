@@ -105,7 +105,7 @@ export default function PlanPage() {
   const [overBudgetOnly, setOverBudgetOnly] = useState(false);
   // Phase: scope を URL search param (?scope_id=) で持つ。
   // 未指定なら全 scope を集約 (legacy 俯瞰)。指定があればその scope だけのビュー。
-  const search = useSearch({ from: "/plan" as never }) as { scope_id?: string };
+  const search = useSearch({ strict: false }) as { scope_id?: string };
   const navigate = useNavigate();
   const selectedScopeId = search.scope_id ?? null;
   const setSelectedScopeId = (id: string | null) => {
