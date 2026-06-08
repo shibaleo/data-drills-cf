@@ -41,8 +41,8 @@ import { usePageTitle, useHeaderSlot, usePageBack } from "@/lib/page-context";
 import { rpc } from "@/lib/rpc-client";
 import { toast } from "sonner";
 
-export default function BacklogDetailPage() {
-  const { backlogId } = useParams({ strict: false }) as { backlogId: string };
+export default function ScopeDetailPage() {
+  const { scopeId } = useParams({ strict: false }) as { scopeId: string };
   const { currentProject, subjects, levels } = useProject();
   const subjectMap = useMemo(() => new Map(subjects.map((s) => [s.id, s])), [subjects]);
   const levelMap = useMemo(() => new Map(levels.map((l) => [l.id, l])), [levels]);
@@ -51,10 +51,10 @@ export default function BacklogDetailPage() {
   const readOnly = asOf != null;
   // 注: asOf はチャート側の client-side フィルタ専用にし、エンティティ取得は常に最新を引く。
   // (asOf がエンティティ作成より古い場合に server 側の bitemporal WHERE で 404 になる問題回避)
-  const { data, isLoading } = useBacklog(backlogId);
-  const revisionsQuery = useBacklogRevisions(backlogId);
+  const { data, isLoading } = useBacklog(scopeId);
+  const revisionsQuery = useBacklogRevisions(scopeId);
   const archive = useArchiveBacklog(currentProject?.id);
-  const batchSave = useBacklogBatchSave(backlogId, currentProject?.id);
+  const batchSave = useBacklogBatchSave(scopeId, currentProject?.id);
 
   // 編集はすべてローカル state、「確定」で diff を計算して mutations を発火する。
   const [dailyMinutes, setDailyMinutes] = useState<number>(60);
@@ -138,10 +138,10 @@ export default function BacklogDetailPage() {
   const chartRef = useRef<BacklogChartHandle>(null);
   const handleDataChanged = useCallback(() => {
     if (currentProject) {
-      qc.invalidateQueries({ queryKey: backlogKeys.detail(backlogId) });
+      qc.invalidateQueries({ queryKey: backlogKeys.detail(scopeId) });
       qc.invalidateQueries({ queryKey: problemsKeys.list(currentProject.id) });
     }
-  }, [qc, currentProject, backlogId]);
+  }, [qc, currentProject, scopeId]);
   const { openDetail, renderDialogs } = useProblemDialogs({ allProblems, onDataChanged: handleDataChanged });
   const handleSelect = useCallback((problemId: string) => {
     setSelectedId((prev) => (prev === problemId ? null : problemId));
@@ -219,9 +219,9 @@ export default function BacklogDetailPage() {
     return allocate(members, localMilestones, dailyMinutes, today, Math.round(timeMultiplier * 100), weekdayWeights);
   }, [data, effectiveMembers, localMilestones, dailyMinutes, timeMultiplier, weekdayWeights, today]);
 
-  usePageTitle("Backlog");
+  usePageTitle("Scope");
   const renderHeaderSlot = useHeaderSlot();
-  usePageBack(useCallback(() => navigate({ to: "/backlog" as string }), [navigate]));
+  usePageBack(useCallback(() => navigate({ to: "/scopes" as string }), [navigate]));
 
   const handleExport = useCallback(async () => {
     if (exportSelected.size === 0) return;
@@ -393,7 +393,7 @@ export default function BacklogDetailPage() {
       const l = localLayers[i];
       if (isTmp(l.id)) {
         payload.layer_creates!.push({
-          temp_id: l.id, backlog_id: backlogId, name: l.name,
+          temp_id: l.id, backlog_id: scopeId, name: l.name,
           color: l.color ?? undefined,
           opacity_pct: l.opacity_pct ?? undefined,
           line_style: l.line_style ?? undefined,
@@ -422,7 +422,7 @@ export default function BacklogDetailPage() {
     for (const m of localMilestones) {
       if (isTmp(m.id)) {
         payload.milestone_creates!.push({
-          temp_id: m.id, backlog_id: backlogId,
+          temp_id: m.id, backlog_id: scopeId,
           layer_id: m.layer_id,  // tmp なら server が id_map で解決
           target: m.target, date: m.date,
         });
@@ -444,8 +444,8 @@ export default function BacklogDetailPage() {
   }
   async function onArchive() {
     if (!confirm("Archive this backlog? (History will be preserved)")) return;
-    await archive.mutateAsync(backlogId);
-    navigate({ to: "/backlog" as string });
+    await archive.mutateAsync(scopeId);
+    navigate({ to: "/scopes" as string });
   }
 
   function centerDate(): string {

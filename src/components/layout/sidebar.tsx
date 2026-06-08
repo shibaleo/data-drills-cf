@@ -88,7 +88,7 @@ function BacklogBadge() {
 
 const navItems: NavItem[] = [
   { href: "/review", label: "Review", icon: Repeat, Badge: OverdueBadge },
-  { href: "/backlog", label: "Backlog", icon: Inbox, Badge: BacklogBadge },
+  { href: "/scopes", label: "Scopes", icon: Inbox, Badge: BacklogBadge },
   { href: "/throughput", label: "Throughput", icon: History },
   { href: "/plan", label: "Plan", icon: CalendarRange },
   { href: "/stats", label: "Stats", icon: BarChart2 },

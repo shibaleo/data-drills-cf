@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import type { MemberFilterInput } from "@/lib/schemas/member-filter";
 
-export default function BacklogNewPage() {
+export default function ScopeNewPage() {
   const { currentProject } = useProject();
   const navigate = useNavigate();
   const create = useCreateBacklog(currentProject?.id);
@@ -32,7 +32,7 @@ export default function BacklogNewPage() {
       weekday_weights: [1, 1, 1, 1, 1, 1, 1],
       filter,
     });
-    navigate({ to: "/backlog/$backlogId" as string, params: { backlogId: res.data.id } });
+    navigate({ to: "/scopes/$scopeId" as string, params: { scopeId: res.data.id } });
   }
 
   return (
@@ -68,7 +68,7 @@ export default function BacklogNewPage() {
         <Button type="submit" disabled={create.isPending || !name.trim()}>
           {create.isPending ? "Creating..." : "Create"}
         </Button>
-        <Button type="button" variant="outline" onClick={() => navigate({ to: "/backlog" as string })}>Cancel</Button>
+        <Button type="button" variant="outline" onClick={() => navigate({ to: "/scopes" as string })}>Cancel</Button>
       </div>
     </form>
   );

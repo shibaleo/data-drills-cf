@@ -31,9 +31,10 @@ const UsersPage = lazy(() => import("./app/(pages)/users/page"));
 const ApiKeysPage = lazy(() => import("./app/(pages)/api-keys/page"));
 const MastersPage = lazy(() => import("./app/(pages)/masters/page"));
 const AboutPage = lazy(() => import("./app/(pages)/about/page"));
-const BacklogPage = lazy(() => import("./app/(pages)/backlog/page"));
-const BacklogNewPage = lazy(() => import("./app/(pages)/backlog/new/page"));
-const BacklogDetailPage = lazy(() => import("./app/(pages)/backlog/$backlogId/page"));
+// Phase 3b: backlog → scopes リネーム (UI のみ。API は当面 backlog routes を共有 = scope.id === backlog.id)
+const ScopesPage = lazy(() => import("./app/(pages)/scopes/page"));
+const ScopesNewPage = lazy(() => import("./app/(pages)/scopes/new/page"));
+const ScopesDetailPage = lazy(() => import("./app/(pages)/scopes/$scopeId/page"));
 const PlanPage = lazy(() => import("./app/(pages)/plan/page"));
 const ReviewNewPage = lazy(() => import("./app/(pages)/review/new/page"));
 const ReviewDetailPage = lazy(() => import("./app/(pages)/review/$scopeId/page"));
@@ -128,15 +129,15 @@ const usersRoute = lazyRoute("/users", UsersPage);
 const apiKeysRoute = lazyRoute("/api-keys", ApiKeysPage);
 const mastersRoute = lazyRoute("/masters", MastersPage);
 const aboutRoute = lazyRoute("/about", AboutPage);
-const backlogRoute = lazyRoute("/backlog", BacklogPage);
+const scopesRoute = lazyRoute("/scopes", ScopesPage);
 const planRoute = lazyRoute("/plan", PlanPage);
-const backlogNewRoute = lazyRoute("/backlog/new", BacklogNewPage);
-const backlogDetailRoute = createRoute({
+const scopesNewRoute = lazyRoute("/scopes/new", ScopesNewPage);
+const scopesDetailRoute = createRoute({
   getParentRoute: () => authLayout,
-  path: "/backlog/$backlogId",
+  path: "/scopes/$scopeId",
   component: () => (
     <Suspense>
-      <BacklogDetailPage />
+      <ScopesDetailPage />
     </Suspense>
   ),
 });
@@ -172,9 +173,9 @@ const routeTree = rootRoute.addChildren([
     apiKeysRoute,
     mastersRoute,
     aboutRoute,
-    backlogRoute,
-    backlogNewRoute,
-    backlogDetailRoute,
+    scopesRoute,
+    scopesNewRoute,
+    scopesDetailRoute,
     planRoute,
     throughputRoute,
     throughputNewRoute,

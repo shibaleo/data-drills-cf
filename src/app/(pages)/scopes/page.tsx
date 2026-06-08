@@ -7,8 +7,8 @@ import { useProblemsList } from "@/hooks/queries/use-problems";
 import { usePageTitle } from "@/lib/page-context";
 import { Plus } from "lucide-react";
 
-export default function BacklogPage() {
-  usePageTitle("Backlog");
+export default function ScopesPage() {
+  usePageTitle("Scopes");
   const { currentProject } = useProject();
   const navigate = useNavigate();
   const { data: backlogs = [], isLoading } = useBacklogList(currentProject?.id);
@@ -45,7 +45,7 @@ export default function BacklogPage() {
           const prog = progressByBacklog.get(b.id) ?? { done: 0, total: 0 };
           const pct = prog.total > 0 ? Math.round((prog.done * 100) / prog.total) : 0;
           return (
-            <Link key={b.id} to="/backlog/$backlogId" params={{ backlogId: b.id }}
+            <Link key={b.id} to="/scopes/$scopeId" params={{ scopeId: b.id }}
               className="block border rounded p-4 hover:bg-accent transition space-y-2">
               <div className="font-semibold">{b.name}</div>
               <div className="flex items-center gap-2">
@@ -63,7 +63,7 @@ export default function BacklogPage() {
           );
         })}
         <button type="button"
-          onClick={() => navigate({ to: "/backlog/new" as string })}
+          onClick={() => navigate({ to: "/scopes/new" as string })}
           className="flex items-center justify-center gap-2 rounded border border-dashed border-muted-foreground/40 p-4 text-muted-foreground hover:text-foreground hover:border-foreground/60 hover:bg-accent/30 transition min-h-[5.5rem]">
           <Plus className="size-4"/>
           <span className="text-sm font-medium">New</span>
