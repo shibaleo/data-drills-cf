@@ -32,6 +32,7 @@ import {
   syntaxTreeKicker,
   tableMarkdownPlugin,
   dollarMathPlugin,
+  tableDelimiterTrimmer,
 } from "@/lib/codemirror-extensions";
 
 interface Props {
@@ -78,6 +79,7 @@ export default function CodemirrorEditor({ defaultValue, onChange, placeholder, 
       horizontalRulePlugin,
       tableMarkdownPlugin,
       dollarMathPlugin,
+      tableDelimiterTrimmer,
       darkThemeOverrides,
 
       // Content min height

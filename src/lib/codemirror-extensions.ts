@@ -13,18 +13,70 @@ import {
   type ViewUpdate,
   type DecorationSet,
 } from "@codemirror/view";
-import { RangeSetBuilder } from "@codemirror/state";
+import { EditorState, RangeSetBuilder, Transaction } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
 import katex from "katex";
 
+// KaTeX レンダリング結果をモジュールスコープでキャッシュ。
+// (source, displayMode) → HTML 文字列。同じ式が複数出現してもレンダリングは 1 回。
+const mathRenderCache = new Map<string, string>();
+const MATH_CACHE_MAX = 500;
+
 function renderMath(source: string, displayMode: boolean): string {
+  const key = `${displayMode ? "B" : "I"}:${source}`;
+  const hit = mathRenderCache.get(key);
+  if (hit !== undefined) return hit;
+  let html: string;
   try {
-    return katex.renderToString(source, { displayMode, throwOnError: false, strict: "ignore" });
+    html = katex.renderToString(source, { displayMode, throwOnError: false, strict: "ignore" });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    return `<span class="cm-math-error" title="${msg.replace(/"/g, "&quot;")}">⚠ math</span>`;
+    html = `<span class="cm-math-error" title="${msg.replace(/"/g, "&quot;")}">⚠ math</span>`;
   }
+  // LRU 簡易版: 上限を超えたら最古エントリを 1 つ削除
+  if (mathRenderCache.size >= MATH_CACHE_MAX) {
+    const first = mathRenderCache.keys().next().value;
+    if (first !== undefined) mathRenderCache.delete(first);
+  }
+  mathRenderCache.set(key, html);
+  return html;
 }
+
+/* ── Table delimiter trimmer ──
+ *
+ * Lezer の GFM Table デリミタ regex は末尾スペースを許容しない。
+ * `| --- | --- |` の末尾にユーザがスペースを足すとテーブル認識が外れる。
+ * トランザクション単位で「テーブルデリミタ行末の trailing space」を自動除去する。
+ * (= 行全体が pipe/dash/colon/space のみのとき末尾空白を削る)
+ */
+const TABLE_DELIM_RE = /^[\s|:\-]+$/;
+
+export const tableDelimiterTrimmer = EditorState.transactionFilter.of(
+  (tr: Transaction) => {
+    if (!tr.docChanged) return tr;
+    const newDoc = tr.newDoc;
+    const trimChanges: { from: number; to: number; insert: string }[] = [];
+    // 影響範囲だけ走査 (= 変更があった範囲の前後行)
+    tr.changes.iterChangedRanges((_fromA, _toA, fromB, toB) => {
+      const startLine = newDoc.lineAt(fromB).number;
+      const endLine = newDoc.lineAt(toB).number;
+      for (let n = startLine; n <= endLine; n++) {
+        const line = newDoc.line(n);
+        if (!TABLE_DELIM_RE.test(line.text)) continue;
+        const trimmed = line.text.replace(/ +$/, "");
+        if (trimmed !== line.text) {
+          trimChanges.push({
+            from: line.from + trimmed.length,
+            to: line.to,
+            insert: "",
+          });
+        }
+      }
+    });
+    if (trimChanges.length === 0) return tr;
+    return [tr, { changes: trimChanges, sequential: true }];
+  },
+);
 
 /* ── Dark theme overrides ── */
 
@@ -62,9 +114,9 @@ export const darkThemeOverrides = EditorView.theme({
   },
   /* dollar math widgets */
   ".cm-dollar-math-inline": {
-    /* inline で baseline 揃え。前後に半角スペース 1/2 分の余白を入れる */
+    /* inline で baseline 揃え。前後に微小な余白を入れる */
     display: "inline",
-    margin: "0 0.25em",
+    margin: "0 0.1em",
   },
   ".cm-dollar-math-block": {
     display: "block",
@@ -109,8 +161,48 @@ export const syntaxTreeKicker = ViewPlugin.fromClass(
  *
  * tableField はセル内容を textContent で設定するため、
  * **太字** や *斜体* がそのまま表示される。
- * DOM 更新後にセルを走査してインラインマークダウンを HTML に変換する。
+ * DOM 更新後にセルを走査して、**安全な DOM 構築** でインライン整形する。
+ * (regex + innerHTML は XSS 経路になるため使わない)
  */
+
+type InlineToken =
+  | { type: "text"; value: string }
+  | { type: "strong"; value: string }
+  | { type: "em"; value: string }
+  | { type: "code"; value: string };
+
+/** `**bold** *em* \`code\`` をトークン列に分解 (DOM 構築用、HTML 文字列は作らない) */
+function parseInlineMarkdown(text: string): InlineToken[] {
+  const tokens: InlineToken[] = [];
+  // 順序重要: 強調 (**) を先に取って * との衝突を避ける
+  const re = /\*\*(.+?)\*\*|(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)|`(.+?)`/g;
+  let last = 0;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > last) tokens.push({ type: "text", value: text.slice(last, m.index) });
+    if (m[1] !== undefined) tokens.push({ type: "strong", value: m[1] });
+    else if (m[2] !== undefined) tokens.push({ type: "em", value: m[2] });
+    else if (m[3] !== undefined) tokens.push({ type: "code", value: m[3] });
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) tokens.push({ type: "text", value: text.slice(last) });
+  return tokens;
+}
+
+function renderInlineTokens(cell: Element, tokens: InlineToken[]): void {
+  cell.textContent = ""; // clear safely
+  for (const t of tokens) {
+    if (t.type === "text") {
+      cell.appendChild(document.createTextNode(t.value));
+    } else {
+      const tag = t.type === "strong" ? "strong" : t.type === "em" ? "em" : "code";
+      const el = document.createElement(tag);
+      el.textContent = t.value; // textContent = XSS safe
+      cell.appendChild(el);
+    }
+  }
+}
+
 export const tableMarkdownPlugin = ViewPlugin.fromClass(
   class {
     constructor(view: EditorView) {
@@ -126,13 +218,13 @@ export const tableMarkdownPlugin = ViewPlugin.fromClass(
         )) {
           if (cell.getAttribute("data-md") === "1") continue;
           const text = cell.textContent || "";
-          const html = text
-            .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
-            .replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, "<em>$1</em>")
-            .replace(/`(.+?)`/g, "<code>$1</code>");
-          if (html !== text) {
-            cell.innerHTML = html;
+          const tokens = parseInlineMarkdown(text);
+          // テキストのみで整形不要ならスキップ (= DOM 触らない)
+          if (tokens.length === 1 && tokens[0].type === "text") {
+            cell.setAttribute("data-md", "1");
+            continue;
           }
+          renderInlineTokens(cell, tokens);
           cell.setAttribute("data-md", "1");
         }
       });
@@ -169,28 +261,27 @@ export const bulletPlugin = ViewPlugin.fromClass(
       this.decorations = this.build(view);
     }
     update(update: ViewUpdate) {
-      if (
-        update.docChanged ||
-        update.viewportChanged ||
-        update.selectionSet
-      ) {
+      // selection 変化ではデコは変わらないので rebuild しない (= 無料の最適化)
+      if (update.docChanged || update.viewportChanged) {
         this.decorations = this.build(update.view);
       }
     }
     build(view: EditorView): DecorationSet {
       const builder = new RangeSetBuilder<Decoration>();
       const state = view.state;
-
-      syntaxTree(state).iterate({
-        enter(node) {
-          if (node.name !== "ListMark") return;
-          const text = state.doc.sliceString(node.from, node.to);
-          if (!/^[-*+]$/.test(text)) return;
-          // ListMark テキスト (「-」等) を「•」ウィジェットで常に置換
-          // (アクティブ行でも置換することで、入力中もバレット表示を維持する)
-          builder.add(node.from, node.to, bulletReplace);
-        },
-      });
+      // viewport 内だけ iterate (長文ノートでの O(n) 走査を避ける)
+      for (const { from, to } of view.visibleRanges) {
+        syntaxTree(state).iterate({
+          from,
+          to,
+          enter(node) {
+            if (node.name !== "ListMark") return;
+            const text = state.doc.sliceString(node.from, node.to);
+            if (!/^[-*+]$/.test(text)) return;
+            builder.add(node.from, node.to, bulletReplace);
+          },
+        });
+      }
       return builder.finish();
     }
   },
@@ -240,14 +331,18 @@ export const horizontalRulePlugin = ViewPlugin.fromClass(
         }
       }
 
-      syntaxTree(state).iterate({
-        enter(node) {
-          if (node.name !== "HorizontalRule") return;
-          const line = state.doc.lineAt(node.from);
-          if (activeLines.has(line.number)) return;
-          builder.add(node.from, node.to, hrReplace);
-        },
-      });
+      for (const { from, to } of view.visibleRanges) {
+        syntaxTree(state).iterate({
+          from,
+          to,
+          enter(node) {
+            if (node.name !== "HorizontalRule") return;
+            const line = state.doc.lineAt(node.from);
+            if (activeLines.has(line.number)) return;
+            builder.add(node.from, node.to, hrReplace);
+          },
+        });
+      }
       return builder.finish();
     }
   },
@@ -316,32 +411,34 @@ export const dollarMathPlugin = ViewPlugin.fromClass(
       };
 
       const decos: { from: number; to: number; deco: Decoration }[] = [];
-      syntaxTree(state).iterate({
-        enter(node) {
-          if (node.name !== "InlineMath" && node.name !== "BlockMath") return;
-          if (isTouched(node.from, node.to)) return;
-          const raw = state.doc.sliceString(node.from, node.to);
-          if (node.name === "InlineMath") {
-            // $...$ → 中身は最初と最後の $ を除いた部分
-            const source = raw.slice(1, -1);
-            if (!source.trim()) return;
-            decos.push({
-              from: node.from,
-              to: node.to,
-              deco: Decoration.replace({ widget: new InlineMathWidget(source) }),
-            });
-          } else {
-            // BlockMath: $$ ... $$ (改行跨ぎ可)。$$ 2 つを剥がす
-            const inner = raw.replace(/^\$\$/, "").replace(/\$\$$/, "").trim();
-            if (!inner) return;
-            decos.push({
-              from: node.from,
-              to: node.to,
-              deco: Decoration.replace({ widget: new BlockMathWidget(inner), block: true }),
-            });
-          }
-        },
-      });
+      for (const { from, to } of view.visibleRanges) {
+        syntaxTree(state).iterate({
+          from,
+          to,
+          enter(node) {
+            if (node.name !== "InlineMath" && node.name !== "BlockMath") return;
+            if (isTouched(node.from, node.to)) return;
+            const raw = state.doc.sliceString(node.from, node.to);
+            if (node.name === "InlineMath") {
+              const source = raw.slice(1, -1);
+              if (!source.trim()) return;
+              decos.push({
+                from: node.from,
+                to: node.to,
+                deco: Decoration.replace({ widget: new InlineMathWidget(source) }),
+              });
+            } else {
+              const inner = raw.replace(/^\$\$/, "").replace(/\$\$$/, "").trim();
+              if (!inner) return;
+              decos.push({
+                from: node.from,
+                to: node.to,
+                deco: Decoration.replace({ widget: new BlockMathWidget(inner), block: true }),
+              });
+            }
+          },
+        });
+      }
       decos.sort((a, b) => a.from - b.from);
       const builder = new RangeSetBuilder<Decoration>();
       for (const d of decos) builder.add(d.from, d.to, d.deco);

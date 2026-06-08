@@ -1,6 +1,7 @@
 "use client";
 import { useMemo, useState, Fragment } from "react";
 import { COLOR_FIRST_ATTEMPT } from "@/lib/block-color";
+import { Markdown } from "@/components/markdown";
 import { ChevronLeft, ChevronRight, Clock, ChevronDown, ChevronUp, MessageSquareText, Layers, ArrowUpRight, AlertTriangle, ArrowLeft } from "lucide-react";
 import { Link, useParams } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
@@ -644,14 +645,18 @@ export default function DigestPage() {
                         </div>
                       </td>
                       <td className="px-2 py-1 align-top">
-                        <div className="flex items-center justify-center gap-1.5">
-                          {prevStatus ? (
-                            <OpaqueTag name={prevStatus.name} color={prevStatus.color ?? null}/>
-                          ) : (
-                            <span className="text-[10px] text-muted-foreground italic">First</span>
-                          )}
+                        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-1.5">
+                          <div className="flex justify-end">
+                            {prevStatus ? (
+                              <OpaqueTag name={prevStatus.name} color={prevStatus.color ?? null}/>
+                            ) : (
+                              <span className="text-[10px] text-muted-foreground italic">First</span>
+                            )}
+                          </div>
                           <span className="text-muted-foreground text-[10px]">→</span>
-                          {nextStatus && <OpaqueTag name={nextStatus.name} color={nextStatus.color ?? null}/>}
+                          <div className="flex justify-start">
+                            {nextStatus && <OpaqueTag name={nextStatus.name} color={nextStatus.color ?? null}/>}
+                          </div>
                         </div>
                       </td>
                       <td className="text-right pl-2 py-1 tabular-nums text-[11px] align-top">
@@ -661,14 +666,18 @@ export default function DigestPage() {
                     {expanded && reviews.length > 0 && (
                       <tr className="bg-muted/30">
                         <td/>
-                        <td colSpan={3} className="py-1.5 pr-2">
-                          <ul className="space-y-1">
+                        <td colSpan={3} className="py-2 pr-2">
+                          <ul className="space-y-2">
                             {reviews.map((rv, idx) => (
-                              <li key={idx} className="text-[11px] leading-relaxed whitespace-pre-wrap break-words pl-2 border-l-2 border-muted-foreground/30">
+                              <li key={idx} className="pl-2 border-l-2 border-muted-foreground/30 space-y-1">
                                 {rv.review_type && (
-                                  <span className="inline-block text-[9px] uppercase tracking-wide text-muted-foreground mr-1.5">{rv.review_type}</span>
+                                  <OpaqueTag name={rv.review_type} color={null}/>
                                 )}
-                                {rv.content}
+                                {rv.content && (
+                                  <div className="text-[12px] text-foreground leading-relaxed">
+                                    <Markdown>{rv.content}</Markdown>
+                                  </div>
+                                )}
                               </li>
                             ))}
                           </ul>

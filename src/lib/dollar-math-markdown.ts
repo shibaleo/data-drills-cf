@@ -76,6 +76,9 @@ export const dollarMathExtension: MarkdownConfig = {
         const text = line.text;
         if (!text.startsWith("$$")) return false;
 
+        // commit-on-start: 開きが見つかった時点で block 確定。
+        // FencedCode と同じく、閉じが無くても EOF まで block として吸う。
+        // 失敗時に nextLine 済の状態で false を返すと後続パースが乱れるため。
         const startOffset = cx.lineStart;
         const restAfterOpen = text.slice(2);
         const closeOnSameLine = restAfterOpen.indexOf("$$");
@@ -89,17 +92,20 @@ export const dollarMathExtension: MarkdownConfig = {
         }
 
         // 複数行: 後続行から $$ を探す
+        let endOffset = cx.lineStart + text.length; // 暫定 (= 1 行目末尾)
         while (cx.nextLine()) {
           const close = line.text.indexOf("$$");
           if (close >= 0) {
-            const endOffset = cx.lineStart + close + 2;
-            cx.addElement(cx.elt("BlockMath", startOffset, endOffset));
+            endOffset = cx.lineStart + close + 2;
             cx.nextLine();
+            cx.addElement(cx.elt("BlockMath", startOffset, endOffset));
             return true;
           }
+          endOffset = cx.lineStart + line.text.length;
         }
-        // 閉じ未発見 — 構文木にノードは作らず、後続パーサに委ねる
-        return false;
+        // EOF に達した場合: ここまでを block として確定 (入力中の未完成状態を想定)
+        cx.addElement(cx.elt("BlockMath", startOffset, endOffset));
+        return true;
       },
     },
   ],
