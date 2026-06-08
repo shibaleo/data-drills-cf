@@ -55,11 +55,14 @@ export const subject = pgTable("subject", {
   code: code(),
   name: name(),
   projectId: uuid("project_id").notNull().references(() => project.id, { onDelete: "cascade" }),
+  // Phase 1 追加: 新 owner。Phase 4 で project_id を drop して NOT NULL 化
+  fieldId: uuid("field_id"),
   color: text("color"),
   sortOrder: integer("sort_order").notNull().default(0),
   ...timestamps(),
 }, (t) => [
   uniqueIndex("subject_project_code_key").on(t.projectId, t.code),
+  index("subject_field_idx").on(t.fieldId),
 ]);
 
 // =============================================================================
@@ -71,11 +74,13 @@ export const level = pgTable("level", {
   code: code(),
   name: name(),
   projectId: uuid("project_id").notNull().references(() => project.id, { onDelete: "cascade" }),
+  fieldId: uuid("field_id"),
   color: text("color"),
   sortOrder: integer("sort_order").notNull().default(0),
   ...timestamps(),
 }, (t) => [
   uniqueIndex("level_project_code_key").on(t.projectId, t.code),
+  index("level_field_idx").on(t.fieldId),
 ]);
 
 // =============================================================================
@@ -137,6 +142,7 @@ export const problem = pgTable("problem", {
   id: id(),
   code: code(),
   projectId: uuid("project_id").notNull().references(() => project.id, { onDelete: "cascade" }),
+  fieldId: uuid("field_id"),
   subjectId: uuid("subject_id").references(() => subject.id, { onDelete: "set null" }),
   levelId: uuid("level_id").references(() => level.id, { onDelete: "set null" }),
   topicId: uuid("topic_id").references(() => topic.id, { onDelete: "set null" }),
@@ -146,6 +152,7 @@ export const problem = pgTable("problem", {
   ...timestamps(),
 }, (t) => [
   uniqueIndex("problem_project_code_key").on(t.projectId, t.code, t.subjectId, t.levelId),
+  index("problem_field_idx").on(t.fieldId),
 ]);
 
 // =============================================================================
@@ -215,12 +222,14 @@ export const flashcard = pgTable("flashcard", {
   id: id(),
   code: code(),
   projectId: uuid("project_id").notNull().references(() => project.id, { onDelete: "cascade" }),
+  fieldId: uuid("field_id"),
   topicId: uuid("topic_id").references(() => topic.id, { onDelete: "set null" }),
   front: text("front").notNull(),
   back: text("back").notNull(),
   ...timestamps(),
 }, (t) => [
   uniqueIndex("flashcard_project_code_key").on(t.projectId, t.code),
+  index("flashcard_field_idx").on(t.fieldId),
 ]);
 
 // =============================================================================
@@ -337,6 +346,8 @@ export const filterPref = pgTable("filter_pref", {
 // =============================================================================
 
 export type MemberFilter = {
+  /** Phase 1 追加: field (旧 project) ID 指定で cross-field 横断選択を表現 */
+  fieldIds?: string[];
   subjectIds?: string[];
   levelIds?: string[];
 };
@@ -361,13 +372,89 @@ export const backlog = pgTable("backlog", {
 ]);
 
 // =============================================================================
+// 24b. Scope (bitemporal append-only) — Phase 1: 追加のみ
+//
+// 各ページ (Review/Plan/Throughput/Stats/Digest) で共有される
+// 「メンバー集合 + スケジューリング設定 + FSRS パラメタ + 目標」のマスターエンティティ。
+// user 所有 (cross-field 横断可)。旧 backlog / *_scope を段階的に吸収予定。
+// Phase 1 では追加のみで既存は無触。
+// =============================================================================
+
+/** scope ごとに status name → stability days (=次回 review までの基準日数) を持つ */
+export type StatusStabilities = Record<string, number>;
+
+export const scope = pgTable("scope", {
+  id: uuid("id").notNull(),
+  revision: integer("revision").notNull(),
+  userId: uuid("user_id").notNull(),
+  name: text("name").notNull(),
+  filter: jsonb("filter").$type<MemberFilter>().notNull().default({}),
+  // スケジューリング (旧 backlog から移植)
+  dailyMinutes: integer("daily_minutes").notNull().default(60),
+  timeMultiplierPct: integer("time_multiplier_pct").notNull().default(100),
+  weekdayWeights: jsonb("weekday_weights").$type<number[]>().notNull().default([1, 1, 1, 1, 1, 1, 1]),
+  // FSRS 風: status name → stability days のマップ。空なら answer_status global を使う
+  statusStabilities: jsonb("status_stabilities").$type<StatusStabilities>().notNull().default({}),
+  isActive: boolean("is_active").notNull().default(true),
+  validFrom: timestamp("valid_from", { withTimezone: true }).notNull().defaultNow(),
+  validTo: timestamp("valid_to", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  primaryKey({ columns: [t.id, t.revision] }),
+  index("scope_current_idx").on(t.id, t.revision.desc()),
+  index("scope_user_active_idx").on(t.userId, t.isActive, t.validTo),
+]);
+
+// =============================================================================
+// 24c. Field (= 旧 project の新名前、user 所有) — Phase 1: 追加のみ
+//
+// 「学問領域」を表す永続エンティティ。project から code/name/color 等をコピー。
+// Phase 4 で project テーブルは廃止される。
+// =============================================================================
+
+export const field = pgTable("field", {
+  id: id(),
+  userId: uuid("user_id").notNull(),
+  code: code(),
+  name: name(),
+  color: text("color"),
+  gdriveFolderId: text("gdrive_folder_id"),
+  sortOrder: integer("sort_order").notNull().default(0),
+  ...timestamps(),
+}, (t) => [
+  uniqueIndex("field_user_code_key").on(t.userId, t.code),
+]);
+
+// =============================================================================
+// 24d. ReviewType (= 旧 tag の新名前、user 所有) — Phase 1: 追加のみ
+//
+// 「review 評価種別」(不理解 / 理解 etc) のマスター。
+// Phase 4 で tag / problem_tag は廃止、review_tag は review_type_id 参照に書き換え。
+// =============================================================================
+
+export const reviewType = pgTable("review_type", {
+  id: id(),
+  userId: uuid("user_id").notNull(),
+  code: code(),
+  name: name(),
+  color: text("color"),
+  sortOrder: integer("sort_order").notNull().default(0),
+  ...timestamps(),
+}, (t) => [
+  uniqueIndex("review_type_user_code_key").on(t.userId, t.code),
+]);
+
+// =============================================================================
 // 25. GoalLayer (bitemporal append-only)
 // =============================================================================
 
 export const goalLayer = pgTable("goal_layer", {
   id: uuid("id").notNull(),
   revision: integer("revision").notNull(),
+  // Phase 1: 旧 backlog_id を残しつつ、scope_id を nullable で追加
+  // (Phase 2 で consumer 切替後、Phase 4 で backlog_id を drop)
   backlogId: uuid("backlog_id").notNull(),
+  scopeId: uuid("scope_id"),
   name: text("name").notNull().default(""),
   color: text("color"),
   opacityPct: integer("opacity_pct"),
@@ -382,6 +469,7 @@ export const goalLayer = pgTable("goal_layer", {
   primaryKey({ columns: [t.id, t.revision] }),
   index("goal_layer_current_idx").on(t.id, t.revision.desc()),
   index("goal_layer_backlog_idx").on(t.backlogId, t.isActive, t.validTo),
+  index("goal_layer_scope_idx").on(t.scopeId, t.isActive, t.validTo),
 ]);
 
 // =============================================================================
@@ -392,6 +480,7 @@ export const goalMilestone = pgTable("goal_milestone", {
   id: uuid("id").notNull(),
   revision: integer("revision").notNull(),
   backlogId: uuid("backlog_id").notNull(),
+  scopeId: uuid("scope_id"),
   layerId: uuid("layer_id").notNull(),
   target: integer("target").notNull(),
   date: date("date").notNull(),
@@ -403,6 +492,7 @@ export const goalMilestone = pgTable("goal_milestone", {
   primaryKey({ columns: [t.id, t.revision] }),
   index("goal_milestone_current_idx").on(t.id, t.revision.desc()),
   index("goal_milestone_backlog_idx").on(t.backlogId, t.isActive, t.validTo),
+  index("goal_milestone_scope_idx").on(t.scopeId, t.isActive, t.validTo),
   index("goal_milestone_layer_idx").on(t.layerId),
 ]);
 
@@ -418,6 +508,7 @@ export const reviewScope = pgTable("review_scope", {
   id: uuid("id").notNull(),
   revision: integer("revision").notNull(),
   projectId: uuid("project_id").notNull().references(() => project.id, { onDelete: "cascade" }),
+  scopeId: uuid("scope_id"),
   name: text("name").notNull(),
   filter: jsonb("filter").$type<MemberFilter>().notNull().default({}),
   isActive: boolean("is_active").notNull().default(true),
@@ -428,6 +519,7 @@ export const reviewScope = pgTable("review_scope", {
   primaryKey({ columns: [t.id, t.revision] }),
   index("review_scope_current_idx").on(t.id, t.revision.desc()),
   index("review_scope_project_active_idx").on(t.projectId, t.isActive, t.validTo),
+  index("review_scope_scope_idx").on(t.scopeId),
 ]);
 
 // =============================================================================
@@ -441,6 +533,7 @@ export const throughputScope = pgTable("throughput_scope", {
   id: uuid("id").notNull(),
   revision: integer("revision").notNull(),
   projectId: uuid("project_id").notNull().references(() => project.id, { onDelete: "cascade" }),
+  scopeId: uuid("scope_id"),
   name: text("name").notNull(),
   filter: jsonb("filter").$type<MemberFilter>().notNull().default({}),
   isActive: boolean("is_active").notNull().default(true),
@@ -451,6 +544,7 @@ export const throughputScope = pgTable("throughput_scope", {
   primaryKey({ columns: [t.id, t.revision] }),
   index("throughput_scope_current_idx").on(t.id, t.revision.desc()),
   index("throughput_scope_project_active_idx").on(t.projectId, t.isActive, t.validTo),
+  index("throughput_scope_scope_idx").on(t.scopeId),
 ]);
 
 // =============================================================================
@@ -461,6 +555,7 @@ export const statsScope = pgTable("stats_scope", {
   id: uuid("id").notNull(),
   revision: integer("revision").notNull(),
   projectId: uuid("project_id").notNull().references(() => project.id, { onDelete: "cascade" }),
+  scopeId: uuid("scope_id"),
   name: text("name").notNull(),
   filter: jsonb("filter").$type<MemberFilter>().notNull().default({}),
   isActive: boolean("is_active").notNull().default(true),
@@ -471,12 +566,14 @@ export const statsScope = pgTable("stats_scope", {
   primaryKey({ columns: [t.id, t.revision] }),
   index("stats_scope_current_idx").on(t.id, t.revision.desc()),
   index("stats_scope_project_active_idx").on(t.projectId, t.isActive, t.validTo),
+  index("stats_scope_scope_idx").on(t.scopeId),
 ]);
 
 export const digestScope = pgTable("digest_scope", {
   id: uuid("id").notNull(),
   revision: integer("revision").notNull(),
   projectId: uuid("project_id").notNull().references(() => project.id, { onDelete: "cascade" }),
+  scopeId: uuid("scope_id"),
   name: text("name").notNull(),
   filter: jsonb("filter").$type<MemberFilter>().notNull().default({}),
   isActive: boolean("is_active").notNull().default(true),
@@ -487,4 +584,5 @@ export const digestScope = pgTable("digest_scope", {
   primaryKey({ columns: [t.id, t.revision] }),
   index("digest_scope_current_idx").on(t.id, t.revision.desc()),
   index("digest_scope_project_active_idx").on(t.projectId, t.isActive, t.validTo),
+  index("digest_scope_scope_idx").on(t.scopeId),
 ]);
