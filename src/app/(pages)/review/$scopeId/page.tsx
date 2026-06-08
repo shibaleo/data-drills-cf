@@ -373,6 +373,10 @@ export default function SchedulePage() {
     setLocalName(sc.name);
     setLocalFilter(sc.filter ?? {});
     setLocalScopeId(sc.scope_id ?? null);
+    // canonical scope_id を localStorage に保存 → /review entry が次回これに戻る
+    if (sc.scope_id && typeof window !== "undefined") {
+      localStorage.setItem("dd_last_scope_id", sc.scope_id);
+    }
   }, [scopeQuery.data]);
 
   // Build status name → sortOrder map from DB statuses

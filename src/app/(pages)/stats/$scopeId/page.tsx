@@ -51,7 +51,11 @@ export default function StatsDetailPage() {
     lastSyncRevRef.current = sc.revision;
     setLocalName(sc.name);
     setLocalFilter(sc.filter ?? {});
-    setLocalScopeId((sc as { scope_id?: string | null }).scope_id ?? null);
+    const canonical = (sc as { scope_id?: string | null }).scope_id ?? null;
+    setLocalScopeId(canonical);
+    if (canonical && typeof window !== "undefined") {
+      localStorage.setItem("dd_last_scope_id", canonical);
+    }
   }, [scopeQuery.data]);
 
   const { data: rawRows = [] } = useThroughputList(currentProject?.id);

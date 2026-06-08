@@ -75,7 +75,18 @@ function lazyRoute(
   });
 }
 
-const reviewRoute = lazyRoute("/review", ReviewPage);
+const reviewRoute = createRoute({
+  getParentRoute: () => authLayout,
+  path: "/review",
+  validateSearch: (search: Record<string, unknown>): { scopeId?: string } => ({
+    scopeId: typeof search.scopeId === "string" ? search.scopeId : undefined,
+  }),
+  component: () => (
+    <Suspense>
+      <ReviewPage />
+    </Suspense>
+  ),
+});
 const reviewNewRoute = lazyRoute("/review/new", ReviewNewPage);
 const reviewDetailRoute = createRoute({
   getParentRoute: () => authLayout,
@@ -96,9 +107,23 @@ const throughputDetailRoute = createRoute({
     </Suspense>
   ),
 });
-const throughputRoute = lazyRoute("/throughput", ThroughputPage);
-const statsRoute = lazyRoute("/stats", StatsPage);
-const digestRoute = lazyRoute("/digest", DigestPage);
+function scopeSearchRoute(path: string, Component: React.LazyExoticComponent<React.ComponentType>) {
+  return createRoute({
+    getParentRoute: () => authLayout,
+    path,
+    validateSearch: (search: Record<string, unknown>): { scopeId?: string } => ({
+      scopeId: typeof search.scopeId === "string" ? search.scopeId : undefined,
+    }),
+    component: () => (
+      <Suspense>
+        <Component />
+      </Suspense>
+    ),
+  });
+}
+const throughputRoute = scopeSearchRoute("/throughput", ThroughputPage);
+const statsRoute = scopeSearchRoute("/stats", StatsPage);
+const digestRoute = scopeSearchRoute("/digest", DigestPage);
 const digestNewRoute = lazyRoute("/digest/new", DigestNewPage);
 const digestDetailRoute = createRoute({
   getParentRoute: () => authLayout,

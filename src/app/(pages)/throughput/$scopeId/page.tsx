@@ -75,7 +75,11 @@ export default function ThroughputPage() {
     lastSyncRevRef.current = sc.revision;
     setLocalName(sc.name);
     setLocalFilter(sc.filter ?? {});
-    setLocalScopeId((sc as { scope_id?: string | null }).scope_id ?? null);
+    const canonical = (sc as { scope_id?: string | null }).scope_id ?? null;
+    setLocalScopeId(canonical);
+    if (canonical && typeof window !== "undefined") {
+      localStorage.setItem("dd_last_scope_id", canonical);
+    }
   }, [scopeQuery.data]);
 
   // 常に全データを fetch、asOf によるフィルタはクライアントで適用 (= アニメーション再生に必要)。
