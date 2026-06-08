@@ -40,6 +40,7 @@ import { useTopicsList } from "@/hooks/queries/use-topics";
 import { usePageTitle, useHeaderSlot, usePageBack } from "@/lib/page-context";
 import { rpc } from "@/lib/rpc-client";
 import { toast } from "sonner";
+import { useScope, useUpdateScope } from "@/hooks/queries/use-scopes";
 
 export default function ScopeDetailPage() {
   const { scopeId } = useParams({ strict: false }) as { scopeId: string };
@@ -55,6 +56,10 @@ export default function ScopeDetailPage() {
   const revisionsQuery = useBacklogRevisions(scopeId);
   const archive = useArchiveBacklog(currentProject?.id);
   const batchSave = useBacklogBatchSave(scopeId, currentProject?.id);
+  // Phase 3c: 並走する新 scope エンティティから status_stabilities を読み書き。
+  // 旧 backlog テーブルが Phase 4 で削除されるまでは並列に保持する。
+  const scopeQuery = useScope(scopeId);
+  const updateScope = useUpdateScope();
 
   // 編集はすべてローカル state、「確定」で diff を計算して mutations を発火する。
   const [dailyMinutes, setDailyMinutes] = useState<number>(60);
@@ -736,6 +741,18 @@ export default function ScopeDetailPage() {
                   })}
                 </div>
               </div>
+              {/* Phase 3c: FSRS パラメタ override (status name → 次回 review までの基準日数) */}
+              {scopeQuery.data && (
+                <FSRSStabilitiesEditor
+                  scopeId={scopeId}
+                  statuses={scopeStatusListForFSRS(currentProject?.id)}
+                  current={scopeQuery.data.status_stabilities ?? {}}
+                  disabled={readOnly}
+                  onSave={(next) =>
+                    updateScope.mutateAsync({ id: scopeId, payload: { status_stabilities: next } })
+                  }
+                />
+              )}
             </div>
           }
           items={visibleAllocated}
@@ -979,6 +996,64 @@ function WeekdayWeightsInput({ value, onChange, dailyMinutes }: {
           );
         })}
       </div>
+    </div>
+  );
+}
+
+function scopeStatusListForFSRS(_projectId: string | undefined) {
+  // Phase 3c minimal: FSRS slider 用の status 一覧。useProject の statuses をそのまま使うが
+  // パネルから独立呼び出しのため一度コンポーネントで参照する形にする。簡単のためここでは
+  // SMOOTH_CHAIN 順固定にする。
+  return ["Miss", "Rough", "Fair", "Fluent", "Done"];
+}
+
+function FSRSStabilitiesEditor({
+  scopeId: _scopeId, statuses, current, disabled, onSave,
+}: {
+  scopeId: string;
+  statuses: string[];
+  current: Record<string, number>;
+  disabled?: boolean;
+  onSave: (next: Record<string, number>) => Promise<unknown>;
+}) {
+  const [local, setLocal] = useState<Record<string, number>>(current);
+  const [saving, setSaving] = useState(false);
+  useEffect(() => { setLocal(current); }, [current]);
+  const dirty = JSON.stringify(local) !== JSON.stringify(current);
+  return (
+    <div className="border-t pt-2 space-y-1">
+      <div className="flex items-center justify-between">
+        <Label className="text-[9px] uppercase tracking-wide text-muted-foreground">FSRS override (days)</Label>
+        {dirty && (
+          <button type="button"
+            disabled={saving || disabled}
+            className="text-[10px] text-primary hover:underline disabled:opacity-40"
+            onClick={async () => {
+              setSaving(true);
+              try { await onSave(local); toast.success("FSRS パラメタを保存"); }
+              catch (e) { toast.error(e instanceof Error ? e.message : "保存失敗"); }
+              finally { setSaving(false); }
+            }}>save</button>
+        )}
+      </div>
+      {statuses.map((name) => (
+        <div key={name} className="flex items-center gap-2">
+          <span className="text-[10px] text-muted-foreground w-12">{name}</span>
+          <Input type="number" min={0} value={local[name] ?? ""}
+            placeholder="(global)"
+            disabled={disabled || saving}
+            onChange={(e) => {
+              const v = e.target.value;
+              setLocal((prev) => {
+                const next = { ...prev };
+                if (v === "") delete next[name];
+                else next[name] = Math.max(0, parseInt(v, 10) || 0);
+                return next;
+              });
+            }}
+            className="h-6 flex-1 px-1 text-center text-[10px] tabular-nums"/>
+        </div>
+      ))}
     </div>
   );
 }
