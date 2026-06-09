@@ -36,11 +36,33 @@ const MENU_INNER_R = SIDE + 4;
 const MENU_OUTER_R = MENU_INNER_R + 20;
 
 // 大六角の top vertex を「小六角の top vertex」に snap (= 全 6 頂点が snap)
-const ANCHOR_COL_T = 9;
 const ANCHOR_ROW_T = 8;
 const COL_STEP_T = 11;
 const ROW_STEP_T = 14; // 要 even
 const COLS_MAX = 3;
+
+// viewport 幅で responsive col 数を決める
+const BREAKPOINTS = [
+  { maxWidth: 640, cols: 1, anchorColT: 5 }, // mobile
+  { maxWidth: 1024, cols: 2, anchorColT: 7 }, // tablet
+];
+const DESKTOP_ANCHOR_COL_T = 9;
+
+function useResponsiveLayout(): { maxCols: number; anchorColT: number } {
+  const [width, setWidth] = useState(() =>
+    typeof window !== "undefined" ? window.innerWidth : 1200,
+  );
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const handler = () => setWidth(window.innerWidth);
+    window.addEventListener("resize", handler);
+    return () => window.removeEventListener("resize", handler);
+  }, []);
+  for (const bp of BREAKPOINTS) {
+    if (width < bp.maxWidth) return { maxCols: bp.cols, anchorColT: bp.anchorColT };
+  }
+  return { maxCols: COLS_MAX, anchorColT: DESKTOP_ANCHOR_COL_T };
+}
 
 function hexPoints(cx: number, cy: number, side: number): string {
   return [
@@ -55,10 +77,10 @@ function hexPoints(cx: number, cy: number, side: number): string {
     .join(" ");
 }
 
-function bigCenterAt(idx: number, cols: number): { cx: number; cy: number } {
+function bigCenterAt(idx: number, cols: number, anchorColT: number): { cx: number; cy: number } {
   const col = idx % cols;
   const row = Math.floor(idx / cols);
-  const col_T = ANCHOR_COL_T + col * COL_STEP_T;
+  const col_T = anchorColT + col * COL_STEP_T;
   const row_T = ANCHOR_ROW_T + row * ROW_STEP_T;
   // top vertex 位置 (小六角 (col_T, row_T) の top vertex):
   //   x = col_T * CELL_W + (row_T % 2) * CELL_W/2
@@ -229,7 +251,8 @@ export default function ScopesHubPage() {
   }, [scopes, allReviews]);
 
   const total = scopes.length + 1;
-  const cols = Math.min(COLS_MAX, Math.max(1, total));
+  const { maxCols, anchorColT } = useResponsiveLayout();
+  const cols = Math.min(maxCols, Math.max(1, total));
 
   const [editingScopeId, setEditingScopeId] = useState<string | null>(null);
 
@@ -248,7 +271,7 @@ export default function ScopesHubPage() {
     }, 500);
   }
 
-  const lastCenter = bigCenterAt(total - 1, cols);
+  const lastCenter = bigCenterAt(total - 1, cols, anchorColT);
   const requiredHeight = lastCenter.cy + MENU_OUTER_R + 60;
 
   function onSectorClick(scopeId: string, view: SectorDef["view"]) {
@@ -260,7 +283,7 @@ export default function ScopesHubPage() {
     }
   }
 
-  const newCenter = bigCenterAt(scopes.length, cols);
+  const newCenter = bigCenterAt(scopes.length, cols, anchorColT);
   const editingScope = scopes.find((s) => s.id === editingScopeId) ?? null;
 
   return (
@@ -361,7 +384,7 @@ export default function ScopesHubPage() {
 
         {/* 各 scope */}
         {scopes.map((scope, idx) => {
-          const { cx, cy } = bigCenterAt(idx, cols);
+          const { cx, cy } = bigCenterAt(idx, cols, anchorColT);
           const hovered = hoveredId === scope.id;
           const stats = statsByScope.get(scope.id) ?? { total: 0, active: 0, overdue: 0, dueToday: 0, pending: 0, goodPct: 0, nextDue: null };
           const heat = heatColor(stats);
