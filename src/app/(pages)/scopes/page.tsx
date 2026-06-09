@@ -439,8 +439,9 @@ export default function ScopesHubPage() {
                 }}
               >
                 {/* 進捗バー (hex の辺に沿って goodPct% 分だけ描画)。
-                    背景の "track" は描かず、伸びている部分だけ常時表示 */}
-                {stats.active > 0 && stats.goodPct > 0 && (
+                    背景の "track" は描かず、伸びている部分だけ常時表示。
+                    hover 中は menu や glow と被るので非表示 */}
+                {!hovered && stats.active > 0 && stats.goodPct > 0 && (
                   <polygon
                     points={hexPoints(cx, cy, RING_SIDE)}
                     fill="none"
