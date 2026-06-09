@@ -590,23 +590,6 @@ export default function ScopesHubPage() {
               </g>
               {hovered && (
                 <g>
-                  {/* sector menu の背後に置く blur halo (scope hover 時のような glow を再現) */}
-                  <circle
-                    cx={cx}
-                    cy={cy}
-                    r={MENU_OUTER_R - 4}
-                    fill="hsl(var(--primary) / 0.55)"
-                    style={{ filter: "blur(28px)" }}
-                    pointerEvents="none"
-                  />
-                  <circle
-                    cx={cx}
-                    cy={cy}
-                    r={MENU_OUTER_R + 6}
-                    fill="hsl(var(--primary) / 0.3)"
-                    style={{ filter: "blur(46px)" }}
-                    pointerEvents="none"
-                  />
                   {SECTORS.map((sec) => {
                     // 各 sector の両端から GAP/2 ずつ引いて隙間を作る
                     const adjStart = sec.startDeg + SECTOR_GAP_DEG / 2;
@@ -660,7 +643,13 @@ export default function ScopesHubPage() {
                             stroke={sec.color}
                             strokeWidth={1.8}
                             strokeLinejoin="round"
-                            style={{ transition: "fill 140ms, d 180ms cubic-bezier(0.34, 1.56, 0.64, 1)" }}
+                            style={{
+                              transition: "fill 140ms, d 180ms cubic-bezier(0.34, 1.56, 0.64, 1), filter 180ms ease-out",
+                              // sector hover 時に同色 drop-shadow を多重で輪郭沿い blur halo に
+                              filter: isSecHover
+                                ? `drop-shadow(0 0 10px ${sec.color}) drop-shadow(0 0 24px ${sec.color}) drop-shadow(0 0 48px ${sec.color})`
+                                : "none",
+                            }}
                           />
                           <text
                             x={lx}
