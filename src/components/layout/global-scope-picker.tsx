@@ -5,7 +5,8 @@ import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { useScopes } from "@/hooks/queries/use-scopes";
 import { useField } from "@/hooks/use-field";
 
-const VIEW_RE = /^\/(review|throughput|stats|digest|scopes|plan)(\/|$)/;
+// /scopes (hub) では非表示。/scopes/$scopeId (detail) や /review 等の view では表示
+const VIEW_RE = /^\/(review|throughput|stats|digest|plan)(\/|$)|^\/scopes\/[^?]/;
 
 /**
  * グローバル top-bar の canonical scope 切替コンボ。

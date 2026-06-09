@@ -4,7 +4,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { useScopes, useUpdateScope, type ScopeRow } from "@/hooks/queries/use-scopes";
 import { useField } from "@/hooks/use-field";
 import { useFields } from "@/hooks/queries/use-field-data";
-import { usePageTitle, useHeaderSlot } from "@/lib/page-context";
+import { usePageTitle } from "@/lib/page-context";
 import { useReviewList } from "@/hooks/queries/use-review";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -206,27 +206,11 @@ function arcPath(cx: number, cy: number, r: number, startDeg: number, endDeg: nu
 
 export default function ScopesHubPage() {
   usePageTitle("Scopes");
-  const renderHeaderSlot = useHeaderSlot();
-  const { currentScopeId, setCurrentScopeId } = useField();
+  const { setCurrentScopeId } = useField();
   const { data: scopes = [] } = useScopes();
   const navigate = useNavigate();
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [ripples, setRipples] = useState<{ id: string; x: number; y: number; color: string }[]>([]);
-  const headerUpdate = useUpdateScope();
-  const [headerName, setHeaderName] = useState("");
-  const currentScope = useMemo(
-    () => scopes.find((s) => s.id === currentScopeId) ?? null,
-    [scopes, currentScopeId],
-  );
-  useEffect(() => {
-    setHeaderName(currentScope?.name ?? "");
-  }, [currentScope?.id, currentScope?.name]);
-  async function commitHeaderName() {
-    if (!currentScope) return;
-    const trimmed = headerName.trim();
-    if (!trimmed || trimmed === currentScope.name) return;
-    await headerUpdate.mutateAsync({ id: currentScope.id, payload: { name: trimmed } });
-  }
 
   // user 全 review を 1 度だけ取得して、client-side で scope.filter ごとに絞り込む
   // (review route の scope_id は status_stabilities override 専用で member filter
@@ -310,21 +294,6 @@ export default function ScopesHubPage() {
 
   return (
     <>
-    {currentScope && renderHeaderSlot(
-      <Input
-        value={headerName}
-        onChange={(e) => setHeaderName(e.target.value)}
-        onBlur={commitHeaderName}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") (e.currentTarget as HTMLInputElement).blur();
-          if (e.key === "Escape") {
-            setHeaderName(currentScope.name);
-            (e.currentTarget as HTMLInputElement).blur();
-          }
-        }}
-        className="h-7 text-xs max-w-xs"
-      />
-    )}
     <div
       ref={containerRef}
       className="relative w-full"
