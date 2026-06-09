@@ -22,16 +22,16 @@ import type { MemberFilterInput } from "@/lib/schemas/member-filter";
  */
 
 const SQRT3 = Math.sqrt(3);
-// 小六角: hex width = SQRT3*10 ≈ 17.32
-const SMALL_SIDE = 10;
-// SIDE = SMALL_SIDE * 6 (= 60): 全 6 頂点が小六角の top vertex に snap する整合値。
-const SIDE = 60;
+// 小六角: hex width = SQRT3*15 ≈ 25.98
+const SMALL_SIDE = 15;
+// SIDE = SMALL_SIDE * 6 (= 90): 全 6 頂点が小六角の top vertex に snap する整合値。
+const SIDE = 90;
 const CELL_W = SQRT3 * SMALL_SIDE;
 const CELL_H = 1.5 * SMALL_SIDE;
 
-// 放射状メニュー
-const MENU_INNER_R = SIDE + 4;
-const MENU_OUTER_R = MENU_INNER_R + 22;
+// 放射状メニュー (1.5x scale)
+const MENU_INNER_R = SIDE + 6;
+const MENU_OUTER_R = MENU_INNER_R + 32;
 
 // 大六角の top vertex を「小六角の top vertex」に snap (= 全 6 頂点が snap)
 const ANCHOR_ROW_T = 8;
