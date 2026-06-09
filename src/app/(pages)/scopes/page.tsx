@@ -639,12 +639,12 @@ export default function ScopesHubPage() {
                         >
                           <path
                             d={path}
-                            fill={isSecHover ? sec.color : "var(--background)"}
+                            fill="var(--background)"
                             stroke={sec.color}
-                            strokeWidth={1.8}
+                            strokeWidth={isSecHover ? 2.4 : 1.8}
                             strokeLinejoin="round"
                             style={{
-                              transition: "fill 140ms, d 180ms cubic-bezier(0.34, 1.56, 0.64, 1), filter 180ms ease-out",
+                              transition: "stroke-width 180ms, d 180ms cubic-bezier(0.34, 1.56, 0.64, 1), filter 180ms ease-out",
                               // sector hover 時に同色 drop-shadow を多重で輪郭沿い blur halo に
                               filter: isSecHover
                                 ? `drop-shadow(0 0 10px ${sec.color}) drop-shadow(0 0 24px ${sec.color}) drop-shadow(0 0 48px ${sec.color})`
@@ -658,11 +658,11 @@ export default function ScopesHubPage() {
                             dominantBaseline="central"
                             fontSize={10}
                             fontWeight={700}
-                            fill={isSecHover ? "var(--background)" : sec.color}
+                            fill={sec.color}
                             className="pointer-events-none select-none"
                             style={{ paintOrder: "stroke" }}
                             stroke="var(--background)"
-                            strokeWidth={isSecHover ? 0 : 0.4}
+                            strokeWidth={0.4}
                           >
                             {sec.label}
                           </text>
