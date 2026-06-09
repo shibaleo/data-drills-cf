@@ -5,7 +5,6 @@ import { toast } from "sonner";
 import { useParams, useNavigate } from "@tanstack/react-router";
 import { Download, Filter, Loader2, RotateCcw, Save, SlidersHorizontal, ArrowLeft, Archive, History, ListFilter, MoreVertical, Check, X } from "lucide-react";
 import { useReviewScope, useReviewScopeRevisions, useUpdateReviewScope, useArchiveReviewScope } from "@/hooks/queries/use-review-scopes";
-import { ScopePickerBar } from "@/components/scope-picker-bar";
 import { StabilitySlider } from "@/components/stability-slider";
 import { applyMemberFilter } from "@/lib/member-filter";
 import { MemberFilterPicker } from "@/components/member-filter-picker";
@@ -848,8 +847,6 @@ export default function SchedulePage() {
         </Popover>
       </>
       )}
-
-      <ScopePickerBar value={localScopeId} onChange={setLocalScopeId} dirty={scopeIdDirty} disabled={readOnly} />
 
       {/* History panel */}
       {historyOpen && (

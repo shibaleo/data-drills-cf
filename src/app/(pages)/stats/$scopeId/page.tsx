@@ -16,7 +16,6 @@ import { ActivityHeatmap } from "@/components/activity-heatmap";
 import { HourPattern } from "@/components/hour-pattern";
 import { SameDayRepeatStats } from "@/components/same-day-repeat-stats";
 import { MemberFilterPicker } from "@/components/member-filter-picker";
-import { ScopePickerBar } from "@/components/scope-picker-bar";
 import { applyMemberFilter } from "@/lib/member-filter";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -162,8 +161,6 @@ export default function StatsDetailPage() {
         </Popover>
       </>
       )}
-
-      <ScopePickerBar value={localScopeId} onChange={setLocalScopeId} dirty={scopeIdDirty} />
 
       {membersOpen && (
         <div className={`relative rounded-md border ${filterDirty ? "border-primary/40 bg-primary/5" : ""} px-3 py-2 text-xs space-y-2`}>

@@ -16,7 +16,6 @@ import { AsOfControls } from "@/components/as-of-controls";
 import { Input } from "@/components/ui/input";
 import { applyMemberFilter } from "@/lib/member-filter";
 import { MemberFilterPicker } from "@/components/member-filter-picker";
-import { ScopePickerBar } from "@/components/scope-picker-bar";
 import { useThroughputScope, useThroughputScopeRevisions, useUpdateThroughputScope, useArchiveThroughputScope } from "@/hooks/queries/use-throughput-scopes";
 import type { MemberFilterInput } from "@/lib/schemas/member-filter";
 import { Button } from "@/components/ui/button";
@@ -358,8 +357,6 @@ export default function ThroughputPage() {
         </Popover>
       </>
       )}
-
-      <ScopePickerBar value={localScopeId} onChange={setLocalScopeId} dirty={scopeIdDirty} />
 
       {/* History panel */}
       {historyOpen && (
