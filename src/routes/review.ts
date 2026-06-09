@@ -148,6 +148,7 @@ const app = new Hono<Env>()
         problemId: p.id,
         code: p.code,
         name: p.name ?? "",
+        fieldId: p.fieldId,
         subjectId: p.subjectId,
         subjectName: subj?.name ?? "",
         subjectColor: subj?.color ?? null,

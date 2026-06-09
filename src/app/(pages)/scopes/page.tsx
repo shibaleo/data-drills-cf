@@ -1,13 +1,11 @@
 "use client";
 import { useMemo, useState, useEffect } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { useQueries } from "@tanstack/react-query";
 import { useScopes, useUpdateScope, type ScopeRow } from "@/hooks/queries/use-scopes";
 import { useField } from "@/hooks/use-field";
 import { useFields } from "@/hooks/queries/use-field-data";
 import { usePageTitle, useHeaderSlot } from "@/lib/page-context";
-import { rpc, unwrap } from "@/lib/rpc-client";
-import { reviewKeys } from "@/hooks/queries/use-review";
+import { useReviewList } from "@/hooks/queries/use-review";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -127,6 +125,29 @@ type ScopeStats = {
   nextDue: number | null;
 };
 
+type ReviewRow = {
+  answerCount: number;
+  daysUntil: number;
+  fieldId: string;
+  subjectId: string | null;
+  levelId: string | null;
+};
+
+function filterRowsByScope(
+  rows: ReviewRow[],
+  filter: { fieldIds?: string[]; subjectIds?: string[]; levelIds?: string[] },
+): ReviewRow[] {
+  const fieldSet = filter.fieldIds?.length ? new Set(filter.fieldIds) : null;
+  const subjectSet = filter.subjectIds?.length ? new Set(filter.subjectIds) : null;
+  const levelSet = filter.levelIds?.length ? new Set(filter.levelIds) : null;
+  return rows.filter((r) => {
+    if (fieldSet && !fieldSet.has(r.fieldId)) return false;
+    if (subjectSet && (!r.subjectId || !subjectSet.has(r.subjectId))) return false;
+    if (levelSet && (!r.levelId || !levelSet.has(r.levelId))) return false;
+    return true;
+  });
+}
+
 function computeStats(rows: { answerCount: number; daysUntil: number }[]): ScopeStats {
   let active = 0;
   let overdue = 0;
@@ -190,28 +211,20 @@ export default function ScopesHubPage() {
     await headerUpdate.mutateAsync({ id: currentScope.id, payload: { name: trimmed } });
   }
 
-  // 各 scope ごとに review schedule を取得 (server で scope filter 済)
-  const reviewQueries = useQueries({
-    queries: scopes.map((s) => ({
-      queryKey: reviewKeys.list(null, null, s.id),
-      queryFn: async () => {
-        const json = await unwrap(
-          rpc.api.v1.review.$get({ query: { scope_id: s.id } }),
-        );
-        return json.data;
-      },
-      staleTime: 5 * 60_000,
-    })),
-  });
+  // user 全 review を 1 度だけ取得して、client-side で scope.filter ごとに絞り込む
+  // (review route の scope_id は status_stabilities override 専用で member filter
+  //  には使われないため、ここで filter する)
+  const { data: allReviews = [] } = useReviewList(undefined);
 
   const statsByScope = useMemo(() => {
     const m = new Map<string, ScopeStats>();
-    scopes.forEach((s, i) => {
-      const rows = reviewQueries[i]?.data ?? [];
-      m.set(s.id, computeStats(rows));
-    });
+    for (const s of scopes) {
+      const filter = (s.filter ?? {}) as { fieldIds?: string[]; subjectIds?: string[]; levelIds?: string[] };
+      const filtered = filterRowsByScope(allReviews as ReviewRow[], filter);
+      m.set(s.id, computeStats(filtered));
+    }
     return m;
-  }, [scopes, reviewQueries]);
+  }, [scopes, allReviews]);
 
   const total = scopes.length + 1;
   const cols = Math.min(COLS_MAX, Math.max(1, total));
