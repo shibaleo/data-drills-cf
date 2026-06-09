@@ -38,10 +38,11 @@ const SECTOR_GAP_DEG = 5;
 const SECTOR_HOVER_LIFT = 12;
 
 // 大六角の top vertex を「小六角の top vertex」に snap (= 全 6 頂点が snap)
-// menu 外径拡大に合わせて step も広げて隣接 hex の menu と overlap させない
+// 横 pitch ≈ COL_STEP_T*CELL_W = 13*25.98 = 337。縦は ROW_STEP_T*CELL_H = 16*22.5 = 360
+// で横と概ね揃える (menu 外径 162 を 2 倍した 324 より大きく overlap も回避)
 const ANCHOR_ROW_T = 8;
 const COL_STEP_T = 13;
-const ROW_STEP_T = 22; // 要 even
+const ROW_STEP_T = 16; // 要 even
 const COLS_MAX = 3;
 
 /** viewport 幅から表示可能な最大 col 数を求める */
