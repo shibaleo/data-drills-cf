@@ -248,25 +248,36 @@ export default function ScopesHubPage() {
   }, [scopes, allReviews]);
 
   const total = scopes.length + 1;
-  // ResizeObserver でコンテナ幅を測定 → cols / anchorColT を動的計算 (中央配置)
+  // viewport 幅で cols / 中央配置 anchorColT を動的計算。
+  // window.innerWidth を一次参照、container 幅は SVG コンテンツで広がりやすいので
+  // 念のため Math.min で頭打ち。
   const containerRef = useRef<HTMLDivElement>(null);
-  const [containerWidth, setContainerWidth] = useState(0);
+  const [viewWidth, setViewWidth] = useState(() =>
+    typeof window !== "undefined" ? window.innerWidth : 1200,
+  );
   useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    setContainerWidth(el.clientWidth);
-    const obs = new ResizeObserver((entries) => {
-      const w = entries[0]?.contentRect.width ?? 0;
-      setContainerWidth(w);
-    });
-    obs.observe(el);
-    return () => obs.disconnect();
+    if (typeof window === "undefined") return;
+    const handler = () => {
+      const innerW = window.innerWidth;
+      const containerW = containerRef.current?.clientWidth ?? innerW;
+      setViewWidth(Math.min(innerW, containerW));
+    };
+    handler();
+    window.addEventListener("resize", handler);
+    const obs = containerRef.current
+      ? new ResizeObserver(() => handler())
+      : null;
+    if (containerRef.current && obs) obs.observe(containerRef.current);
+    return () => {
+      window.removeEventListener("resize", handler);
+      obs?.disconnect();
+    };
   }, []);
-  const maxCols = maxColsFor(containerWidth || 1200);
+  const maxCols = maxColsFor(viewWidth);
   const cols = Math.min(maxCols, Math.max(1, total));
   const anchorColT = useMemo(
-    () => computeAnchorColT(containerWidth, cols),
-    [containerWidth, cols],
+    () => computeAnchorColT(viewWidth, cols),
+    [viewWidth, cols],
   );
 
   const [editingScopeId, setEditingScopeId] = useState<string | null>(null);
