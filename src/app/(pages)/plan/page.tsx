@@ -3,8 +3,6 @@ import { useMemo, useState, useEffect } from "react";
 import { useQueries } from "@tanstack/react-query";
 import { useSearch, useNavigate } from "@tanstack/react-router";
 import { useField } from "@/hooks/use-field";
-import { useMasterField } from "@/hooks/use-master-field";
-import { MasterFieldPicker } from "@/components/master-field-picker";
 import { useReviewList } from "@/hooks/queries/use-review";
 import { usePageTitle } from "@/lib/page-context";
 import { rpc, unwrap } from "@/lib/rpc-client";
@@ -97,41 +95,31 @@ function addDays(s: string, n: number): string {
 
 export default function PlanPage() {
   usePageTitle("Plan");
-  const { statuses } = useField();
-  const { field } = useMasterField();
-  const fieldId = field?.id;
+  const { statuses, currentScopeId, setCurrentScopeId } = useField();
   const today = todayJST();
   const [hideFirst, setHideFirst] = useState(false);
   const [hideFuture, setHideFuture] = useState(false);
   const [hiddenStatuses, setHiddenStatuses] = useState<Set<string>>(new Set());
   const [overflowOnly, setOverflowOnly] = useState(false);
   const [overBudgetOnly, setOverBudgetOnly] = useState(false);
-  // Phase: scope を URL search param (?scope_id=) で持つ。
-  // 未指定なら全 scope を集約 (legacy 俯瞰)。指定があればその scope だけのビュー。
+  // scope は GlobalScopePicker (top-bar) または ?scope_id= から取得する。
+  // 後者は外部リンクからの shareable 用。両者を currentScopeId に同期する。
   const search = useSearch({ strict: false }) as { scope_id?: string };
   const navigate = useNavigate();
-  const selectedScopeId = search.scope_id ?? null;
-  const setSelectedScopeId = (id: string | null) => {
-    navigate({ to: "/plan" as string, search: id ? { scope_id: id } : {} });
-  };
   const { data: scopes = [] } = useScopes();
+  useEffect(() => {
+    if (search.scope_id && search.scope_id !== currentScopeId) {
+      setCurrentScopeId(search.scope_id);
+    }
+  }, [search.scope_id, currentScopeId, setCurrentScopeId]);
+  const selectedScopeId = currentScopeId;
   const selectedScope = useMemo(
     () => scopes.find((s) => s.id === selectedScopeId) ?? null,
     [scopes, selectedScopeId],
   );
-  // sidebar 経由で /plan に来た時、前回選択 scope を localStorage から復元
-  useEffect(() => {
-    if (selectedScopeId || scopes.length === 0) return;
-    const saved = typeof window !== "undefined" ? localStorage.getItem("dd_last_scope_id") : null;
-    if (saved && scopes.some((s) => s.id === saved)) {
-      navigate({ to: "/plan" as string, search: { scope_id: saved }, replace: true });
-    }
-  }, [selectedScopeId, scopes, navigate]);
-  useEffect(() => {
-    if (selectedScopeId && typeof window !== "undefined") {
-      localStorage.setItem("dd_last_scope_id", selectedScopeId);
-    }
-  }, [selectedScopeId]);
+  // scope.filter.fieldIds[0] が plan の対象 field。
+  // 未指定 (cross-field) なら fieldId=undefined で全 user 集計。
+  const fieldId = (selectedScope?.filter as { fieldIds?: string[] } | undefined)?.fieldIds?.[0];
 
   const reviewQuery = useReviewList(fieldId, null, selectedScopeId);
 
@@ -373,37 +361,22 @@ export default function PlanPage() {
     return entries;
   }, [hideFirst, hideFuture, hiddenStatuses, overBudgetOnly, overflowOnly, statuses]);
 
-  if (!field) {
+  if (!selectedScopeId) {
     return (
-      <div className="p-4 md:p-6 space-y-3">
-        <MasterFieldPicker />
-        <div className="text-center py-12 text-muted-foreground">Select a field</div>
+      <div className="p-4 md:p-6 text-center py-12 text-muted-foreground">
+        Select a scope from the top bar
       </div>
     );
   }
 
   return (
     <div className="p-3 md:p-4 flex flex-col gap-3">
-      <div><MasterFieldPicker /></div>
       <div className="rounded-md border p-3 space-y-2">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 flex-wrap">
             <BlockLegend entries={legendEntries} />
           </div>
-          <div className="flex items-center gap-2">
-            <label className="text-[10px] text-muted-foreground">Scope:</label>
-            <select
-              className="text-[11px] rounded border bg-background px-2 py-0.5"
-              value={selectedScopeId ?? ""}
-              onChange={(e) => setSelectedScopeId(e.target.value || null)}
-            >
-              <option value="">— All scopes (aggregate)</option>
-              {scopes.map((s) => (
-                <option key={s.id} value={s.id}>{s.name}</option>
-              ))}
-            </select>
-            {isLoading && <span className="text-xs text-muted-foreground">Loading…</span>}
-          </div>
+          {isLoading && <span className="text-xs text-muted-foreground">Loading…</span>}
         </div>
         <ChartShell dates={dates} cursorDate={today} maxStack={maxStack} yAxisLabels={yTicks}>
         {dates.map((date, colIdx) => {

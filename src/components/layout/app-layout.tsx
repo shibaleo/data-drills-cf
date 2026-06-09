@@ -6,6 +6,7 @@ import { SITE_NAME } from "@/lib/site";
 import { Sidebar, SidebarNav } from "./sidebar";
 import { Sheet, SheetTrigger, SheetContent } from "@/components/ui/sheet";
 import { UserMenu } from "./user-menu";
+import { GlobalScopePicker } from "./global-scope-picker";
 import { PageProvider, usePageContext } from "@/lib/page-context";
 
 function LayoutInner({ children }: { children: React.ReactNode }) {
@@ -71,6 +72,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
           {title && (
             <h1 className="text-lg font-semibold truncate shrink-0">{title}</h1>
           )}
+          <GlobalScopePicker />
           {/* Portal target: detail pages inject their top-bar content here via useHeaderSlot(). */}
           <div ref={setHeaderSlotNode} className="flex-1 min-w-0 flex items-center gap-2"/>
           {subtitle && <span className="text-xs text-muted-foreground">{subtitle}</span>}
