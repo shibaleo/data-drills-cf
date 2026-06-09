@@ -29,18 +29,19 @@ const SIDE = 90;
 const CELL_W = SQRT3 * SMALL_SIDE;
 const CELL_H = 1.5 * SMALL_SIDE;
 
-// 放射状メニュー (1.5x scale)
-const MENU_INNER_R = SIDE + 6;
-const MENU_OUTER_R = MENU_INNER_R + 32;
+// 放射状メニュー (1.5x scale)。hex から離して overlap を防ぐ
+const MENU_INNER_R = SIDE + 16;
+const MENU_OUTER_R = MENU_INNER_R + 28;
 // sector 間の角度 gap (= 扇形を独立した petal に見せる)
 const SECTOR_GAP_DEG = 5;
 // 個別 sector hover 時に外側へ伸びる量 (= 「段差」)
 const SECTOR_HOVER_LIFT = 12;
 
 // 大六角の top vertex を「小六角の top vertex」に snap (= 全 6 頂点が snap)
+// menu 外径拡大に合わせて step も少し広げる
 const ANCHOR_ROW_T = 8;
-const COL_STEP_T = 10;
-const ROW_STEP_T = 12; // 要 even
+const COL_STEP_T = 12;
+const ROW_STEP_T = 18; // 要 even
 const COLS_MAX = 3;
 
 /** viewport 幅から表示可能な最大 col 数を求める */
@@ -481,10 +482,17 @@ export default function ScopesHubPage() {
                     const midR = (MENU_INNER_R + outerR) / 2;
                     const lx = cx + midR * Math.cos(midRad);
                     const ly = cy + midR * Math.sin(midRad);
+                    // 他 sector が hover 中ならこの sector はスモーク (dim)
+                    const anySecHovered = hoveredSec !== null;
+                    const dim = anySecHovered && !isSecHover;
                     return (
                       <g
                         key={sec.label}
                         className="cursor-pointer sector-pop"
+                        style={{
+                          opacity: dim ? 0.25 : 1,
+                          transition: "opacity 160ms ease-out",
+                        }}
                         onMouseEnter={() => setHoveredSec(secKey)}
                         onMouseLeave={() => setHoveredSec(null)}
                         onClick={(e) => {
