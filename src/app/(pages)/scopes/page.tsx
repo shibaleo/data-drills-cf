@@ -378,7 +378,7 @@ export default function ScopesHubPage() {
               />
             ))}
           </pattern>
-          {/* hex の fill 用 gradient — idle は gray、hover は黒系 */}
+          {/* hex の fill 用 gradient — idle=gray, hover=黒系, sector hover=warm orange */}
           <radialGradient id="hexFillIdle" cx="50%" cy="30%" r="80%">
             <stop offset="0%" stopColor="hsl(0 0% 30%)" stopOpacity="1" />
             <stop offset="100%" stopColor="hsl(0 0% 20%)" stopOpacity="1" />
@@ -386,6 +386,11 @@ export default function ScopesHubPage() {
           <radialGradient id="hexFillHover" cx="50%" cy="30%" r="80%">
             <stop offset="0%" stopColor="hsl(var(--card))" stopOpacity="1" />
             <stop offset="100%" stopColor="hsl(0 0% 4%)" stopOpacity="1" />
+          </radialGradient>
+          <radialGradient id="hexFillWarm" cx="50%" cy="30%" r="85%">
+            <stop offset="0%" stopColor="hsl(var(--primary) / 0.35)" stopOpacity="1" />
+            <stop offset="60%" stopColor="hsl(var(--primary) / 0.15)" stopOpacity="1" />
+            <stop offset="100%" stopColor="hsl(0 0% 6%)" stopOpacity="1" />
           </radialGradient>
         </defs>
         <rect x="0" y="0" width="100%" height="100%" fill="url(#hexGrid)" />
@@ -486,7 +491,13 @@ export default function ScopesHubPage() {
                 )}
                 <polygon
                   points={hexPoints(cx, cy, SIDE)}
-                  fill={hovered ? "url(#hexFillHover)" : "url(#hexFillIdle)"}
+                  fill={
+                    hoveredSec !== null && hoveredSec.startsWith(`${scope.id}:`)
+                      ? "url(#hexFillWarm)"
+                      : hovered
+                        ? "url(#hexFillHover)"
+                        : "url(#hexFillIdle)"
+                  }
                   stroke={
                     hovered || stats.pending > 0
                       ? "hsl(var(--primary) / 0.55)"
