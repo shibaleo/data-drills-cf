@@ -639,7 +639,7 @@ export default function ScopesHubPage() {
                         >
                           <path
                             d={path}
-                            fill={isSecHover ? sec.color : "var(--card)"}
+                            fill={isSecHover ? sec.color : "var(--background)"}
                             stroke={sec.color}
                             strokeWidth={1.8}
                             strokeLinejoin="round"
