@@ -32,6 +32,10 @@ const CELL_H = 1.5 * SMALL_SIDE;
 // 放射状メニュー (1.5x scale)
 const MENU_INNER_R = SIDE + 6;
 const MENU_OUTER_R = MENU_INNER_R + 32;
+// sector 間の角度 gap (= 扇形を独立した petal に見せる)
+const SECTOR_GAP_DEG = 5;
+// 個別 sector hover 時に外側へ伸びる量 (= 「段差」)
+const SECTOR_HOVER_LIFT = 12;
 
 // 大六角の top vertex を「小六角の top vertex」に snap (= 全 6 頂点が snap)
 const ANCHOR_ROW_T = 8;
@@ -210,6 +214,7 @@ export default function ScopesHubPage() {
   const { data: scopes = [] } = useScopes();
   const navigate = useNavigate();
   const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const [hoveredSec, setHoveredSec] = useState<string | null>(null);
   const [ripples, setRipples] = useState<{ id: string; x: number; y: number; color: string }[]>([]);
 
   // user 全 review を 1 度だけ取得して、client-side で scope.filter ごとに絞り込む
@@ -457,23 +462,31 @@ export default function ScopesHubPage() {
               {hovered && (
                 <g>
                   {SECTORS.map((sec) => {
+                    // 各 sector の両端から GAP/2 ずつ引いて隙間を作る
+                    const adjStart = sec.startDeg + SECTOR_GAP_DEG / 2;
+                    const adjEnd = sec.endDeg - SECTOR_GAP_DEG / 2;
+                    const secKey = `${scope.id}:${sec.label}`;
+                    const isSecHover = hoveredSec === secKey;
+                    const outerR = MENU_OUTER_R + (isSecHover ? SECTOR_HOVER_LIFT : 0);
                     const path = annularSector(
                       cx,
                       cy,
                       MENU_INNER_R,
-                      MENU_OUTER_R,
-                      sec.startDeg,
-                      sec.endDeg,
+                      outerR,
+                      adjStart,
+                      adjEnd,
                     );
-                    const midDeg = (sec.startDeg + sec.endDeg) / 2;
+                    const midDeg = (adjStart + adjEnd) / 2;
                     const midRad = (midDeg * Math.PI) / 180;
-                    const midR = (MENU_INNER_R + MENU_OUTER_R) / 2;
+                    const midR = (MENU_INNER_R + outerR) / 2;
                     const lx = cx + midR * Math.cos(midRad);
                     const ly = cy + midR * Math.sin(midRad);
                     return (
                       <g
                         key={sec.label}
                         className="cursor-pointer sector-pop"
+                        onMouseEnter={() => setHoveredSec(secKey)}
+                        onMouseLeave={() => setHoveredSec(null)}
                         onClick={(e) => {
                           spawnRipple(
                             (e.currentTarget as SVGGElement).ownerSVGElement,
@@ -486,17 +499,11 @@ export default function ScopesHubPage() {
                       >
                         <path
                           d={path}
-                          fill="var(--card)"
+                          fill={isSecHover ? sec.color : "var(--card)"}
                           stroke={sec.color}
                           strokeWidth={1.8}
                           strokeLinejoin="round"
-                          style={{ transition: "fill 140ms" }}
-                          onMouseEnter={(e) => {
-                            (e.currentTarget as SVGPathElement).style.fill = sec.color;
-                          }}
-                          onMouseLeave={(e) => {
-                            (e.currentTarget as SVGPathElement).style.fill = "var(--card)";
-                          }}
+                          style={{ transition: "fill 140ms, d 180ms cubic-bezier(0.34, 1.56, 0.64, 1)" }}
                         />
                         <text
                           x={lx}
@@ -505,11 +512,11 @@ export default function ScopesHubPage() {
                           dominantBaseline="central"
                           fontSize={10}
                           fontWeight={700}
-                          fill={sec.color}
+                          fill={isSecHover ? "var(--background)" : sec.color}
                           className="pointer-events-none select-none"
                           style={{ paintOrder: "stroke" }}
                           stroke="var(--background)"
-                          strokeWidth={0.4}
+                          strokeWidth={isSecHover ? 0 : 0.4}
                         >
                           {sec.label}
                         </text>
