@@ -1,6 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { rpc, unwrap, type RpcData } from "@/lib/rpc-client";
 import type { ScopeCreateInput, ScopeUpdateInput, ScopeBatchInput } from "@/lib/schemas/scope";
+import { reviewKeys } from "@/hooks/queries/use-review";
+import { problemsKeys } from "@/hooks/queries/use-problems";
 
 export type ScopeRow = RpcData<typeof rpc.api.v1.scopes.$get>["data"][number];
 export type ScopeRevision = RpcData<typeof rpc.api.v1.scopes[":id"]["revisions"]["$get"]>["data"][number];
@@ -90,6 +92,9 @@ export function useUpdateScope() {
       qc.invalidateQueries({ queryKey: scopesKeys.list() });
       qc.invalidateQueries({ queryKey: scopesKeys.detail(vars.id) });
       qc.invalidateQueries({ queryKey: scopesKeys.revisions(vars.id) });
+      // filter 変更で member 集合が変わる → review / problems のクエリも fresh に
+      qc.invalidateQueries({ queryKey: reviewKeys.all });
+      qc.invalidateQueries({ queryKey: problemsKeys.all });
     },
   });
 }

@@ -431,10 +431,11 @@ export default function ScopesHubPage() {
                   glow filter はここだけに当てる (sector menu には掛けない) */}
               <g
                 style={{
+                  // 多重 drop-shadow で強めの glow halo を作る (hover 時のみ)
                   filter: hovered
-                    ? `drop-shadow(0 0 12px ${THEME_PRIMARY_GLOW_SOFT})`
+                    ? `drop-shadow(0 0 8px hsl(var(--primary) / 0.85)) drop-shadow(0 0 28px hsl(var(--primary) / 0.65)) drop-shadow(0 0 60px hsl(var(--primary) / 0.45))`
                     : "none",
-                  transition: "filter 200ms ease-out",
+                  transition: "filter 220ms ease-out",
                 }}
               >
                 {/* 進捗バー (hex の辺に沿って goodPct% 分だけ描画)。
