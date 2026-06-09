@@ -442,27 +442,31 @@ export default function ScopesHubPage() {
                   filter: `drop-shadow(0 0 6px ${THEME_PRIMARY_GLOW_SOFT})`,
                 }}
               >
-                {/* 進捗バー track (hex の辺に沿う) */}
-                <polygon
-                  points={hexPoints(cx, cy, RING_SIDE)}
-                  fill="none"
-                  stroke="currentColor"
-                  strokeOpacity={0.16}
-                  strokeWidth={3}
-                  strokeLinejoin="round"
-                />
-                {/* 進捗バー fill: top vertex から時計回りに goodPct% 分 */}
-                {stats.active > 0 && stats.goodPct > 0 && (
-                  <polygon
-                    points={hexPoints(cx, cy, RING_SIDE)}
-                    fill="none"
-                    stroke={heat.ring}
-                    strokeWidth={3}
-                    strokeLinejoin="round"
-                    strokeLinecap="round"
-                    strokeDasharray={RING_PERIMETER}
-                    strokeDashoffset={RING_PERIMETER * (1 - stats.goodPct / 100)}
-                  />
+                {/* 進捗バー (hex の辺に沿う) — hover 時は donut menu と
+                    位置が被るので非表示 */}
+                {!hovered && (
+                  <>
+                    <polygon
+                      points={hexPoints(cx, cy, RING_SIDE)}
+                      fill="none"
+                      stroke="currentColor"
+                      strokeOpacity={0.16}
+                      strokeWidth={3}
+                      strokeLinejoin="round"
+                    />
+                    {stats.active > 0 && stats.goodPct > 0 && (
+                      <polygon
+                        points={hexPoints(cx, cy, RING_SIDE)}
+                        fill="none"
+                        stroke={heat.ring}
+                        strokeWidth={3}
+                        strokeLinejoin="round"
+                        strokeLinecap="round"
+                        strokeDasharray={RING_PERIMETER}
+                        strokeDashoffset={RING_PERIMETER * (1 - stats.goodPct / 100)}
+                      />
+                    )}
+                  </>
                 )}
                 <polygon
                   points={hexPoints(cx, cy, SIDE)}
