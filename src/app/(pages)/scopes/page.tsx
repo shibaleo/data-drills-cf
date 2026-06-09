@@ -1,79 +1,246 @@
 "use client";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { useQueryClient } from "@tanstack/react-query";
 import { useScopes } from "@/hooks/queries/use-scopes";
-import { useProblemsList } from "@/hooks/queries/use-problems";
+import { useField } from "@/hooks/use-field";
 import { usePageTitle } from "@/lib/page-context";
-import { prefetchScopeFromFilter } from "@/lib/prefetch-scope";
 import { Plus } from "lucide-react";
 
-export default function ScopesPage() {
-  usePageTitle("Scopes");
-  const navigate = useNavigate();
-  const qc = useQueryClient();
-  const { data: scopes = [], isLoading } = useScopes();
-  const { data: allProblems = [] } = useProblemsList();
+/**
+ * Scopes hub — pointy-top hex grid.
+ *
+ * 背景は小六角の honeycomb。各 scope は 1 辺 = 小六角 6 マス分の大六角として
+ * 配置される。hover で 6 辺それぞれの外側に Edit/Review/Throughput/Plan/Stats/
+ * Digest ボタンが現れ、該当ページへ navigate する hub になる。
+ */
 
-  // 各 scope の filter で members を絞り、進捗 (done / total) を出す。
-  // 中間 map 作成を避け、1パス per scope で直接判定 (allocation 不要)
-  const progressByScope = useMemo(() => {
-    const m = new Map<string, { done: number; total: number }>();
-    for (const s of scopes) {
-      const filter = (s.filter ?? {}) as { fieldIds?: string[]; subjectIds?: string[]; levelIds?: string[] };
-      // useProblemsList は field_id を返す (Phase 6 で rename 済)
-      const fieldSet = filter.fieldIds?.length ? new Set(filter.fieldIds) : null;
-      const subjectSet = filter.subjectIds?.length ? new Set(filter.subjectIds) : null;
-      const levelSet = filter.levelIds?.length ? new Set(filter.levelIds) : null;
-      let total = 0;
-      let done = 0;
-      for (const p of allProblems) {
-        if (fieldSet && (!p.field_id || !fieldSet.has(p.field_id))) continue;
-        if (subjectSet && (!p.subject_id || !subjectSet.has(p.subject_id))) continue;
-        if (levelSet && (!p.level_id || !levelSet.has(p.level_id))) continue;
-        total++;
-        if (p.answers.length > 0) done++;
+const SQRT3 = Math.sqrt(3);
+// 大六角の 1 辺 (px)。背景の小六角は SIDE / 6
+const SIDE = 60;
+const SMALL_SIDE = SIDE / 6;
+const HEX_W = SQRT3 * SIDE;
+const HEX_H = 2 * SIDE;
+const INRADIUS = (SIDE * SQRT3) / 2;
+const BUTTON_OFFSET = 14; // 辺中点から外側に押し出す距離
+const COLS_MAX = 4;
+const GAP_X = 80;
+const GAP_Y = 60;
+const PAD = 70;
+
+function hexPoints(cx: number, cy: number, side: number) {
+  return [
+    [cx, cy - side],
+    [cx + (SQRT3 * side) / 2, cy - side / 2],
+    [cx + (SQRT3 * side) / 2, cy + side / 2],
+    [cx, cy + side],
+    [cx - (SQRT3 * side) / 2, cy + side / 2],
+    [cx - (SQRT3 * side) / 2, cy - side / 2],
+  ]
+    .map(([x, y]) => `${x},${y}`)
+    .join(" ");
+}
+
+// 6 辺の外向き unit normal + ラベル + 遷移先。
+// pointy-top: 上下は頂点。辺は NW/NE/E/SE/SW/W の 6 つ。
+type EdgeDef = {
+  nx: number;
+  ny: number;
+  label: string;
+  /** Edit は /scopes/$id、それ以外は /[view]?scope_id= */
+  view: "edit" | "review" | "throughput" | "plan" | "stats" | "digest";
+};
+const EDGES: EdgeDef[] = [
+  { nx: -0.5, ny: -SQRT3 / 2, label: "Edit", view: "edit" },
+  { nx: 0.5, ny: -SQRT3 / 2, label: "Review", view: "review" },
+  { nx: 1, ny: 0, label: "Throughput", view: "throughput" },
+  { nx: 0.5, ny: SQRT3 / 2, label: "Plan", view: "plan" },
+  { nx: -0.5, ny: SQRT3 / 2, label: "Stats", view: "stats" },
+  { nx: -1, ny: 0, label: "Digest", view: "digest" },
+];
+
+function truncate(s: string, n: number): string {
+  return s.length > n ? s.slice(0, n - 1) + "…" : s;
+}
+
+export default function ScopesHubPage() {
+  usePageTitle("Scopes");
+  const { setCurrentScopeId } = useField();
+  const { data: scopes = [] } = useScopes();
+  const navigate = useNavigate();
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
+
+  // 配置: COLS_MAX 列でグリッド (新規 + 件分)。scope 数が少ない時は自然に左寄せ
+  const total = scopes.length + 1; // +1 = New ボタン
+  const cols = Math.min(COLS_MAX, Math.max(1, total));
+  const rows = Math.ceil(total / cols);
+
+  const positions = useMemo(() => {
+    return scopes.map((s, i) => {
+      const col = i % cols;
+      const row = Math.floor(i / cols);
+      const cx = PAD + HEX_W / 2 + col * (HEX_W + GAP_X);
+      const cy = PAD + SIDE + row * (HEX_H + GAP_Y);
+      return { scope: s, cx, cy };
+    });
+  }, [scopes, cols]);
+
+  const newPos = useMemo(() => {
+    const col = scopes.length % cols;
+    const row = Math.floor(scopes.length / cols);
+    return {
+      cx: PAD + HEX_W / 2 + col * (HEX_W + GAP_X),
+      cy: PAD + SIDE + row * (HEX_H + GAP_Y),
+    };
+  }, [scopes.length, cols]);
+
+  const width = PAD * 2 + cols * HEX_W + (cols - 1) * GAP_X;
+  const height = PAD * 2 + rows * HEX_H + (rows - 1) * GAP_Y;
+
+  // 背景 honeycomb (装飾)
+  const bgHexes = useMemo(() => {
+    const cellW = SQRT3 * SMALL_SIDE;
+    const cellH = 1.5 * SMALL_SIDE;
+    const totalCols = Math.ceil(width / cellW) + 2;
+    const totalRows = Math.ceil(height / cellH) + 2;
+    const out: { cx: number; cy: number; key: string }[] = [];
+    for (let r = 0; r < totalRows; r++) {
+      for (let c = 0; c < totalCols; c++) {
+        const cx = c * cellW + (r % 2) * (cellW / 2);
+        const cy = r * cellH;
+        out.push({ cx, cy, key: `${r}-${c}` });
       }
-      m.set(s.id, { done, total });
     }
-    return m;
-  }, [scopes, allProblems]);
+    return out;
+  }, [width, height]);
+
+  function onEdgeClick(scopeId: string, view: EdgeDef["view"]) {
+    setCurrentScopeId(scopeId);
+    if (view === "edit") {
+      navigate({ to: "/scopes/$scope_id" as string, params: { scope_id: scopeId } });
+    } else {
+      navigate({ to: `/${view}` as string, search: { scope_id: scopeId } });
+    }
+  }
 
   return (
-    <div className="p-3 md:p-4 flex flex-col gap-2">
-      {isLoading && <div>Loading...</div>}
+    <div className="overflow-auto">
+      <svg
+        viewBox={`0 0 ${width} ${height}`}
+        width={width}
+        height={height}
+        className="block mx-auto"
+        style={{ maxWidth: "100%" }}
+      >
+        {/* 背景: 小六角 honeycomb */}
+        <g className="stroke-muted-foreground/15 fill-none" strokeWidth={0.5}>
+          {bgHexes.map((h) => (
+            <polygon key={h.key} points={hexPoints(h.cx, h.cy, SMALL_SIDE)} />
+          ))}
+        </g>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {scopes.map((s) => {
-          const prog = progressByScope.get(s.id) ?? { done: 0, total: 0 };
-          const pct = prog.total > 0 ? Math.round((prog.done * 100) / prog.total) : 0;
+        {/* 各 scope hex */}
+        {positions.map(({ scope, cx, cy }) => {
+          const hovered = hoveredId === scope.id;
+          // 透明な大きめ六角で hover 領域を確保 (ボタンが現れるエリアも含む)
+          const hitSide = SIDE + BUTTON_OFFSET + 16;
           return (
-            <Link key={s.id} to="/scopes/$scope_id" params={{ scope_id: s.id }}
-              onMouseEnter={() => prefetchScopeFromFilter(qc, s.filter as { fieldIds?: string[] })}
-              onFocus={() => prefetchScopeFromFilter(qc, s.filter as { fieldIds?: string[] })}
-              className="block border rounded p-4 hover:bg-accent transition space-y-2">
-              <div className="font-semibold">{s.name}</div>
-              <div className="flex items-center gap-2">
-                <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
-                  <div className="h-full bg-green-500 transition-all" style={{ width: `${pct}%` }}/>
-                </div>
-                <div className="text-xs text-muted-foreground tabular-nums shrink-0">
-                  {prog.done} / {prog.total} ({pct}%)
-                </div>
-              </div>
-              <div className="text-xs text-muted-foreground">
-                {s.daily_minutes} min/day · revision {s.revision}
-              </div>
-            </Link>
+            <g
+              key={scope.id}
+              onMouseEnter={() => setHoveredId(scope.id)}
+              onMouseLeave={() => setHoveredId(null)}
+            >
+              {/* hit region (transparent) */}
+              <polygon
+                points={hexPoints(cx, cy, hitSide)}
+                fill="transparent"
+                pointerEvents="all"
+              />
+              {/* visible hex */}
+              <polygon
+                points={hexPoints(cx, cy, SIDE)}
+                className={
+                  hovered
+                    ? "fill-accent stroke-primary transition-all"
+                    : "fill-card stroke-border transition-all"
+                }
+                strokeWidth={1.5}
+              />
+              <text
+                x={cx}
+                y={cy}
+                textAnchor="middle"
+                dominantBaseline="central"
+                className="fill-foreground text-[11px] font-semibold pointer-events-none select-none"
+              >
+                {truncate(scope.name, 9)}
+              </text>
+              {hovered && (
+                <g>
+                  {EDGES.map((edge) => {
+                    const dist = INRADIUS + BUTTON_OFFSET;
+                    const bx = cx + edge.nx * dist;
+                    const by = cy + edge.ny * dist;
+                    return (
+                      <EdgeButton
+                        key={edge.label}
+                        cx={bx}
+                        cy={by}
+                        label={edge.label}
+                        onClick={() => onEdgeClick(scope.id, edge.view)}
+                      />
+                    );
+                  })}
+                </g>
+              )}
+            </g>
           );
         })}
-        <button type="button"
-          onClick={() => navigate({ to: "/scopes/new" as string })}
-          className="flex items-center justify-center gap-2 rounded border border-dashed border-muted-foreground/40 p-4 text-muted-foreground hover:text-foreground hover:border-foreground/60 hover:bg-accent/30 transition min-h-[5.5rem]">
-          <Plus className="size-4"/>
-          <span className="text-sm font-medium">New</span>
-        </button>
-      </div>
+
+        {/* New scope ボタン */}
+        <g>
+          <Link to={"/scopes/new" as string}>
+            <polygon
+              points={hexPoints(newPos.cx, newPos.cy, SIDE)}
+              className="fill-card stroke-dashed stroke-muted-foreground/60 hover:fill-accent transition-colors cursor-pointer"
+              strokeWidth={1.5}
+              strokeDasharray="4 3"
+            />
+          </Link>
+          <Plus
+            x={newPos.cx - 10}
+            y={newPos.cy - 10}
+            width={20}
+            height={20}
+            className="fill-none stroke-muted-foreground pointer-events-none"
+          />
+        </g>
+      </svg>
     </div>
+  );
+}
+
+function EdgeButton({
+  cx,
+  cy,
+  label,
+  onClick,
+}: {
+  cx: number;
+  cy: number;
+  label: string;
+  onClick: () => void;
+}) {
+  const W = 66;
+  const H = 20;
+  return (
+    <foreignObject x={cx - W / 2} y={cy - H / 2} width={W} height={H}>
+      <button
+        type="button"
+        onClick={onClick}
+        className="w-full h-full text-[10px] font-semibold rounded border bg-popover/95 backdrop-blur px-1 leading-none hover:bg-primary hover:text-primary-foreground hover:border-primary shadow-sm"
+      >
+        {label}
+      </button>
+    </foreignObject>
   );
 }

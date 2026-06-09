@@ -20,7 +20,6 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useReviewList } from "@/hooks/queries/use-review";
-import { useScopeTodayCount } from "@/hooks/queries/use-scopes";
 import { useQueryClient } from "@tanstack/react-query";
 import { reviewKeys } from "@/hooks/queries/use-review";
 import { UserMenu } from "./user-menu";
@@ -59,19 +58,9 @@ function OverdueBadge() {
   );
 }
 
-function BacklogBadge() {
-  const { data: count = 0 } = useScopeTodayCount();
-  if (count <= 0) return null;
-  return (
-    <span className="absolute -right-2 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-0.5 text-[10px] font-bold leading-none text-destructive-foreground">
-      {count > 99 ? "99+" : count}
-    </span>
-  );
-}
-
 const navItems: NavItem[] = [
   { href: "/review", label: "Review", icon: Repeat, Badge: OverdueBadge },
-  { href: "/scopes", label: "Scopes", icon: Inbox, Badge: BacklogBadge },
+  { href: "/scopes", label: "Scopes", icon: Inbox },
   { href: "/throughput", label: "Throughput", icon: History },
   { href: "/plan", label: "Plan", icon: CalendarRange },
   { href: "/stats", label: "Stats", icon: BarChart2 },
