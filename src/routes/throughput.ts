@@ -2,9 +2,11 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { sql } from "drizzle-orm";
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import { scope } from "@/lib/db/schema";
 import { ownsField } from "@/lib/ownership";
 import type { AuthResult } from "@/lib/auth";
+import type { MemberFilter } from "@/lib/db/schema";
 
 type Env = { Variables: { authResult: AuthResult } };
 
@@ -34,11 +36,28 @@ const app = new Hono<Env>()
   .get("/", zValidator("query", z.object({
     field_id: z.string().uuid().optional(),
     as_of: z.string().optional(),
+    scope_id: z.string().uuid().optional(),
   })), async (c) => {
     const userId = c.get("authResult").userId;
-    const { field_id: fieldId, as_of: asOf } = c.req.valid("query");
+    const { field_id: fieldId, as_of: asOf, scope_id: scopeId } = c.req.valid("query");
     if (!userId) return c.json({ data: [] });
     if (fieldId && !(await ownsField(fieldId, userId))) return c.json({ data: [] });
+
+    // scope_id 指定時: scope.filter を resolve して problem.{field,subject,level} の追加 WHERE に変換
+    let scopeFilter: MemberFilter | null = null;
+    if (scopeId) {
+      const [scopeRow] = await db.select().from(scope)
+        .where(and(
+          eq(scope.id, scopeId),
+          eq(scope.userId, userId),
+          isNull(scope.validTo),
+          eq(scope.isActive, true),
+        ))
+        .orderBy(desc(scope.revision))
+        .limit(1);
+      if (scopeRow) scopeFilter = scopeRow.filter;
+    }
+
     // asOf 指定中は JST のその日以前の answer のみ対象。
     // LAG over partition は WHERE 適用後に評価されるため "前回 status" も
     // 巻き戻し後の系列でちゃんと計算される。
@@ -46,6 +65,27 @@ const app = new Hono<Env>()
     const fieldCond = fieldId
       ? sql`p.field_id = ${fieldId}`
       : sql`p.field_id IN (SELECT id FROM data_drills.field WHERE user_id = ${userId})`;
+
+    // member filter (scope_id 指定時): 配列が空なら 0 件、undefined ならその軸は無制約
+    const filterConds: ReturnType<typeof sql>[] = [];
+    if (scopeFilter?.fieldIds !== undefined) {
+      filterConds.push(
+        scopeFilter.fieldIds.length === 0 ? sql`FALSE` : sql`p.field_id IN ${scopeFilter.fieldIds}`,
+      );
+    }
+    if (scopeFilter?.subjectIds !== undefined) {
+      filterConds.push(
+        scopeFilter.subjectIds.length === 0 ? sql`FALSE` : sql`p.subject_id IN ${scopeFilter.subjectIds}`,
+      );
+    }
+    if (scopeFilter?.levelIds !== undefined) {
+      filterConds.push(
+        scopeFilter.levelIds.length === 0 ? sql`FALSE` : sql`p.level_id IN ${scopeFilter.levelIds}`,
+      );
+    }
+    const filterCond = filterConds.length === 0
+      ? sql``
+      : sql`AND ${sql.join(filterConds, sql` AND `)}`;
     const rows = await db.execute<Row>(sql`
       SELECT
         a.id,
@@ -67,6 +107,7 @@ const app = new Hono<Env>()
       JOIN data_drills.problem p ON p.id = a.problem_id
       LEFT JOIN data_drills.answer_status s ON s.id = a.answer_status_id
       WHERE ${fieldCond}
+      ${filterCond}
       ${asOfCond}
       ORDER BY a.date ASC, a.created_at ASC
     `);

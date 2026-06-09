@@ -8,6 +8,8 @@ import { computeNextReview, computeDaysOverdue } from "@/lib/review-scoring";
 import { toJSTDateString } from "@/lib/date-utils";
 import { problemColor } from "@/lib/problem-color";
 import { ownsField } from "@/lib/ownership";
+import { applyMemberFilter } from "@/lib/member-filter";
+import type { MemberFilter } from "@/lib/db/schema";
 import type { AuthResult } from "@/lib/auth";
 
 type Env = { Variables: { authResult: AuthResult } };
@@ -30,8 +32,9 @@ const app = new Hono<Env>()
     if (!userId) return c.json({ data: [], next_cursor: null });
     if (fieldId && !(await ownsField(fieldId, userId))) return c.json({ data: [], next_cursor: null });
 
-    // scope_id 指定時: status_stabilities override map を引く (空ならグローバル fallback)
+    // scope_id 指定時: status_stabilities override map と filter (member 絞り込み) を引く
     let statusStabilityOverride: Record<string, number> = {};
+    let scopeFilter: MemberFilter | null = null;
     if (scopeId) {
       const [scopeRow] = await db.select().from(scope)
         .where(and(
@@ -42,10 +45,13 @@ const app = new Hono<Env>()
         ))
         .orderBy(desc(scope.revision))
         .limit(1);
-      if (scopeRow) statusStabilityOverride = scopeRow.statusStabilities ?? {};
+      if (scopeRow) {
+        statusStabilityOverride = scopeRow.statusStabilities ?? {};
+        scopeFilter = scopeRow.filter;
+      }
     }
 
-    const problems = fieldId
+    const problemsRaw = fieldId
       ? await db.select().from(problem)
           .where(eq(problem.fieldId, fieldId))
           .orderBy(problem.createdAt)
@@ -58,6 +64,7 @@ const app = new Hono<Env>()
           .where(eq(field.userId, userId))
           .orderBy(problem.createdAt);
 
+    const problems = scopeFilter ? applyMemberFilter(problemsRaw, scopeFilter) : problemsRaw;
     const problemIds = problems.map((p) => p.id);
 
     // asOf 指定中はその日 (JST) までの answer のみ集計対象。
