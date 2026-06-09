@@ -378,14 +378,14 @@ export default function ScopesHubPage() {
               />
             ))}
           </pattern>
-          {/* hex の fill 用 gradient */}
-          <radialGradient id="hexFillCalm" cx="50%" cy="30%" r="75%">
-            <stop offset="0%" stopColor="hsl(var(--card))" stopOpacity="1" />
-            <stop offset="100%" stopColor="hsl(var(--background))" stopOpacity="1" />
+          {/* hex の fill 用 gradient — idle は gray、hover は黒系 */}
+          <radialGradient id="hexFillIdle" cx="50%" cy="30%" r="80%">
+            <stop offset="0%" stopColor="hsl(0 0% 30%)" stopOpacity="1" />
+            <stop offset="100%" stopColor="hsl(0 0% 20%)" stopOpacity="1" />
           </radialGradient>
-          <radialGradient id="hexFillWarm" cx="50%" cy="30%" r="75%">
+          <radialGradient id="hexFillHover" cx="50%" cy="30%" r="80%">
             <stop offset="0%" stopColor="hsl(var(--card))" stopOpacity="1" />
-            <stop offset="100%" stopColor="hsl(var(--primary) / 0.18)" stopOpacity="1" />
+            <stop offset="100%" stopColor="hsl(0 0% 4%)" stopOpacity="1" />
           </radialGradient>
         </defs>
         <rect x="0" y="0" width="100%" height="100%" fill="url(#hexGrid)" />
@@ -486,7 +486,7 @@ export default function ScopesHubPage() {
                 )}
                 <polygon
                   points={hexPoints(cx, cy, SIDE)}
-                  fill={hovered ? "url(#hexFillWarm)" : "url(#hexFillCalm)"}
+                  fill={hovered ? "url(#hexFillHover)" : "url(#hexFillIdle)"}
                   stroke={
                     hovered || stats.pending > 0
                       ? "hsl(var(--primary) / 0.55)"
@@ -532,25 +532,22 @@ export default function ScopesHubPage() {
                     {countLine}
                   </text>
                 )}
-                {/* 未消化: ピル形バッジで強調。caught up は淡色テキスト */}
+                {/* 未消化 / 状態: pill は status 専用なので、ここでは
+                    左に色付き dot + 件数テキストで表現 (status pill とは形が違う) */}
                 {stats.pending > 0 ? (
                   <g>
-                    <rect
-                      x={cx - 28}
-                      y={cy + 26}
-                      width={56}
-                      height={16}
-                      rx={8}
-                      fill="hsl(var(--primary) / 0.18)"
-                      stroke="hsl(var(--primary) / 0.6)"
-                      strokeWidth={1}
+                    <circle
+                      cx={cx - 22}
+                      cy={cy + 32}
+                      r={3.5}
+                      fill="hsl(var(--primary))"
                     />
                     <text
-                      x={cx}
-                      y={cy + 34}
-                      textAnchor="middle"
+                      x={cx - 14}
+                      y={cy + 32}
+                      textAnchor="start"
                       dominantBaseline="central"
-                      fontSize={10}
+                      fontSize={11}
                       fontWeight={700}
                       fill="hsl(var(--primary))"
                       className="pointer-events-none select-none"
