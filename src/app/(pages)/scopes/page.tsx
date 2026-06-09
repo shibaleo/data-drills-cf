@@ -22,23 +22,21 @@ import type { MemberFilterInput } from "@/lib/schemas/member-filter";
  */
 
 const SQRT3 = Math.sqrt(3);
-// 小六角: tetris CELL=14 とおおむね同じ視覚サイズ (hex width = SQRT3*8 ≈ 13.86)
-const SMALL_SIDE = 8;
-// SIDE = SMALL_SIDE * 6 (= 48): 全 6 頂点が小六角の top vertex に snap する整合値。
-// これで大六角の 6 辺それぞれが小六角の vertex を 6 個結ぶまっすぐな線になり、
-// グリッドとの一体感が出る。
-const SIDE = 48;
+// 小六角: hex width = SQRT3*10 ≈ 17.32
+const SMALL_SIDE = 10;
+// SIDE = SMALL_SIDE * 6 (= 60): 全 6 頂点が小六角の top vertex に snap する整合値。
+const SIDE = 60;
 const CELL_W = SQRT3 * SMALL_SIDE;
 const CELL_H = 1.5 * SMALL_SIDE;
 
 // 放射状メニュー
 const MENU_INNER_R = SIDE + 4;
-const MENU_OUTER_R = MENU_INNER_R + 20;
+const MENU_OUTER_R = MENU_INNER_R + 22;
 
 // 大六角の top vertex を「小六角の top vertex」に snap (= 全 6 頂点が snap)
 const ANCHOR_ROW_T = 8;
-const COL_STEP_T = 11;
-const ROW_STEP_T = 14; // 要 even
+const COL_STEP_T = 10;
+const ROW_STEP_T = 12; // 要 even
 const COLS_MAX = 3;
 
 /** viewport 幅から表示可能な最大 col 数を求める */
