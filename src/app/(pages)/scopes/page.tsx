@@ -185,10 +185,9 @@ function computeStats(rows: { answerCount: number; daysUntil: number }[]): Scope
   return { total: rows.length, active, overdue, dueToday, pending, goodPct, nextDue };
 }
 
-// テーマプライマリ (globals.css の --accent-value = hsl(19 58% 56%))。
-// 進捗バー / グロー / hover アクセントを全部これに揃える。
-const THEME_PRIMARY = "hsl(var(--accent-value))";
-const THEME_PRIMARY_GLOW_SOFT = "hsl(var(--accent-value) / 0.35)";
+// すべて semantic な --primary (= theme primary) 参照。色値はハードコードしない。
+const THEME_PRIMARY = "hsl(var(--primary))";
+const THEME_PRIMARY_GLOW_SOFT = "hsl(var(--primary) / 0.35)";
 
 function heatColor(): { glow: string; ring: string } {
   return { glow: THEME_PRIMARY_GLOW_SOFT, ring: THEME_PRIMARY };
