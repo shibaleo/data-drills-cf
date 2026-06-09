@@ -380,6 +380,20 @@ export default function ScopesHubPage() {
         </defs>
         <rect x="0" y="0" width="100%" height="100%" fill="url(#hexGrid)" />
 
+        {/* 全体スモーク overlay: いずれかの scope を hover 中は背景と他 scope を暗く */}
+        <rect
+          x="0"
+          y="0"
+          width="100%"
+          height="100%"
+          fill="black"
+          style={{
+            pointerEvents: "none",
+            opacity: hoveredId !== null ? 0.55 : 0,
+            transition: "opacity 200ms ease-out",
+          }}
+        />
+
         {/* 各 scope */}
         {scopes.map((scope, idx) => {
           const { cx, cy } = bigCenterAt(idx, cols, anchorColT);
@@ -400,7 +414,10 @@ export default function ScopesHubPage() {
                 transform: hovered
                   ? `translate(${cx}px, ${cy}px) scale(1.06) translate(${-cx}px, ${-cy}px)`
                   : "none",
-                transition: "transform 220ms cubic-bezier(0.34, 1.56, 0.64, 1)",
+                // 他 scope が hover 中ならこの scope はスモーク
+                opacity: hoveredId !== null && !hovered ? 0.18 : 1,
+                transition:
+                  "transform 220ms cubic-bezier(0.34, 1.56, 0.64, 1), opacity 200ms ease-out",
               }}
             >
               <circle
@@ -544,7 +561,11 @@ export default function ScopesHubPage() {
 
         {/* New scope affordance */}
         <g
-          style={{ cursor: "pointer" }}
+          style={{
+            cursor: "pointer",
+            opacity: hoveredId !== null ? 0.18 : 1,
+            transition: "opacity 200ms ease-out",
+          }}
           onClick={() => navigate({ to: "/scopes/new" as string })}
         >
           <polygon
