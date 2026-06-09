@@ -34,8 +34,12 @@ export function MemberFilterPicker({ fieldId, value, onChange, trailing }: Props
   const { data: fields = [] } = useFields();
 
   // Effective fields = subjects/levels を表示する対象
+  // - value.fieldIds が undefined (= "all")  → 全 user field
+  // - value.fieldIds = []        (= "none") → 空 (Subject/Level も非表示)
+  // - value.fieldIds = [...]                → その field
+  // - 上記いずれでもなく fieldId prop があれば              → [fieldId]
   const explicitFieldIds =
-    value.fieldIds && value.fieldIds.length > 0
+    value.fieldIds !== undefined
       ? new Set(value.fieldIds)
       : fieldId
         ? new Set([fieldId])
@@ -132,7 +136,7 @@ export function MemberFilterPicker({ fieldId, value, onChange, trailing }: Props
 
       {effectiveFields.length === 0 ? (
         <div className="text-xs text-muted-foreground italic px-1">
-          Field を 1 つ以上選んでください
+          Pick at least one field
         </div>
       ) : (
         <>
@@ -208,7 +212,7 @@ function CategoryGroup({
             type="button"
             onClick={onReset}
             className="text-[10px] text-primary hover:underline"
-            title="制約をリセットして全選択 (all) に戻す"
+            title="Clear constraint (reset to all)"
           >
             reset
           </button>
@@ -302,7 +306,7 @@ function ChipRow({
           type="button"
           onClick={onReset}
           className="text-[10px] text-primary hover:underline"
-          title="制約をリセットして全選択 (all) に戻す"
+          title="Clear constraint (reset to all)"
         >
           reset
         </button>
