@@ -491,13 +491,7 @@ export default function ScopesHubPage() {
                 )}
                 <polygon
                   points={hexPoints(cx, cy, SIDE)}
-                  fill={
-                    hoveredSec !== null && hoveredSec.startsWith(`${scope.id}:`)
-                      ? "url(#hexFillWarm)"
-                      : hovered
-                        ? "url(#hexFillHover)"
-                        : "url(#hexFillIdle)"
-                  }
+                  fill={hovered ? "url(#hexFillHover)" : "url(#hexFillIdle)"}
                   stroke={
                     hovered || stats.pending > 0
                       ? "hsl(var(--primary) / 0.55)"
@@ -596,6 +590,23 @@ export default function ScopesHubPage() {
               </g>
               {hovered && (
                 <g>
+                  {/* sector menu の背後に置く blur halo (scope hover 時のような glow を再現) */}
+                  <circle
+                    cx={cx}
+                    cy={cy}
+                    r={MENU_OUTER_R - 4}
+                    fill="hsl(var(--primary) / 0.55)"
+                    style={{ filter: "blur(28px)" }}
+                    pointerEvents="none"
+                  />
+                  <circle
+                    cx={cx}
+                    cy={cy}
+                    r={MENU_OUTER_R + 6}
+                    fill="hsl(var(--primary) / 0.3)"
+                    style={{ filter: "blur(46px)" }}
+                    pointerEvents="none"
+                  />
                   {SECTORS.map((sec) => {
                     // 各 sector の両端から GAP/2 ずつ引いて隙間を作る
                     const adjStart = sec.startDeg + SECTOR_GAP_DEG / 2;
