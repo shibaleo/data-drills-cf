@@ -785,8 +785,7 @@ export default function SchedulePage() {
     <div className="p-3 md:p-4 flex flex-col gap-2">
       {renderHeaderSlot(
       <>
-        <Input value={localName} onChange={(e) => setLocalName(e.target.value)} disabled={readOnly}
-          className="h-7 text-xs max-w-xs"/>
+        <span className="text-xs font-medium truncate max-w-xs text-foreground/80">{localName}</span>
         {dirty && !readOnly && (
           <div className="ml-auto flex items-center gap-2">
             <button type="button"
