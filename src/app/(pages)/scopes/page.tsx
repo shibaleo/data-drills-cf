@@ -1,5 +1,5 @@
 "use client";
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useScopes, useUpdateScope, type ScopeRow } from "@/hooks/queries/use-scopes";
 import { useField } from "@/hooks/use-field";
@@ -41,27 +41,24 @@ const COL_STEP_T = 11;
 const ROW_STEP_T = 14; // 要 even
 const COLS_MAX = 3;
 
-// viewport 幅で responsive col 数を決める
-const BREAKPOINTS = [
-  { maxWidth: 640, cols: 1, anchorColT: 5 }, // mobile
-  { maxWidth: 1024, cols: 2, anchorColT: 7 }, // tablet
-];
-const DESKTOP_ANCHOR_COL_T = 9;
+/** viewport 幅から表示可能な最大 col 数を求める */
+function maxColsFor(width: number): number {
+  if (width < 640) return 1;
+  if (width < 1024) return 2;
+  return COLS_MAX;
+}
 
-function useResponsiveLayout(): { maxCols: number; anchorColT: number } {
-  const [width, setWidth] = useState(() =>
-    typeof window !== "undefined" ? window.innerWidth : 1200,
-  );
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const handler = () => setWidth(window.innerWidth);
-    window.addEventListener("resize", handler);
-    return () => window.removeEventListener("resize", handler);
-  }, []);
-  for (const bp of BREAKPOINTS) {
-    if (width < bp.maxWidth) return { maxCols: bp.cols, anchorColT: bp.anchorColT };
-  }
-  return { maxCols: COLS_MAX, anchorColT: DESKTOP_ANCHOR_COL_T };
+/**
+ * 大六角群を左右中央に配置するための anchorColT を計算。
+ * group 全幅 = (cols - 1) * COL_STEP_T * CELL_W (= 中心間距離 × (cols-1))
+ * 最初の hex の center x = (containerWidth - group全幅) / 2
+ * anchorColT = round(firstCenterX / CELL_W) で整数 cell snap して grid 整合維持
+ */
+function computeAnchorColT(containerWidth: number, cols: number): number {
+  if (containerWidth <= 0) return 9;
+  const groupWidth = (cols - 1) * COL_STEP_T * CELL_W;
+  const firstCenterX = (containerWidth - groupWidth) / 2;
+  return Math.max(3, Math.round(firstCenterX / CELL_W));
 }
 
 function hexPoints(cx: number, cy: number, side: number): string {
@@ -251,8 +248,26 @@ export default function ScopesHubPage() {
   }, [scopes, allReviews]);
 
   const total = scopes.length + 1;
-  const { maxCols, anchorColT } = useResponsiveLayout();
+  // ResizeObserver でコンテナ幅を測定 → cols / anchorColT を動的計算 (中央配置)
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [containerWidth, setContainerWidth] = useState(0);
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    setContainerWidth(el.clientWidth);
+    const obs = new ResizeObserver((entries) => {
+      const w = entries[0]?.contentRect.width ?? 0;
+      setContainerWidth(w);
+    });
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []);
+  const maxCols = maxColsFor(containerWidth || 1200);
   const cols = Math.min(maxCols, Math.max(1, total));
+  const anchorColT = useMemo(
+    () => computeAnchorColT(containerWidth, cols),
+    [containerWidth, cols],
+  );
 
   const [editingScopeId, setEditingScopeId] = useState<string | null>(null);
 
@@ -304,6 +319,7 @@ export default function ScopesHubPage() {
       />
     )}
     <div
+      ref={containerRef}
       className="relative w-full"
       style={{ minHeight: `${Math.max(requiredHeight, 600)}px` }}
     >
