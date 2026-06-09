@@ -139,9 +139,9 @@ function filterRowsByScope(
   rows: ReviewRow[],
   filter: { fieldIds?: string[]; subjectIds?: string[]; levelIds?: string[] },
 ): ReviewRow[] {
-  const fieldSet = filter.fieldIds?.length ? new Set(filter.fieldIds) : null;
-  const subjectSet = filter.subjectIds?.length ? new Set(filter.subjectIds) : null;
-  const levelSet = filter.levelIds?.length ? new Set(filter.levelIds) : null;
+  const fieldSet = filter.fieldIds !== undefined ? new Set(filter.fieldIds) : null;
+  const subjectSet = filter.subjectIds !== undefined ? new Set(filter.subjectIds) : null;
+  const levelSet = filter.levelIds !== undefined ? new Set(filter.levelIds) : null;
   return rows.filter((r) => {
     if (fieldSet && !fieldSet.has(r.fieldId)) return false;
     if (subjectSet && (!r.subjectId || !subjectSet.has(r.subjectId))) return false;

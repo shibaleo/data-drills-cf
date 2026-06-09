@@ -1,39 +1,39 @@
 /**
- * Member filter (field/subject/level) selector — colored chip toggles。
+ * Member filter (field/subject/level) selector。
  *
- * - 1 field のみ対象 (fieldId prop または filter.fieldIds = [single]): flat 表示
- * - 複数 field 対象: テーブル形式 (行 = field、列 = Subject / Level)
- * - 行 = 「effective field」: filter.fieldIds が指定されていればその集合、
- *   未指定なら fieldId prop の field、それも無ければ全 user field
+ * UX:
+ * 1. トップは Field chip row (multi-select)
+ * 2. 選択された field の subjects / levels のみ表示
+ * 3. 各 sub-row は左端の縦罫線 + 小さな field 名 (= field 色) で
+ *    どの field の項目か視覚的に示す
+ * 4. ピルは独立にシングルクリックで on/off。空配列 (= "all") 状態のときも
+ *    on 表示のピルをクリックするとそれだけが off になる (内部で
+ *    "all-expand → toggle → 全選択なら空に戻す" で実現)
  */
-import { useSubjectsList, type SubjectRow } from "@/hooks/queries/use-subjects";
-import { useLevelsList, type LevelRow } from "@/hooks/queries/use-levels";
+import { useQueries } from "@tanstack/react-query";
 import { useFields, type Field as FieldType } from "@/hooks/queries/use-field-data";
+import {
+  subjectsKeys,
+  type SubjectRow,
+} from "@/hooks/queries/use-subjects";
+import { levelsKeys, type LevelRow } from "@/hooks/queries/use-levels";
+import { rpc, unwrap } from "@/lib/rpc-client";
 import { OpaqueTag } from "@/components/problem-card";
 import type { MemberFilterInput } from "@/lib/schemas/member-filter";
 
 type Props = {
-  /** 単一 field のときに渡す (新規ページ用)。filter.fieldIds が空のとき採用 */
+  /** 単一 field 用 (新規ページ等)。filter.fieldIds が空のとき採用 */
   fieldId?: string;
   value: MemberFilterInput;
   onChange: (v: MemberFilterInput) => void;
-  /** Level 行 (flat 時) または最終 cell の右端に並べる任意要素 */
+  /** flat 時、Level 行の右端に並べる任意要素 */
   trailing?: React.ReactNode;
 };
-
-type ToggleFn = (field: keyof MemberFilterInput, id: string) => void;
 
 export function MemberFilterPicker({ fieldId, value, onChange, trailing }: Props) {
   const { data: fields = [] } = useFields();
 
-  const toggle: ToggleFn = (field, id) => {
-    const cur = value[field] ?? [];
-    const next = cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id];
-    onChange({ ...value, [field]: next.length ? next : undefined });
-  };
-
-  // Effective fields = subjects/levels を表示する対象。
-  // priority: filter.fieldIds > fieldId prop > 全 user field
+  // Effective fields = subjects/levels を表示する対象
   const explicitFieldIds =
     value.fieldIds && value.fieldIds.length > 0
       ? new Set(value.fieldIds)
@@ -44,92 +44,216 @@ export function MemberFilterPicker({ fieldId, value, onChange, trailing }: Props
     ? fields.filter((f) => explicitFieldIds.has(f.id))
     : fields;
 
+  // 各 effective field の subjects / levels を並列 fetch (staleTime 共有で軽量)
+  const subjectQueries = useQueries({
+    queries: effectiveFields.map((f) => ({
+      queryKey: subjectsKeys.list(f.id),
+      queryFn: async () => {
+        const json = await unwrap(
+          rpc.api.v1.fields[":id"].subjects.$get({ param: { id: f.id } }),
+        );
+        return json.data;
+      },
+      staleTime: 5 * 60_000,
+    })),
+  });
+  const levelQueries = useQueries({
+    queries: effectiveFields.map((f) => ({
+      queryKey: levelsKeys.list(f.id),
+      queryFn: async () => {
+        const json = await unwrap(
+          rpc.api.v1.fields[":id"].levels.$get({ param: { id: f.id } }),
+        );
+        return json.data;
+      },
+      staleTime: 5 * 60_000,
+    })),
+  });
+
+  const subjectsByField = effectiveFields.map((f, i) => ({
+    field: f,
+    items: (subjectQueries[i]?.data ?? []) as SubjectRow[],
+  }));
+  const levelsByField = effectiveFields.map((f, i) => ({
+    field: f,
+    items: (levelQueries[i]?.data ?? []) as LevelRow[],
+  }));
+
+  const allSubjectIds = subjectsByField.flatMap((g) => g.items.map((it) => it.id));
+  const allLevelIds = levelsByField.flatMap((g) => g.items.map((it) => it.id));
+  const allFieldIds = fields.map((f) => f.id);
+
+  function setCategory(
+    category: keyof MemberFilterInput,
+    next: string[] | undefined,
+  ) {
+    onChange({ ...value, [category]: next });
+  }
+
+  function toggleId(
+    category: keyof MemberFilterInput,
+    id: string,
+    allCandidates: string[],
+  ) {
+    const cur = value[category];
+    // undefined ("all") のときは「全 candidates が暗黙 ON」と扱って expand
+    const effective = cur === undefined ? allCandidates : cur;
+    const next = effective.includes(id)
+      ? effective.filter((x) => x !== id)
+      : [...effective, id];
+    // 常に明示配列を保存 (空配列 [] = 0 件選択は維持。"all" には戻さない)
+    setCategory(category, next);
+  }
+
+  /** category を "all" (undefined) に戻す */
+  function resetCategory(category: keyof MemberFilterInput) {
+    setCategory(category, undefined);
+  }
+
+  function isOn(category: keyof MemberFilterInput, id: string): boolean {
+    const arr = value[category];
+    if (arr === undefined) return true; // "all" mode
+    return arr.includes(id);
+  }
+
   return (
-    <div className="space-y-2">
+    <div className="space-y-2.5">
       {fields.length > 1 && (
         <ChipRow
           label="Field"
           items={fields.map((f) => ({ id: f.id, name: f.name, color: f.color ?? null }))}
-          selectedIds={value.fieldIds ?? []}
-          onToggle={(id) => toggle("fieldIds", id)}
+          isOn={(id) => isOn("fieldIds", id)}
+          onToggle={(id) => toggleId("fieldIds", id, allFieldIds)}
+          summary={summarize(value.fieldIds, fields.length)}
+          isExplicit={value.fieldIds !== undefined}
+          onReset={() => resetCategory("fieldIds")}
         />
       )}
+
       {effectiveFields.length === 0 ? (
         <div className="text-xs text-muted-foreground italic px-1">
           Field を 1 つ以上選んでください
         </div>
-      ) : effectiveFields.length === 1 ? (
-        <FlatLayout
-          field={effectiveFields[0]}
-          value={value}
-          toggle={toggle}
-          trailing={trailing}
-        />
       ) : (
-        <TableLayout fields={effectiveFields} value={value} toggle={toggle} />
+        <>
+          <CategoryGroup
+            label="Subject"
+            summary={summarize(value.subjectIds, allSubjectIds.length)}
+            isExplicit={value.subjectIds !== undefined}
+            onReset={() => resetCategory("subjectIds")}
+          >
+            {subjectsByField.map(({ field, items }) => (
+              <FieldGroupedChipRow
+                key={field.id}
+                field={field}
+                items={items}
+                isOn={(id) => isOn("subjectIds", id)}
+                onToggle={(id) => toggleId("subjectIds", id, allSubjectIds)}
+              />
+            ))}
+          </CategoryGroup>
+          <CategoryGroup
+            label="Level"
+            summary={summarize(value.levelIds, allLevelIds.length)}
+            isExplicit={value.levelIds !== undefined}
+            onReset={() => resetCategory("levelIds")}
+            trailing={trailing}
+          >
+            {levelsByField.map(({ field, items }) => (
+              <FieldGroupedChipRow
+                key={field.id}
+                field={field}
+                items={items}
+                isOn={(id) => isOn("levelIds", id)}
+                onToggle={(id) => toggleId("levelIds", id, allLevelIds)}
+              />
+            ))}
+          </CategoryGroup>
+        </>
       )}
     </div>
   );
 }
 
-/* ── single-field flat layout (= 既存の見た目) ── */
+function summarize(arr: string[] | undefined, totalCount: number): string {
+  if (arr === undefined) return "all";
+  if (arr.length === 0) return "none";
+  return `${arr.length} / ${totalCount}`;
+}
 
-function FlatLayout({
-  field,
-  value,
-  toggle,
+/* ── grouped layout (per-field rows) ── */
+
+function CategoryGroup({
+  label,
+  summary,
+  isExplicit,
+  onReset,
+  children,
   trailing,
 }: {
-  field: FieldType;
-  value: MemberFilterInput;
-  toggle: ToggleFn;
+  label: string;
+  summary: string;
+  isExplicit: boolean;
+  onReset: () => void;
+  children: React.ReactNode;
   trailing?: React.ReactNode;
 }) {
-  const { data: subjects = [] } = useSubjectsList(field.id);
-  const { data: levels = [] } = useLevelsList(field.id);
   return (
-    <div className="space-y-1.5">
-      <ChipRow
-        label="Subject"
-        items={subjects.map((s) => ({ id: s.id, name: s.name, color: s.color ?? null }))}
-        selectedIds={value.subjectIds ?? []}
-        onToggle={(id) => toggle("subjectIds", id)}
-      />
-      <ChipRow
-        label="Level"
-        items={levels.map((l) => ({ id: l.id, name: l.name, color: l.color ?? null }))}
-        selectedIds={value.levelIds ?? []}
-        onToggle={(id) => toggle("levelIds", id)}
-        trailing={trailing}
-      />
+    <div className="space-y-1">
+      <div className="flex items-baseline gap-2">
+        <div className="text-xs font-semibold text-foreground">{label}</div>
+        <div className="text-[10px] text-muted-foreground/60">{summary}</div>
+        {isExplicit && (
+          <button
+            type="button"
+            onClick={onReset}
+            className="text-[10px] text-primary hover:underline"
+            title="制約をリセットして全選択 (all) に戻す"
+          >
+            reset
+          </button>
+        )}
+        {trailing && <div className="ml-auto">{trailing}</div>}
+      </div>
+      <div className="space-y-1">{children}</div>
     </div>
   );
 }
 
-/* ── multi-field table layout ── */
-
-function TableLayout({
-  fields,
-  value,
-  toggle,
+function FieldGroupedChipRow({
+  field,
+  items,
+  isOn,
+  onToggle,
 }: {
-  fields: FieldType[];
-  value: MemberFilterInput;
-  toggle: ToggleFn;
+  field: FieldType;
+  items: (SubjectRow | LevelRow)[];
+  isOn: (id: string) => boolean;
+  onToggle: (id: string) => void;
 }) {
+  const fieldColor = field.color ?? "rgb(115 115 115)";
   return (
-    <div className="rounded-md border overflow-hidden">
-      <div className="grid grid-cols-[auto_1fr_1fr] text-xs">
-        <HeaderCell>Field</HeaderCell>
-        <HeaderCell>Subject</HeaderCell>
-        <HeaderCell>Level</HeaderCell>
-        {fields.map((f, i) => (
-          <FieldTableRow
-            key={f.id}
-            field={f}
-            value={value}
-            toggle={toggle}
-            isLast={i === fields.length - 1}
+    <div
+      className="flex items-center gap-2 pl-2 border-l-2"
+      style={{ borderColor: fieldColor }}
+    >
+      <span
+        className="text-[10px] font-medium w-20 shrink-0 truncate"
+        style={{ color: fieldColor }}
+      >
+        {field.name}
+      </span>
+      <div className="flex items-center flex-wrap gap-1.5 py-0.5">
+        {items.length === 0 && (
+          <span className="text-[10px] text-muted-foreground/60 italic">—</span>
+        )}
+        {items.map((it) => (
+          <Pill
+            key={it.id}
+            name={it.name}
+            color={it.color ?? null}
+            on={isOn(it.id)}
+            onClick={() => onToggle(it.id)}
           />
         ))}
       </div>
@@ -137,123 +261,76 @@ function TableLayout({
   );
 }
 
-function HeaderCell({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="px-2.5 py-1.5 font-semibold bg-muted/40 border-b border-border/60 text-muted-foreground">
-      {children}
-    </div>
-  );
-}
-
-function FieldTableRow({
-  field,
-  value,
-  toggle,
-  isLast,
-}: {
-  field: FieldType;
-  value: MemberFilterInput;
-  toggle: ToggleFn;
-  isLast: boolean;
-}) {
-  const { data: subjects = [] } = useSubjectsList(field.id);
-  const { data: levels = [] } = useLevelsList(field.id);
-  const border = isLast ? "" : "border-b border-border/40";
-  return (
-    <>
-      <div className={`px-2.5 py-2 flex items-center gap-2 bg-muted/10 ${border}`}>
-        <OpaqueTag name={field.name} color={field.color ?? null} />
-      </div>
-      <ChipCell
-        items={subjects}
-        selectedIds={value.subjectIds ?? []}
-        onToggle={(id) => toggle("subjectIds", id)}
-        border={border}
-      />
-      <ChipCell
-        items={levels}
-        selectedIds={value.levelIds ?? []}
-        onToggle={(id) => toggle("levelIds", id)}
-        border={border}
-      />
-    </>
-  );
-}
-
-function ChipCell({
-  items,
-  selectedIds,
-  onToggle,
-  border,
-}: {
-  items: (SubjectRow | LevelRow)[];
-  selectedIds: string[];
-  onToggle: (id: string) => void;
-  border: string;
-}) {
-  const allSelected = selectedIds.length === 0;
-  return (
-    <div className={`px-2.5 py-2 flex items-center flex-wrap gap-1.5 ${border}`}>
-      {items.length === 0 && (
-        <span className="text-[10px] text-muted-foreground/60 italic">—</span>
-      )}
-      {items.map((it) => {
-        const isOn = allSelected || selectedIds.includes(it.id);
-        return (
-          <button
-            key={it.id}
-            type="button"
-            onClick={() => onToggle(it.id)}
-            aria-pressed={!allSelected && selectedIds.includes(it.id)}
-            className={`transition-opacity ${isOn ? "opacity-100" : "opacity-30 hover:opacity-60"}`}
-          >
-            <OpaqueTag name={it.name} color={it.color ?? null} />
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-/* ── single-row chip layout (flat) ── */
+/* ── single-row chip layout ── */
 
 function ChipRow({
   label,
   items,
-  selectedIds,
+  isOn,
   onToggle,
+  summary,
+  isExplicit,
+  onReset,
   trailing,
 }: {
   label: string;
   items: { id: string; name: string; color: string | null }[];
-  selectedIds: string[];
+  isOn: (id: string) => boolean;
   onToggle: (id: string) => void;
+  summary: string;
+  isExplicit?: boolean;
+  onReset?: () => void;
   trailing?: React.ReactNode;
 }) {
-  const allSelected = selectedIds.length === 0;
   return (
     <div className="flex items-center gap-2 flex-wrap">
       <span className="text-xs font-semibold text-foreground w-16 shrink-0">
         {label}
       </span>
-      {items.map((it) => {
-        const isOn = allSelected || selectedIds.includes(it.id);
-        return (
-          <button
-            key={it.id}
-            type="button"
-            onClick={() => onToggle(it.id)}
-            aria-pressed={!allSelected && selectedIds.includes(it.id)}
-            className={`transition-opacity ${isOn ? "opacity-100" : "opacity-30 hover:opacity-60"}`}
-          >
-            <OpaqueTag name={it.name} color={it.color} />
-          </button>
-        );
-      })}
-      <span className="text-[10px] text-muted-foreground/60 ml-1">
-        {allSelected ? "all" : `${selectedIds.length} selected`}
-      </span>
+      {items.map((it) => (
+        <Pill
+          key={it.id}
+          name={it.name}
+          color={it.color}
+          on={isOn(it.id)}
+          onClick={() => onToggle(it.id)}
+        />
+      ))}
+      <span className="text-[10px] text-muted-foreground/60 ml-1">{summary}</span>
+      {isExplicit && onReset && (
+        <button
+          type="button"
+          onClick={onReset}
+          className="text-[10px] text-primary hover:underline"
+          title="制約をリセットして全選択 (all) に戻す"
+        >
+          reset
+        </button>
+      )}
       {trailing && <div className="ml-auto">{trailing}</div>}
     </div>
+  );
+}
+
+function Pill({
+  name,
+  color,
+  on,
+  onClick,
+}: {
+  name: string;
+  color: string | null;
+  on: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={on}
+      className={`transition-opacity ${on ? "opacity-100" : "opacity-30 hover:opacity-60"}`}
+    >
+      <OpaqueTag name={name} color={color} />
+    </button>
   );
 }
