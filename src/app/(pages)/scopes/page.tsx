@@ -669,10 +669,10 @@ export default function ScopesHubPage() {
                           {/* hidden path for textPath */}
                           <path id={arcId} d={textArcPath} fill="none" stroke="none" />
                           <text
-                            fontSize={13}
+                            fontSize={16}
                             fontWeight={800}
                             fill="white"
-                            letterSpacing={0.5}
+                            letterSpacing={0.6}
                             className="pointer-events-none select-none"
                           >
                             <textPath
