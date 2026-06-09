@@ -378,6 +378,15 @@ export default function ScopesHubPage() {
               />
             ))}
           </pattern>
+          {/* hex の fill 用 gradient */}
+          <radialGradient id="hexFillCalm" cx="50%" cy="30%" r="75%">
+            <stop offset="0%" stopColor="hsl(var(--card))" stopOpacity="1" />
+            <stop offset="100%" stopColor="hsl(var(--background))" stopOpacity="1" />
+          </radialGradient>
+          <radialGradient id="hexFillWarm" cx="50%" cy="30%" r="75%">
+            <stop offset="0%" stopColor="hsl(var(--card))" stopOpacity="1" />
+            <stop offset="100%" stopColor="hsl(var(--primary) / 0.18)" stopOpacity="1" />
+          </radialGradient>
         </defs>
         <rect x="0" y="0" width="100%" height="100%" fill="url(#hexGrid)" />
 
@@ -477,9 +486,21 @@ export default function ScopesHubPage() {
                 )}
                 <polygon
                   points={hexPoints(cx, cy, SIDE)}
-                  className={`${hovered ? "fill-accent" : "fill-card"} stroke-border transition-colors`}
+                  fill={
+                    hovered
+                      ? "hsl(var(--accent))"
+                      : stats.pending > 0
+                        ? "url(#hexFillWarm)"
+                        : "url(#hexFillCalm)"
+                  }
+                  stroke={
+                    stats.pending > 0
+                      ? "hsl(var(--primary) / 0.55)"
+                      : "hsl(var(--border))"
+                  }
                   strokeWidth={1.8}
                   strokeLinejoin="round"
+                  style={{ transition: "fill 200ms ease-out, stroke 200ms ease-out" }}
                 />
                 {/* タイトル: 1 行 or 2 行折返し。font サイズは行数で調整 */}
                 {nameLines.map((line, i) => {
@@ -502,42 +523,70 @@ export default function ScopesHubPage() {
                     </text>
                   );
                 })}
-                {/* 件数 + 未消化/状態 */}
+                {/* 件数: メイン情報として強調 */}
                 {countLine && (
                   <text
                     x={cx}
-                    y={cy + 10}
+                    y={cy + 12}
                     textAnchor="middle"
                     dominantBaseline="central"
-                    fontSize={12}
-                    fontWeight={700}
-                    className="fill-foreground/80 pointer-events-none select-none"
+                    fontSize={18}
+                    fontWeight={800}
+                    className="fill-foreground pointer-events-none select-none"
+                    style={{ fontVariantNumeric: "tabular-nums" }}
                   >
                     {countLine}
                   </text>
                 )}
-                {pendingLine && (
+                {/* 未消化: ピル形バッジで強調。caught up は淡色テキスト */}
+                {stats.pending > 0 ? (
+                  <g>
+                    <rect
+                      x={cx - 28}
+                      y={cy + 26}
+                      width={56}
+                      height={16}
+                      rx={8}
+                      fill="hsl(var(--primary) / 0.18)"
+                      stroke="hsl(var(--primary) / 0.6)"
+                      strokeWidth={1}
+                    />
+                    <text
+                      x={cx}
+                      y={cy + 34}
+                      textAnchor="middle"
+                      dominantBaseline="central"
+                      fontSize={10}
+                      fontWeight={700}
+                      fill="hsl(var(--primary))"
+                      className="pointer-events-none select-none"
+                      style={{ fontVariantNumeric: "tabular-nums" }}
+                    >
+                      {stats.pending} due
+                    </text>
+                  </g>
+                ) : pendingLine ? (
                   <text
                     x={cx}
-                    y={cy + 26}
+                    y={cy + 32}
                     textAnchor="middle"
                     dominantBaseline="central"
                     fontSize={10}
                     fontWeight={600}
-                    fill={stats.pending > 0 ? heat.ring : "hsl(var(--muted-foreground))"}
-                    className="pointer-events-none select-none"
+                    className="fill-muted-foreground/80 pointer-events-none select-none"
                   >
                     {pendingLine}
                   </text>
-                )}
+                ) : null}
                 {nextLine && (
                   <text
                     x={cx}
-                    y={cy + 40}
+                    y={cy + 46}
                     textAnchor="middle"
                     dominantBaseline="central"
                     fontSize={9}
-                    className="fill-muted-foreground/70 pointer-events-none select-none"
+                    className="fill-muted-foreground/60 pointer-events-none select-none"
+                    style={{ fontVariantNumeric: "tabular-nums" }}
                   >
                     {nextLine}
                   </text>
