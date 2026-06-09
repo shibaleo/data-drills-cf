@@ -158,6 +158,34 @@ member filter は `scope.filter` から構築。
   の filter と一致しているか」検証。Phase 4 SQL でほぼ揃ってるが、その後に
   user が view_scope だけ編集した場合は不整合あり得る
 
+## 意図的に残すもの
+
+### `/scopes/$scopeId` (canonical scope detail page) — 半到達状態だが温存
+
+現状の UI 到達経路:
+- `/scopes/new` で scope 作成直後の auto-navigate
+- 直接 URL / bookmark
+
+到達しない経路:
+- ヘックスハブの Edit セクター: `<ScopeEditDialog>` を開くだけで navigate しない
+- グローバル picker / sidebar: 直接遷移なし
+
+**ここに残っているユニーク機能**:
+- milestone (goal_layer / goal_milestone) の CRUD UI
+- revision history panel + asOf 切替
+- archive
+- 詳細 member filter editor (chip + dirty + revision 反映の bitemporal write)
+
+後日「これらの編集機能を別の場所 (例: 個別のページ or よりリッチなダイアログ) で
+再実装する」想定でこのページのコードを **ソースとして温存**。意図せず削除しない
+こと。Plan A の Step 1 (= detail page の編集 UI を view-only に) を進める際も、
+このページは別物として扱う。
+
+### `src/components/scope-picker-bar.tsx`
+
+`db820df` で全 callsite を撤去した結果 dead code 化したが、Plan A 中間段階で
+再利用する可能性があれば残しておく。完全な不要が確定次第削除。
+
 ## 完了の定義
 
 - すべての navigation が `/<view>/<canonical_id>` 直行
