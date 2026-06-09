@@ -11,5 +11,5 @@ export const reviewUpdateInputSchema = z.object({
 });
 
 export const reviewTagCreateInputSchema = z.object({
-  tag_id: z.string().uuid(),
+  review_type_id: z.string().uuid(),
 });

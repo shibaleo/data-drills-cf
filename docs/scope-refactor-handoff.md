@@ -1,19 +1,23 @@
 # Scope / Field 大改造 — 次セッションへの申し送り
 
 > 作成: 2026-06-08
-> 更新: 2026-06-08 (Phase 4.2 完了)
+> 更新: 2026-06-09 (Phase 4.1 SQL 適用 + 5.2 ドキュメント反映)
 > 関連: [`scope-refactor.md`](./scope-refactor.md) (元の設計プラン)
 > 前回の終端 commit: `ebefda6`
 
 ## 現在の状態
 
-**Phase 1〜4.2 完了 + push 済**。コード側は **Phase 4 SQL 適用後の状態を前提** に
-整っている (option C: wire 互換は維持、内部実装のみ field/scope 直叩き)。
-SQL 適用前の今の DB でも動く (新 column はすべて backfill 済、旧 column はまだ存在)。
+**Phase 1〜4.2 + 4.1 SQL 完了**。コード側は option C (wire 互換維持、内部実装のみ
+field/scope 直叩き) で停止。DB 側も旧 entity は drop 済。次は Phase 5.1 (taxtant
+確認) → Phase 6 (cosmetic rename) の順。
 
 ### DB 状態
 - Phase 1 SQL (`drizzle/manual/004_phase1_field_scope.sql`) は **Neon 適用済**
-- Phase 4 SQL (`drizzle/manual/005_phase4_drop_old.sql`) は **未適用**
+- Phase 4 SQL (`drizzle/manual/005_phase4_drop_old.sql`) は **Neon 適用済** (2026-06-09)
+  - 旧 column (`project_id`/`topic_id`/`backlog_id`) drop
+  - 旧 table (`project`/`tag`/`topic`/`backlog`/`problem_tag`) drop
+  - 新 FK (field/review_type への) 制約付与
+  - 新 column (`field_id`/`scope_id`) NOT NULL 化
 - このセッション中、dev 側 milestone 表示復旧のために以下 2 行を Neon に手動適用済:
   ```sql
   UPDATE data_drills.goal_layer     SET scope_id = backlog_id WHERE scope_id IS NULL;
@@ -59,23 +63,10 @@ SQL 適用前の今の DB でも動く (新 column はすべて backfill 済、�
 
 ## 残作業
 
-### Phase 4.1: SQL 適用 + 本番デプロイ
+### Phase 4.1: SQL 適用 + 本番デプロイ — 完了 (2026-06-09)
 
-**注意**: 必ず DB バックアップを取ってから実行する。
-
-実行前チェックリスト:
-- [ ] Neon snapshot を取得済
-- [ ] taxtant Python 側の field_id 切替 PR を main に merge 済 (Phase 5.1 完了)
-- [ ] dev で `pnpm dev` → 全ページ動作確認済 (Phase 4.2 push 後、未確認)
-- [ ] CF Workers がデプロイ済 (= push 済の `ebefda6` が反映済)
-
-実行:
-```bash
-psql "$NEON_URL" -f drizzle/manual/005_phase4_drop_old.sql
-```
-
-005 SQL は `BEGIN; ... COMMIT;` で囲まれているため、失敗したら `ROLLBACK;` で安全に戻る。
-COMMIT 後の取り消しは snapshot からの restore のみ。
+Neon SQL editor から `005_phase4_drop_old.sql` を流して COMMIT 済。検証クエリ
+(`*_null`, 旧 table 存在チェック) も pass。CASCADE NOTICE は意図通り。
 
 ### Phase 5: taxtant 連動 + 仕上げ
 

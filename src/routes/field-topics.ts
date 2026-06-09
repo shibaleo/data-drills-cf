@@ -6,7 +6,7 @@
 
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
-import { masterCreateInputSchema, masterUpdateInputSchema } from "@/lib/schemas/project";
+import { masterCreateInputSchema, masterUpdateInputSchema } from "@/lib/schemas/field";
 import { reorderInputSchema } from "@/lib/schemas/common";
 import type { AuthResult } from "@/lib/auth";
 

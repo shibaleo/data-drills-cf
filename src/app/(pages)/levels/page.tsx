@@ -12,12 +12,12 @@ import {
 
 export default function LevelsPage() {
   const { currentField } = useField();
-  const projectId = currentField?.id;
-  const { data: levels = [], isLoading } = useLevelsList(projectId);
-  const create = useCreateLevel(projectId);
-  const update = useUpdateLevel(projectId);
-  const remove = useDeleteLevel(projectId);
-  const reorder = useReorderLevels(projectId);
+  const fieldId = currentField?.id;
+  const { data: levels = [], isLoading } = useLevelsList(fieldId);
+  const create = useCreateLevel(fieldId);
+  const update = useUpdateLevel(fieldId);
+  const remove = useDeleteLevel(fieldId);
+  const reorder = useReorderLevels(fieldId);
 
   if (!currentField) {
     return (
@@ -29,7 +29,7 @@ export default function LevelsPage() {
 
   return (
     <MasterPageUI
-      key={projectId}
+      key={fieldId}
       title="Levels"
       entityName="Level"
       hasColor

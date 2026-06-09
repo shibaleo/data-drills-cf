@@ -3,12 +3,9 @@ import { useCallback } from "react";
 import { rpc, unwrap, type RpcData } from "@/lib/rpc-client";
 
 // Field CRUD + subjects/levels/statuses lookup hooks。
-// Phase 3c.2 で /api/v1/projects → /api/v1/fields に透過スワップ済。
-// 旧 use-fields.ts は同等機能のため Phase で削除、ここに統合。
+// Phase 6 で /api/v1/projects は完全削除済、/api/v1/fields に統合。
 export type Field = RpcData<typeof rpc.api.v1.fields.$get>["data"][number];
-/** consumer 互換のため旧名 Project を Field の alias として残す。 */
-export type Project = Field;
-export type LookupItem = RpcData<typeof rpc.api.v1.projects[":id"]["subjects"]["$get"]>["data"][number];
+export type LookupItem = RpcData<typeof rpc.api.v1.fields[":id"]["subjects"]["$get"]>["data"][number];
 export type StatusItem = RpcData<typeof rpc.api.v1.statuses.$get>["data"][number];
 
 export const fieldKeys = {
@@ -35,7 +32,7 @@ export function useSubjects(fieldId: string | undefined) {
     queryKey: fieldId ? fieldKeys.subjects(fieldId) : fieldKeys.all,
     queryFn: async () => {
       const json = await unwrap(
-        rpc.api.v1.projects[":id"].subjects.$get({ param: { id: fieldId! } }),
+        rpc.api.v1.fields[":id"].subjects.$get({ param: { id: fieldId! } }),
       );
       return json.data;
     },
@@ -49,7 +46,7 @@ export function useLevels(fieldId: string | undefined) {
     queryKey: fieldId ? fieldKeys.levels(fieldId) : fieldKeys.all,
     queryFn: async () => {
       const json = await unwrap(
-        rpc.api.v1.projects[":id"].levels.$get({ param: { id: fieldId! } }),
+        rpc.api.v1.fields[":id"].levels.$get({ param: { id: fieldId! } }),
       );
       return json.data;
     },

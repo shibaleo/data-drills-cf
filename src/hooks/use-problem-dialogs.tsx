@@ -110,7 +110,7 @@ export function useProblemDialogs({
             checkpoint: editProblem.checkpoint,
             standardTime: editProblem.standard_time,
           } : null}
-          projectId={currentField.id}
+          fieldId={currentField.id}
           subjects={subjects}
           levels={levels}
           onSaved={() => { setEditDialogOpen(false); notifyAndRefresh(); }}

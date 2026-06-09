@@ -12,12 +12,12 @@ import {
 
 export default function SubjectsPage() {
   const { currentField } = useField();
-  const projectId = currentField?.id;
-  const { data: subjects = [], isLoading } = useSubjectsList(projectId);
-  const create = useCreateSubject(projectId);
-  const update = useUpdateSubject(projectId);
-  const remove = useDeleteSubject(projectId);
-  const reorder = useReorderSubjects(projectId);
+  const fieldId = currentField?.id;
+  const { data: subjects = [], isLoading } = useSubjectsList(fieldId);
+  const create = useCreateSubject(fieldId);
+  const update = useUpdateSubject(fieldId);
+  const remove = useDeleteSubject(fieldId);
+  const reorder = useReorderSubjects(fieldId);
 
   if (!currentField) {
     return (
@@ -29,7 +29,7 @@ export default function SubjectsPage() {
 
   return (
     <MasterPageUI
-      key={projectId}
+      key={fieldId}
       title="Subjects"
       entityName="Subject"
       hasColor

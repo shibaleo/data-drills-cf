@@ -11,16 +11,16 @@ import { OpaqueTag } from "@/components/problem-card";
 import type { MemberFilterInput } from "@/lib/schemas/member-filter";
 
 type Props = {
-  projectId: string;
+  fieldId: string;
   value: MemberFilterInput;
   onChange: (v: MemberFilterInput) => void;
   /** 最終行 (Level) の右端に並べる任意要素。count などを置く想定。 */
   trailing?: React.ReactNode;
 };
 
-export function MemberFilterPicker({ projectId, value, onChange, trailing }: Props) {
-  const { data: subjects = [] } = useSubjectsList(projectId);
-  const { data: levels = [] } = useLevelsList(projectId);
+export function MemberFilterPicker({ fieldId, value, onChange, trailing }: Props) {
+  const { data: subjects = [] } = useSubjectsList(fieldId);
+  const { data: levels = [] } = useLevelsList(fieldId);
   const { data: fields = [] } = useFields();
 
   function toggle(field: keyof MemberFilterInput, id: string) {

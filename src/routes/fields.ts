@@ -12,6 +12,9 @@ import { and, eq } from "drizzle-orm";
 import { randomCode } from "@/lib/utils";
 import { fieldCreateInputSchema, fieldUpdateInputSchema } from "@/lib/schemas/field";
 import { reorderInputSchema } from "@/lib/schemas/common";
+import fieldSubjects from "@/routes/field-subjects";
+import fieldLevels from "@/routes/field-levels";
+import fieldTopics from "@/routes/field-topics";
 import type { AuthResult } from "@/lib/auth";
 
 type Env = { Variables: { authResult: AuthResult } };
@@ -74,6 +77,9 @@ const app = new Hono<Env>()
       .where(and(eq(field.id, c.req.param("id")), eq(field.userId, userId))).returning();
     if (!row) return c.json({ error: "Not found" }, 404);
     return c.json({ data: row });
-  });
+  })
+  .route("/:id/subjects", fieldSubjects)
+  .route("/:id/levels", fieldLevels)
+  .route("/:id/topics", fieldTopics);
 
 export default app;

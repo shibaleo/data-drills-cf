@@ -1,81 +1,81 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { rpc, unwrap, type RpcData } from "@/lib/rpc-client";
 
-export type TopicRow = RpcData<typeof rpc.api.v1.projects[":id"]["topics"]["$get"]>["data"][number];
+export type TopicRow = RpcData<typeof rpc.api.v1.fields[":id"]["topics"]["$get"]>["data"][number];
 
 export const topicsKeys = {
   all: ["topics"] as const,
-  list: (projectId: string) => [...topicsKeys.all, "list", projectId] as const,
+  list: (fieldId: string) => [...topicsKeys.all, "list", fieldId] as const,
 };
 
-export function useTopicsList(projectId: string | undefined) {
+export function useTopicsList(fieldId: string | undefined) {
   return useQuery({
-    queryKey: projectId ? topicsKeys.list(projectId) : topicsKeys.all,
+    queryKey: fieldId ? topicsKeys.list(fieldId) : topicsKeys.all,
     queryFn: async () => {
       const json = await unwrap(
-        rpc.api.v1.projects[":id"].topics.$get({ param: { id: projectId! } }),
+        rpc.api.v1.fields[":id"].topics.$get({ param: { id: fieldId! } }),
       );
       return json.data;
     },
-    enabled: !!projectId,
+    enabled: !!fieldId,
   });
 }
 
-export function useCreateTopic(projectId: string | undefined) {
+export function useCreateTopic(fieldId: string | undefined) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (payload: { code: string; name: string; color?: string | null; sort_order?: number }) =>
-      unwrap(rpc.api.v1.projects[":id"].topics.$post({ param: { id: projectId! }, json: payload })),
+      unwrap(rpc.api.v1.fields[":id"].topics.$post({ param: { id: fieldId! }, json: payload })),
     onSuccess: () => {
-      if (projectId) qc.invalidateQueries({ queryKey: topicsKeys.list(projectId) });
+      if (fieldId) qc.invalidateQueries({ queryKey: topicsKeys.list(fieldId) });
     },
   });
 }
 
-export function useUpdateTopic(projectId: string | undefined) {
+export function useUpdateTopic(fieldId: string | undefined) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (vars: { id: string; payload: { code?: string; name?: string; color?: string | null; sort_order?: number } }) =>
       unwrap(
-        rpc.api.v1.projects[":id"].topics[":entityId"].$put({
-          param: { id: projectId!, entityId: vars.id },
+        rpc.api.v1.fields[":id"].topics[":entityId"].$put({
+          param: { id: fieldId!, entityId: vars.id },
           json: vars.payload,
         }),
       ),
     onSuccess: () => {
-      if (projectId) qc.invalidateQueries({ queryKey: topicsKeys.list(projectId) });
+      if (fieldId) qc.invalidateQueries({ queryKey: topicsKeys.list(fieldId) });
     },
   });
 }
 
-export function useDeleteTopic(projectId: string | undefined) {
+export function useDeleteTopic(fieldId: string | undefined) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) =>
       unwrap(
-        rpc.api.v1.projects[":id"].topics[":entityId"].$delete({
-          param: { id: projectId!, entityId: id },
+        rpc.api.v1.fields[":id"].topics[":entityId"].$delete({
+          param: { id: fieldId!, entityId: id },
         }),
       ),
     onSuccess: () => {
-      if (projectId) qc.invalidateQueries({ queryKey: topicsKeys.list(projectId) });
+      if (fieldId) qc.invalidateQueries({ queryKey: topicsKeys.list(fieldId) });
     },
   });
 }
 
-export function useReorderTopics(projectId: string | undefined) {
+export function useReorderTopics(fieldId: string | undefined) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (ids: string[]) =>
       unwrap(
-        rpc.api.v1.projects[":id"].topics.reorder.$patch({
-          param: { id: projectId! },
+        rpc.api.v1.fields[":id"].topics.reorder.$patch({
+          param: { id: fieldId! },
           json: { ids },
         }),
       ),
     onMutate: async (ids) => {
-      if (!projectId) return;
-      const key = topicsKeys.list(projectId);
+      if (!fieldId) return;
+      const key = topicsKeys.list(fieldId);
       await qc.cancelQueries({ queryKey: key });
       const previous = qc.getQueryData<TopicRow[]>(key);
       if (previous) {
@@ -88,11 +88,11 @@ export function useReorderTopics(projectId: string | undefined) {
       return { previous };
     },
     onError: (_err, _vars, ctx) => {
-      if (!projectId || !ctx?.previous) return;
-      qc.setQueryData(topicsKeys.list(projectId), ctx.previous);
+      if (!fieldId || !ctx?.previous) return;
+      qc.setQueryData(topicsKeys.list(fieldId), ctx.previous);
     },
     onSettled: () => {
-      if (projectId) qc.invalidateQueries({ queryKey: topicsKeys.list(projectId) });
+      if (fieldId) qc.invalidateQueries({ queryKey: topicsKeys.list(fieldId) });
     },
   });
 }

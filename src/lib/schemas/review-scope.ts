@@ -4,7 +4,7 @@ import { memberFilterSchema } from "@/lib/schemas/member-filter";
 /* ── ReviewScope (bitemporal) ───────────────────────────────── */
 
 export const reviewScopeCreateInputSchema = z.object({
-  project_id: z.string().uuid(),
+  field_id: z.string().uuid(),
   name: z.string().min(1),
   filter: memberFilterSchema.default({}),
 });

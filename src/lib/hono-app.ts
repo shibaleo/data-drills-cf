@@ -4,7 +4,6 @@ import { authenticate, type AuthResult } from "@/lib/auth";
 
 type Env = { Variables: { authResult: AuthResult } };
 import health from "@/routes/health";
-import projects from "@/routes/projects";
 import problems from "@/routes/problems";
 import answers from "@/routes/answers";
 import flashcards from "@/routes/flashcards";
@@ -27,7 +26,7 @@ import filterPrefs from "@/routes/filter-prefs";
 import googleAuth from "@/routes/google-auth";
 import drive from "@/routes/drive";
 import toggl from "@/routes/toggl";
-// Phase 2: 新エンティティ routes (旧 projects/tags/backlog と並走)
+// Phase 6: 新エンティティ routes (旧 projects/tags/backlog は廃止済)
 import fields from "@/routes/fields";
 import reviewTypes from "@/routes/review-types";
 import scopes from "@/routes/scopes";
@@ -63,7 +62,6 @@ const v1 = new Hono<Env>()
     await next();
   })
   // Protected routes
-  .route("/projects", projects)
   .route("/problems", problems)
   .route("/answers", answers)
   .route("/flashcards", flashcards)
@@ -84,7 +82,7 @@ const v1 = new Hono<Env>()
   .route("/digest-scopes", digestScopes)
   .route("/filter-prefs", filterPrefs)
   .route("/toggl", toggl)
-  // Phase 2: 新エンティティ
+  // Phase 6: 新エンティティ
   .route("/fields", fields)
   .route("/review-types", reviewTypes)
   .route("/scopes", scopes)

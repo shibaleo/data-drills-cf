@@ -42,8 +42,10 @@ import {
   useCreateField,
   useUpdateField,
   useDeleteField,
-  type Project,
+  type Field,
 } from "@/hooks/queries/use-field-data";
+// Phase 6: 内部の `Project` シンボルは masters page 内のみの local alias として残す。
+type Project = Field;
 import {
   useStatusesList,
   useCreateStatus,
@@ -95,12 +97,12 @@ function StatusesSection() {
 
 /* ── Per-project subjects/levels ── */
 
-function SubjectsSection({ projectId }: { projectId: string }) {
-  const { data: subjects = [], isLoading } = useSubjectsList(projectId);
-  const create = useCreateSubject(projectId);
-  const update = useUpdateSubject(projectId);
-  const remove = useDeleteSubject(projectId);
-  const reorder = useReorderSubjects(projectId);
+function SubjectsSection({ fieldId }: { fieldId: string }) {
+  const { data: subjects = [], isLoading } = useSubjectsList(fieldId);
+  const create = useCreateSubject(fieldId);
+  const update = useUpdateSubject(fieldId);
+  const remove = useDeleteSubject(fieldId);
+  const reorder = useReorderSubjects(fieldId);
   return (
     <MasterList
       title="Subjects"
@@ -120,12 +122,12 @@ function SubjectsSection({ projectId }: { projectId: string }) {
   );
 }
 
-function LevelsSection({ projectId }: { projectId: string }) {
-  const { data: levels = [], isLoading } = useLevelsList(projectId);
-  const create = useCreateLevel(projectId);
-  const update = useUpdateLevel(projectId);
-  const remove = useDeleteLevel(projectId);
-  const reorder = useReorderLevels(projectId);
+function LevelsSection({ fieldId }: { fieldId: string }) {
+  const { data: levels = [], isLoading } = useLevelsList(fieldId);
+  const create = useCreateLevel(fieldId);
+  const update = useUpdateLevel(fieldId);
+  const remove = useDeleteLevel(fieldId);
+  const reorder = useReorderLevels(fieldId);
   return (
     <MasterList
       title="Levels"
@@ -182,8 +184,8 @@ function SortableProjectSection({
         </button>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <SubjectsSection projectId={project.id} />
-        <LevelsSection projectId={project.id} />
+        <SubjectsSection fieldId={project.id} />
+        <LevelsSection fieldId={project.id} />
       </div>
     </div>
   );

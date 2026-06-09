@@ -20,15 +20,14 @@ export default function ScopesPage() {
     const m = new Map<string, { done: number; total: number }>();
     for (const s of scopes) {
       const filter = (s.filter ?? {}) as { fieldIds?: string[]; subjectIds?: string[]; levelIds?: string[] };
-      // 注: useProblemsList は project_id しか返さないが field.id === project.id なので
-      // fieldIds 判定にもそのまま使える (Phase 4 で problems-list に field_id を追加予定)
+      // useProblemsList は field_id を返す (Phase 6 で rename 済)
       const fieldSet = filter.fieldIds?.length ? new Set(filter.fieldIds) : null;
       const subjectSet = filter.subjectIds?.length ? new Set(filter.subjectIds) : null;
       const levelSet = filter.levelIds?.length ? new Set(filter.levelIds) : null;
       let total = 0;
       let done = 0;
       for (const p of allProblems) {
-        if (fieldSet && (!p.project_id || !fieldSet.has(p.project_id))) continue;
+        if (fieldSet && (!p.field_id || !fieldSet.has(p.field_id))) continue;
         if (subjectSet && (!p.subject_id || !subjectSet.has(p.subject_id))) continue;
         if (levelSet && (!p.level_id || !levelSet.has(p.level_id))) continue;
         total++;

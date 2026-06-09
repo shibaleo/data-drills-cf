@@ -5,9 +5,9 @@ import { db } from "@/lib/db";
 import { throughputScope, problem } from "@/lib/db/schema";
 import { and, asc, desc, eq, gt, isNull, lte, or } from "drizzle-orm";
 import { throughputScopeCreateInputSchema, throughputScopeUpdateInputSchema } from "@/lib/schemas/throughput-scope";
-import { projectIdQuerySchema } from "@/lib/schemas/common";
+import { fieldIdQuerySchema } from "@/lib/schemas/common";
 import { applyMemberFilter } from "@/lib/member-filter";
-import { ownsProject } from "@/lib/ownership";
+import { ownsField } from "@/lib/ownership";
 import type { MemberFilter } from "@/lib/db/schema";
 import type { AuthResult } from "@/lib/auth";
 
@@ -23,13 +23,13 @@ async function fetchCurrentScope(id: string) {
 
 async function ownsThroughputScope(id: string, userId: string): Promise<boolean> {
   if (!userId) return false;
-  const [row] = await db.select({ projectId: throughputScope.projectId }).from(throughputScope)
+  const [row] = await db.select({ fieldId: throughputScope.fieldId }).from(throughputScope)
     .where(eq(throughputScope.id, id)).orderBy(desc(throughputScope.revision)).limit(1);
   if (!row) return false;
-  return ownsProject(row.projectId, userId);
+  return ownsField(row.fieldId, userId);
 }
 
-async function fetchMembers(projectId: string, filter: MemberFilter) {
+async function fetchMembers(fieldId: string, filter: MemberFilter) {
   const rows = await db.select({
     id: problem.id,
     code: problem.code,
@@ -37,7 +37,7 @@ async function fetchMembers(projectId: string, filter: MemberFilter) {
     fieldId: problem.fieldId,
     subjectId: problem.subjectId,
     levelId: problem.levelId,
-  }).from(problem).where(eq(problem.fieldId, projectId))
+  }).from(problem).where(eq(problem.fieldId, fieldId))
     .orderBy(asc(problem.code), asc(problem.id));
   return applyMemberFilter(rows, filter);
 }
@@ -46,7 +46,7 @@ function scopeToApi(row: typeof throughputScope.$inferSelect) {
   return {
     id: row.id,
     revision: row.revision,
-    project_id: row.projectId,
+    field_id: row.fieldId,
     name: row.name,
     filter: row.filter,
     scope_id: row.scopeId ?? null,
@@ -58,22 +58,22 @@ function scopeToApi(row: typeof throughputScope.$inferSelect) {
 }
 
 const app = new Hono<Env>()
-  .get("/", zValidator("query", projectIdQuerySchema), async (c) => {
+  .get("/", zValidator("query", fieldIdQuerySchema), async (c) => {
     const userId = c.get("authResult").userId;
-    const { project_id: projectId } = c.req.valid("query");
-    if (!(await ownsProject(projectId, userId))) return c.json({ data: [] });
+    const { field_id: fieldId } = c.req.valid("query");
+    if (!(await ownsField(fieldId, userId))) return c.json({ data: [] });
     const rows = await db.select().from(throughputScope)
-      .where(and(eq(throughputScope.projectId, projectId), isNull(throughputScope.validTo), eq(throughputScope.isActive, true)))
+      .where(and(eq(throughputScope.fieldId, fieldId), isNull(throughputScope.validTo), eq(throughputScope.isActive, true)))
       .orderBy(desc(throughputScope.createdAt));
     return c.json({ data: rows.map(scopeToApi) });
   })
   .post("/", zValidator("json", throughputScopeCreateInputSchema), async (c) => {
     const userId = c.get("authResult").userId;
     const body = c.req.valid("json");
-    if (!(await ownsProject(body.project_id, userId))) return c.json({ error: "Not found" }, 404);
+    if (!(await ownsField(body.field_id, userId))) return c.json({ error: "Not found" }, 404);
     const [row] = await db.insert(throughputScope).values({
       id: crypto.randomUUID(), revision: 1,
-      projectId: body.project_id,
+      fieldId: body.field_id,
       name: body.name,
       filter: body.filter,
     }).returning();
@@ -103,7 +103,7 @@ const app = new Hono<Env>()
     }
     if (!current) return c.json({ error: "Not found" }, 404);
 
-    const members = await fetchMembers(current.projectId, current.filter);
+    const members = await fetchMembers(current.fieldId, current.filter);
     return c.json({
       data: {
         scope: scopeToApi(current),
@@ -146,7 +146,7 @@ const app = new Hono<Env>()
       const [row] = await tx.insert(throughputScope).values({
         id,
         revision: current.revision + 1,
-        projectId: current.projectId,
+        fieldId: current.fieldId,
         name: body.name ?? current.name,
         filter: body.filter ?? current.filter,
         scopeId: body.scope_id !== undefined ? body.scope_id : current.scopeId,
@@ -168,7 +168,7 @@ const app = new Hono<Env>()
       const [row] = await tx.insert(throughputScope).values({
         id,
         revision: current.revision + 1,
-        projectId: current.projectId,
+        fieldId: current.fieldId,
         name: current.name,
         filter: current.filter,
         scopeId: current.scopeId,

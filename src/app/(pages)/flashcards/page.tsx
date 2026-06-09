@@ -161,7 +161,7 @@ export default function FlashcardsPage() {
       updateCard.mutate({ id: editItem.id, payload: base }, onDone);
     } else {
       createCard.mutate(
-        { ...base, project_id: currentField!.id, code: randomCode() },
+        { ...base, field_id: currentField!.id, code: randomCode() },
         onDone,
       );
     }

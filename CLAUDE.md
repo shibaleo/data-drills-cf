@@ -33,10 +33,25 @@ CF Pages (React + Vite SPA, TanStack Router)
 ### Key Features
 
 - **Review** — FSRS を参考にしたスケジューリングアルゴリズムによる復習 Tetris (問題ごとに次回復習日を算出)
-- **Backlog** — 未着手新規問題の milestone 配分 Tetris (bitemporal 履歴付き)
+- **Scope** — cross-field 横断可能な member 絞り込み (`fieldIds[]/subjectIds[]/levelIds[]`) + scheduling (daily_minutes, weekday_weights) + milestone 配分 Tetris を 1 entity に統合。bitemporal 履歴付き
 - **Throughput** — 過去回答実績の Tetris (1 answer = 1 ブロック、色は直前 status)
 - **Flashcards** — Markdown 表裏のフラッシュカード演習
 - **PDF エクスポート** — 選択問題を Render サービスで PDF 結合
+
+### Domain Model (Phase 4 完了後)
+
+```
+user
+  ├─ field         (永続的な学問領域。subject/level/problem/flashcard の親)
+  ├─ review_type   (review 評価種別。Miss/Rough/Fair/Fluent 等)
+  └─ scope         (bitemporal、cross-field 横断 member filter + scheduling + goals)
+        ├─ goal_layer / goal_milestone (scope_id FK)
+        └─ review_scope / throughput_scope / stats_scope / digest_scope は scope_id FK で接続
+```
+
+- 旧 `project`/`backlog`/`tag`/`topic`/`problem_tag` は drop 済 (2026-06-09)
+- option C: API wire (`project_id` query/列名) と内部変数 `currentProject` は据え置き、将来 Phase 6 で機械的 rename 予定
+- 詳細: [docs/scope-refactor.md](docs/scope-refactor.md), [docs/scope-refactor-handoff.md](docs/scope-refactor-handoff.md)
 
 ## Deployed Services
 
@@ -97,10 +112,11 @@ CF Pages (React + Vite SPA, TanStack Router)
 - TypeScript の generic narrowing 制限を回避するための cast
 - `isErrorBody` ガードで runtime 保証済み、意図的な妥協として維持
 
-#### 9. `tag` / `reviewTag` → `review_kind` リネーム
-- 現状の `tag` テーブルは事実上 review 評価種別 (Miss/Rough/Fair/Fluent 等) の用途にしか使われていない (`reviewTag` 経由)
-- `problem` に直接 tag を付ける UI は存在せず、`problemTag` 経由のフローは廃止済 (backlog filter からも tagIds 削除済)
-- 将来 `tag` → `review_kind` にリネーム or 専用 enum 化を検討
+#### 9. Phase 6: option C → option B の内部 rename
+- 現状 (Phase 4.1 完了, 2026-06-09 時点) は option C: 内部実装のみ field/scope/review_type に切り替え、wire (`project_id` query param, URL `/api/v1/projects/:id/...`) と列名 (`filter_pref.project_id`, `*_scope.project_id`, `review_tag.tag_id` 等) は据え置き
+- 内部変数 `currentProject` / `projectId` 引数名は ~28 ファイルで生存
+- Phase 6 で機械的 rename: 内部変数 → `currentField`、wire → `field_id`、列名 → `field_id` / `review_type_id`。SQL migration `006_phase6_rename.sql` + schema.ts + routes + hooks 同時変更
+- 詳細: [docs/scope-refactor-handoff.md](docs/scope-refactor-handoff.md) §Phase 6
 
 ## Conventions
 

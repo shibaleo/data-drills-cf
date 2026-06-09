@@ -8,37 +8,37 @@ export type AnswerWithReviews = ProblemWithAnswers["answers"][number];
 
 export const problemsKeys = {
   all: ["problems"] as const,
-  list: (projectId: string) => [...problemsKeys.all, "list", projectId] as const,
+  list: (fieldId: string) => [...problemsKeys.all, "list", fieldId] as const,
 };
 
-export function useProblemsList(projectId: string | undefined) {
+export function useProblemsList(fieldId: string | undefined) {
   return useQuery({
-    queryKey: projectId ? problemsKeys.list(projectId) : problemsKeys.all,
+    queryKey: fieldId ? problemsKeys.list(fieldId) : problemsKeys.all,
     queryFn: async () => {
       const json = await unwrap(
-        rpc.api.v1["problems-list"].$get({ query: { project_id: projectId! } }),
+        rpc.api.v1["problems-list"].$get({ query: { field_id: fieldId! } }),
       );
       return json.data;
     },
-    enabled: !!projectId,
+    enabled: !!fieldId,
     // problems-list は 7 join で重い。ナビゲーションのたびに再 fetch しないよう
     // staleTime を長め (5 分) に。mutation で invalidate されたら必ず再取得される。
     staleTime: 5 * 60_000,
   });
 }
 
-export function useDeleteProblem(projectId: string | undefined) {
+export function useDeleteProblem(fieldId: string | undefined) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) =>
       unwrap(rpc.api.v1.problems[":id"].$delete({ param: { id } })),
     onSuccess: () => {
-      if (projectId) qc.invalidateQueries({ queryKey: problemsKeys.list(projectId) });
+      if (fieldId) qc.invalidateQueries({ queryKey: problemsKeys.list(fieldId) });
     },
   });
 }
 
-export function useUpdateProblem(projectId: string | undefined) {
+export function useUpdateProblem(fieldId: string | undefined) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (vars: { id: string; payload: ProblemUpdateInput }) =>
@@ -49,8 +49,8 @@ export function useUpdateProblem(projectId: string | undefined) {
         }),
       ),
     onMutate: async ({ id, payload }) => {
-      if (!projectId) return;
-      const key = problemsKeys.list(projectId);
+      if (!fieldId) return;
+      const key = problemsKeys.list(fieldId);
       await qc.cancelQueries({ queryKey: key });
       const previous = qc.getQueryData<ProblemWithAnswers[]>(key);
       // Server emits `name`, `subject_id`, `level_id` as non-null strings
@@ -70,11 +70,11 @@ export function useUpdateProblem(projectId: string | undefined) {
       return { previous };
     },
     onError: (_err, _vars, ctx) => {
-      if (!projectId || !ctx?.previous) return;
-      qc.setQueryData(problemsKeys.list(projectId), ctx.previous);
+      if (!fieldId || !ctx?.previous) return;
+      qc.setQueryData(problemsKeys.list(fieldId), ctx.previous);
     },
     onSettled: () => {
-      if (projectId) qc.invalidateQueries({ queryKey: problemsKeys.list(projectId) });
+      if (fieldId) qc.invalidateQueries({ queryKey: problemsKeys.list(fieldId) });
     },
   });
 }

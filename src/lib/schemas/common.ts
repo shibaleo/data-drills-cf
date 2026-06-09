@@ -5,7 +5,7 @@ export const reorderInputSchema = z.object({
   ids: z.array(z.string().uuid()),
 });
 
-/** Query with required `project_id` */
-export const projectIdQuerySchema = z.object({
-  project_id: z.string().uuid(),
+/** Query with required `field_id` */
+export const fieldIdQuerySchema = z.object({
+  field_id: z.string().uuid(),
 });

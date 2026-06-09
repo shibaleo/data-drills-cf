@@ -142,12 +142,12 @@ export const review = pgTable("review", {
 // 11b. ReviewTag (M:N)
 // =============================================================================
 
-// Phase 4: tag_id column 名は残しつつ、参照先は review_type に切り替え (option C, wire 互換維持)
+// Phase 6: column 名も review_type_id に rename 済 (option C 解消)
 export const reviewTag = pgTable("review_tag", {
   reviewId: uuid("review_id").notNull().references(() => review.id, { onDelete: "cascade" }),
-  tagId: uuid("tag_id").notNull().references(() => reviewType.id, { onDelete: "cascade" }),
+  reviewTypeId: uuid("review_type_id").notNull().references(() => reviewType.id, { onDelete: "cascade" }),
 }, (t) => [
-  primaryKey({ columns: [t.reviewId, t.tagId] }),
+  primaryKey({ columns: [t.reviewId, t.reviewTypeId] }),
 ]);
 
 // =============================================================================
@@ -166,14 +166,14 @@ export const flashcard = pgTable("flashcard", {
 ]);
 
 // =============================================================================
-// 13. FlashcardTag (M:N) — tag_id column 名のまま review_type に向ける (option C)
+// 13. FlashcardTag (M:N) — Phase 6: column 名も review_type_id に rename 済
 // =============================================================================
 
 export const flashcardTag = pgTable("flashcard_tag", {
   flashcardId: uuid("flashcard_id").notNull().references(() => flashcard.id, { onDelete: "cascade" }),
-  tagId: uuid("tag_id").notNull().references(() => reviewType.id, { onDelete: "cascade" }),
+  reviewTypeId: uuid("review_type_id").notNull().references(() => reviewType.id, { onDelete: "cascade" }),
 }, (t) => [
-  primaryKey({ columns: [t.flashcardId, t.tagId] }),
+  primaryKey({ columns: [t.flashcardId, t.reviewTypeId] }),
 ]);
 
 // =============================================================================
@@ -259,15 +259,15 @@ export const oauthToken = pgTable("oauth_token", {
 // 23. FilterPref
 // =============================================================================
 
-// Phase 4: column 名 project_id のまま field を参照 (option C)
+// Phase 6: column 名も field_id に rename 済
 export const filterPref = pgTable("filter_pref", {
   id: id(),
   userId: uuid("user_id").notNull(),
-  projectId: uuid("project_id").notNull().references(() => field.id, { onDelete: "cascade" }),
+  fieldId: uuid("field_id").notNull().references(() => field.id, { onDelete: "cascade" }),
   filters: jsonb("filters").notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
-  uniqueIndex("filter_pref_user_project_key").on(t.userId, t.projectId),
+  uniqueIndex("filter_pref_user_field_key").on(t.userId, t.fieldId),
 ]);
 
 // =============================================================================
@@ -411,7 +411,7 @@ export const goalMilestone = pgTable("goal_milestone", {
 export const reviewScope = pgTable("review_scope", {
   id: uuid("id").notNull(),
   revision: integer("revision").notNull(),
-  projectId: uuid("project_id").notNull().references(() => field.id, { onDelete: "cascade" }),
+  fieldId: uuid("field_id").notNull().references(() => field.id, { onDelete: "cascade" }),
   scopeId: uuid("scope_id"),
   name: text("name").notNull(),
   filter: jsonb("filter").$type<MemberFilter>().notNull().default({}),
@@ -422,7 +422,7 @@ export const reviewScope = pgTable("review_scope", {
 }, (t) => [
   primaryKey({ columns: [t.id, t.revision] }),
   index("review_scope_current_idx").on(t.id, t.revision.desc()),
-  index("review_scope_project_active_idx").on(t.projectId, t.isActive, t.validTo),
+  index("review_scope_field_active_idx").on(t.fieldId, t.isActive, t.validTo),
   index("review_scope_scope_idx").on(t.scopeId),
 ]);
 
@@ -436,7 +436,7 @@ export const reviewScope = pgTable("review_scope", {
 export const throughputScope = pgTable("throughput_scope", {
   id: uuid("id").notNull(),
   revision: integer("revision").notNull(),
-  projectId: uuid("project_id").notNull().references(() => field.id, { onDelete: "cascade" }),
+  fieldId: uuid("field_id").notNull().references(() => field.id, { onDelete: "cascade" }),
   scopeId: uuid("scope_id"),
   name: text("name").notNull(),
   filter: jsonb("filter").$type<MemberFilter>().notNull().default({}),
@@ -447,7 +447,7 @@ export const throughputScope = pgTable("throughput_scope", {
 }, (t) => [
   primaryKey({ columns: [t.id, t.revision] }),
   index("throughput_scope_current_idx").on(t.id, t.revision.desc()),
-  index("throughput_scope_project_active_idx").on(t.projectId, t.isActive, t.validTo),
+  index("throughput_scope_field_active_idx").on(t.fieldId, t.isActive, t.validTo),
   index("throughput_scope_scope_idx").on(t.scopeId),
 ]);
 
@@ -458,7 +458,7 @@ export const throughputScope = pgTable("throughput_scope", {
 export const statsScope = pgTable("stats_scope", {
   id: uuid("id").notNull(),
   revision: integer("revision").notNull(),
-  projectId: uuid("project_id").notNull().references(() => field.id, { onDelete: "cascade" }),
+  fieldId: uuid("field_id").notNull().references(() => field.id, { onDelete: "cascade" }),
   scopeId: uuid("scope_id"),
   name: text("name").notNull(),
   filter: jsonb("filter").$type<MemberFilter>().notNull().default({}),
@@ -469,14 +469,14 @@ export const statsScope = pgTable("stats_scope", {
 }, (t) => [
   primaryKey({ columns: [t.id, t.revision] }),
   index("stats_scope_current_idx").on(t.id, t.revision.desc()),
-  index("stats_scope_project_active_idx").on(t.projectId, t.isActive, t.validTo),
+  index("stats_scope_field_active_idx").on(t.fieldId, t.isActive, t.validTo),
   index("stats_scope_scope_idx").on(t.scopeId),
 ]);
 
 export const digestScope = pgTable("digest_scope", {
   id: uuid("id").notNull(),
   revision: integer("revision").notNull(),
-  projectId: uuid("project_id").notNull().references(() => field.id, { onDelete: "cascade" }),
+  fieldId: uuid("field_id").notNull().references(() => field.id, { onDelete: "cascade" }),
   scopeId: uuid("scope_id"),
   name: text("name").notNull(),
   filter: jsonb("filter").$type<MemberFilter>().notNull().default({}),
@@ -487,6 +487,6 @@ export const digestScope = pgTable("digest_scope", {
 }, (t) => [
   primaryKey({ columns: [t.id, t.revision] }),
   index("digest_scope_current_idx").on(t.id, t.revision.desc()),
-  index("digest_scope_project_active_idx").on(t.projectId, t.isActive, t.validTo),
+  index("digest_scope_field_active_idx").on(t.fieldId, t.isActive, t.validTo),
   index("digest_scope_scope_idx").on(t.scopeId),
 ]);

@@ -2,80 +2,80 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { rpc, unwrap, type RpcData } from "@/lib/rpc-client";
 import { fieldKeys } from "@/hooks/queries/use-field-data";
 
-export type LevelRow = RpcData<typeof rpc.api.v1.projects[":id"]["levels"]["$get"]>["data"][number];
+export type LevelRow = RpcData<typeof rpc.api.v1.fields[":id"]["levels"]["$get"]>["data"][number];
 
 export const levelsKeys = {
   all: ["levels"] as const,
-  list: (projectId: string) => [...levelsKeys.all, "list", projectId] as const,
+  list: (fieldId: string) => [...levelsKeys.all, "list", fieldId] as const,
 };
 
-export function useLevelsList(projectId: string | undefined) {
+export function useLevelsList(fieldId: string | undefined) {
   return useQuery({
-    queryKey: projectId ? levelsKeys.list(projectId) : levelsKeys.all,
+    queryKey: fieldId ? levelsKeys.list(fieldId) : levelsKeys.all,
     queryFn: async () => {
       const json = await unwrap(
-        rpc.api.v1.projects[":id"].levels.$get({ param: { id: projectId! } }),
+        rpc.api.v1.fields[":id"].levels.$get({ param: { id: fieldId! } }),
       );
       return json.data;
     },
-    enabled: !!projectId,
+    enabled: !!fieldId,
   });
 }
 
-function invalidateLevels(qc: ReturnType<typeof useQueryClient>, projectId: string) {
-  qc.invalidateQueries({ queryKey: levelsKeys.list(projectId) });
-  qc.invalidateQueries({ queryKey: fieldKeys.levels(projectId) });
+function invalidateLevels(qc: ReturnType<typeof useQueryClient>, fieldId: string) {
+  qc.invalidateQueries({ queryKey: levelsKeys.list(fieldId) });
+  qc.invalidateQueries({ queryKey: fieldKeys.levels(fieldId) });
 }
 
-export function useCreateLevel(projectId: string | undefined) {
+export function useCreateLevel(fieldId: string | undefined) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (payload: { code: string; name: string; color?: string | null; sort_order?: number }) =>
-      unwrap(rpc.api.v1.projects[":id"].levels.$post({ param: { id: projectId! }, json: payload })),
-    onSuccess: () => projectId && invalidateLevels(qc, projectId),
+      unwrap(rpc.api.v1.fields[":id"].levels.$post({ param: { id: fieldId! }, json: payload })),
+    onSuccess: () => fieldId && invalidateLevels(qc, fieldId),
   });
 }
 
-export function useUpdateLevel(projectId: string | undefined) {
+export function useUpdateLevel(fieldId: string | undefined) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (vars: { id: string; payload: { code?: string; name?: string; color?: string | null; sort_order?: number } }) =>
       unwrap(
-        rpc.api.v1.projects[":id"].levels[":entityId"].$put({
-          param: { id: projectId!, entityId: vars.id },
+        rpc.api.v1.fields[":id"].levels[":entityId"].$put({
+          param: { id: fieldId!, entityId: vars.id },
           json: vars.payload,
         }),
       ),
-    onSuccess: () => projectId && invalidateLevels(qc, projectId),
+    onSuccess: () => fieldId && invalidateLevels(qc, fieldId),
   });
 }
 
-export function useDeleteLevel(projectId: string | undefined) {
+export function useDeleteLevel(fieldId: string | undefined) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) =>
       unwrap(
-        rpc.api.v1.projects[":id"].levels[":entityId"].$delete({
-          param: { id: projectId!, entityId: id },
+        rpc.api.v1.fields[":id"].levels[":entityId"].$delete({
+          param: { id: fieldId!, entityId: id },
         }),
       ),
-    onSuccess: () => projectId && invalidateLevels(qc, projectId),
+    onSuccess: () => fieldId && invalidateLevels(qc, fieldId),
   });
 }
 
-export function useReorderLevels(projectId: string | undefined) {
+export function useReorderLevels(fieldId: string | undefined) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (ids: string[]) =>
       unwrap(
-        rpc.api.v1.projects[":id"].levels.reorder.$patch({
-          param: { id: projectId! },
+        rpc.api.v1.fields[":id"].levels.reorder.$patch({
+          param: { id: fieldId! },
           json: { ids },
         }),
       ),
     onMutate: async (ids) => {
-      if (!projectId) return;
-      const key = levelsKeys.list(projectId);
+      if (!fieldId) return;
+      const key = levelsKeys.list(fieldId);
       await qc.cancelQueries({ queryKey: key });
       const previous = qc.getQueryData<LevelRow[]>(key);
       if (previous) {
@@ -88,9 +88,9 @@ export function useReorderLevels(projectId: string | undefined) {
       return { previous };
     },
     onError: (_err, _vars, ctx) => {
-      if (!projectId || !ctx?.previous) return;
-      qc.setQueryData(levelsKeys.list(projectId), ctx.previous);
+      if (!fieldId || !ctx?.previous) return;
+      qc.setQueryData(levelsKeys.list(fieldId), ctx.previous);
     },
-    onSettled: () => projectId && invalidateLevels(qc, projectId),
+    onSettled: () => fieldId && invalidateLevels(qc, fieldId),
   });
 }

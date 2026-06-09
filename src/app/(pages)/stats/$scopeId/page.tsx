@@ -172,7 +172,7 @@ export default function StatsDetailPage() {
             <X className="size-3.5"/>
           </button>
           <MemberFilterPicker
-            projectId={currentField.id}
+            fieldId={currentField.id}
             value={localFilter}
             onChange={setLocalFilter}
             trailing={

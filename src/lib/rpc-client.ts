@@ -7,7 +7,7 @@ import { ApiError } from "@/lib/api-client";
  *
  * Usage:
  * ```ts
- * const data = await unwrap(rpc.api.v1.problems.$get({ query: { project_id } }));
+ * const data = await unwrap(rpc.api.v1.problems.$get({ query: { field_id } }));
  * ```
  *
  * `import type { AppType }` keeps server-only deps (Drizzle, postgres, etc.)

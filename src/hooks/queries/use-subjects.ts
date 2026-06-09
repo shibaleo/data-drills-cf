@@ -2,80 +2,80 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { rpc, unwrap, type RpcData } from "@/lib/rpc-client";
 import { fieldKeys } from "@/hooks/queries/use-field-data";
 
-export type SubjectRow = RpcData<typeof rpc.api.v1.projects[":id"]["subjects"]["$get"]>["data"][number];
+export type SubjectRow = RpcData<typeof rpc.api.v1.fields[":id"]["subjects"]["$get"]>["data"][number];
 
 export const subjectsKeys = {
   all: ["subjects"] as const,
-  list: (projectId: string) => [...subjectsKeys.all, "list", projectId] as const,
+  list: (fieldId: string) => [...subjectsKeys.all, "list", fieldId] as const,
 };
 
-export function useSubjectsList(projectId: string | undefined) {
+export function useSubjectsList(fieldId: string | undefined) {
   return useQuery({
-    queryKey: projectId ? subjectsKeys.list(projectId) : subjectsKeys.all,
+    queryKey: fieldId ? subjectsKeys.list(fieldId) : subjectsKeys.all,
     queryFn: async () => {
       const json = await unwrap(
-        rpc.api.v1.projects[":id"].subjects.$get({ param: { id: projectId! } }),
+        rpc.api.v1.fields[":id"].subjects.$get({ param: { id: fieldId! } }),
       );
       return json.data;
     },
-    enabled: !!projectId,
+    enabled: !!fieldId,
   });
 }
 
-function invalidateSubjects(qc: ReturnType<typeof useQueryClient>, projectId: string) {
-  qc.invalidateQueries({ queryKey: subjectsKeys.list(projectId) });
-  qc.invalidateQueries({ queryKey: fieldKeys.subjects(projectId) });
+function invalidateSubjects(qc: ReturnType<typeof useQueryClient>, fieldId: string) {
+  qc.invalidateQueries({ queryKey: subjectsKeys.list(fieldId) });
+  qc.invalidateQueries({ queryKey: fieldKeys.subjects(fieldId) });
 }
 
-export function useCreateSubject(projectId: string | undefined) {
+export function useCreateSubject(fieldId: string | undefined) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (payload: { code: string; name: string; color?: string | null; sort_order?: number }) =>
-      unwrap(rpc.api.v1.projects[":id"].subjects.$post({ param: { id: projectId! }, json: payload })),
-    onSuccess: () => projectId && invalidateSubjects(qc, projectId),
+      unwrap(rpc.api.v1.fields[":id"].subjects.$post({ param: { id: fieldId! }, json: payload })),
+    onSuccess: () => fieldId && invalidateSubjects(qc, fieldId),
   });
 }
 
-export function useUpdateSubject(projectId: string | undefined) {
+export function useUpdateSubject(fieldId: string | undefined) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (vars: { id: string; payload: { code?: string; name?: string; color?: string | null; sort_order?: number } }) =>
       unwrap(
-        rpc.api.v1.projects[":id"].subjects[":entityId"].$put({
-          param: { id: projectId!, entityId: vars.id },
+        rpc.api.v1.fields[":id"].subjects[":entityId"].$put({
+          param: { id: fieldId!, entityId: vars.id },
           json: vars.payload,
         }),
       ),
-    onSuccess: () => projectId && invalidateSubjects(qc, projectId),
+    onSuccess: () => fieldId && invalidateSubjects(qc, fieldId),
   });
 }
 
-export function useDeleteSubject(projectId: string | undefined) {
+export function useDeleteSubject(fieldId: string | undefined) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) =>
       unwrap(
-        rpc.api.v1.projects[":id"].subjects[":entityId"].$delete({
-          param: { id: projectId!, entityId: id },
+        rpc.api.v1.fields[":id"].subjects[":entityId"].$delete({
+          param: { id: fieldId!, entityId: id },
         }),
       ),
-    onSuccess: () => projectId && invalidateSubjects(qc, projectId),
+    onSuccess: () => fieldId && invalidateSubjects(qc, fieldId),
   });
 }
 
-export function useReorderSubjects(projectId: string | undefined) {
+export function useReorderSubjects(fieldId: string | undefined) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (ids: string[]) =>
       unwrap(
-        rpc.api.v1.projects[":id"].subjects.reorder.$patch({
-          param: { id: projectId! },
+        rpc.api.v1.fields[":id"].subjects.reorder.$patch({
+          param: { id: fieldId! },
           json: { ids },
         }),
       ),
     onMutate: async (ids) => {
-      if (!projectId) return;
-      const key = subjectsKeys.list(projectId);
+      if (!fieldId) return;
+      const key = subjectsKeys.list(fieldId);
       await qc.cancelQueries({ queryKey: key });
       const previous = qc.getQueryData<SubjectRow[]>(key);
       if (previous) {
@@ -88,9 +88,9 @@ export function useReorderSubjects(projectId: string | undefined) {
       return { previous };
     },
     onError: (_err, _vars, ctx) => {
-      if (!projectId || !ctx?.previous) return;
-      qc.setQueryData(subjectsKeys.list(projectId), ctx.previous);
+      if (!fieldId || !ctx?.previous) return;
+      qc.setQueryData(subjectsKeys.list(fieldId), ctx.previous);
     },
-    onSettled: () => projectId && invalidateSubjects(qc, projectId),
+    onSettled: () => fieldId && invalidateSubjects(qc, fieldId),
   });
 }

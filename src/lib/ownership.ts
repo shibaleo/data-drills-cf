@@ -2,6 +2,8 @@
  * マルチユーザ境界を強制するヘルパー群。各 route ハンドラ冒頭で呼ぶ。
  * - 認証されたユーザが対象 field の所有者でない場合は 404 を返す。
  *   (= 認可失敗で 403 を出すと "存在は確認できる" 情報漏れ。404 で隠蔽。)
+ *
+ * Phase 6: 旧 `ownsProject` alias は削除済。新規コードは `ownsField` を直接 import すること。
  */
 
 import type { Context } from "hono";
@@ -25,9 +27,6 @@ export async function ownsField(fieldId: string, userId: string): Promise<boolea
     .limit(1);
   return !!row;
 }
-
-/** 互換 alias: 旧 project は field に同じ UUID で移行済 (Phase 1)。 */
-export const ownsProject = ownsField;
 
 export async function ownsProblem(problemId: string, userId: string): Promise<boolean> {
   if (!userId) return false;

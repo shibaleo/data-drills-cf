@@ -96,7 +96,7 @@ function addDays(s: string, n: number): string {
 export default function PlanPage() {
   usePageTitle("Plan");
   const { currentField, statuses } = useField();
-  const projectId = currentField?.id;
+  const fieldId = currentField?.id;
   const today = todayJST();
   const [hideFirst, setHideFirst] = useState(false);
   const [hideFuture, setHideFuture] = useState(false);
@@ -130,7 +130,7 @@ export default function PlanPage() {
     }
   }, [selectedScopeId]);
 
-  const reviewQuery = useReviewList(projectId, null, selectedScopeId);
+  const reviewQuery = useReviewList(fieldId, null, selectedScopeId);
 
   // selectedScopeId 指定中はその scope だけ fetch (= per-scope view)。
   // 未指定は全 scope を fan-out (legacy 俯瞰モード)。
@@ -146,7 +146,7 @@ export default function PlanPage() {
         );
         return json.data;
       },
-      enabled: !!projectId,
+      enabled: !!fieldId,
     })),
   });
 

@@ -23,7 +23,7 @@ function durationToSeconds(dur: string): number | null {
  * Returns the existing problem ID, or creates a new one.
  */
 async function resolveProblemId(
-  projectId: string,
+  fieldId: string,
   subjectId: string,
   levelId: string,
   code: string,
@@ -31,7 +31,7 @@ async function resolveProblemId(
   const trimmed = code.trim()
   if (!trimmed) return null
 
-  const listRes = await unwrap(rpc.api.v1.problems.$get({ query: { project_id: projectId } }))
+  const listRes = await unwrap(rpc.api.v1.problems.$get({ query: { field_id: fieldId } }))
   const existing = listRes.data.find(
     (p) => p.subjectId === subjectId && p.levelId === levelId && p.code === trimmed,
   )
@@ -41,7 +41,7 @@ async function resolveProblemId(
     const res = await unwrap(
       rpc.api.v1.problems.$post({
         json: {
-          project_id: projectId,
+          field_id: fieldId,
           subject_id: subjectId,
           level_id: levelId,
           code: trimmed,
@@ -58,14 +58,14 @@ async function resolveProblemId(
 
 /* ── Code suggestions for (subject, level) ── */
 
-function useCodeSuggestions(projectId: string | undefined, subject: string, level: string) {
+function useCodeSuggestions(fieldId: string | undefined, subject: string, level: string) {
   const { data: problems = [] } = useQuery({
-    queryKey: ['problems-for-suggestions', projectId],
+    queryKey: ['problems-for-suggestions', fieldId],
     queryFn: async () => {
-      const json = await unwrap(rpc.api.v1.problems.$get({ query: { project_id: projectId! } }))
+      const json = await unwrap(rpc.api.v1.problems.$get({ query: { field_id: fieldId! } }))
       return json.data
     },
-    enabled: !!projectId,
+    enabled: !!fieldId,
     staleTime: 60_000,
   })
 
@@ -222,12 +222,12 @@ export function useAnswerForm(onSaved: (problemId: string) => void) {
           }),
         )
         const revId = revRes.data.id
-        const tagId = tagMap.get(r.type)
-        if (tagId) {
+        const reviewTypeId = tagMap.get(r.type)
+        if (reviewTypeId) {
           await unwrap(
-            rpc.api.v1.reviews[":id"].tags.$post({
+            rpc.api.v1.reviews[":id"]["review-types"].$post({
               param: { id: revId },
-              json: { tag_id: tagId },
+              json: { review_type_id: reviewTypeId },
             }),
           )
         }
@@ -358,17 +358,17 @@ export function useEditAnswerForm(onSaved: (problemId: string) => void) {
           const oldTags = currentReviewTags.filter((rt) => rt.reviewId === r.id)
           for (const ot of oldTags) {
             await unwrap(
-              rpc.api.v1.reviews[":id"].tags[":tagId"].$delete({
-                param: { id: r.id, tagId: ot.tagId },
+              rpc.api.v1.reviews[":id"]["review-types"][":reviewTypeId"].$delete({
+                param: { id: r.id, reviewTypeId: ot.reviewTypeId },
               }),
             )
           }
-          const tagId = tagMap.get(r.type)
-          if (tagId) {
+          const reviewTypeId = tagMap.get(r.type)
+          if (reviewTypeId) {
             await unwrap(
-              rpc.api.v1.reviews[":id"].tags.$post({
+              rpc.api.v1.reviews[":id"]["review-types"].$post({
                 param: { id: r.id },
-                json: { tag_id: tagId },
+                json: { review_type_id: reviewTypeId },
               }),
             )
           }
@@ -379,12 +379,12 @@ export function useEditAnswerForm(onSaved: (problemId: string) => void) {
             }),
           )
           const newRevId = res.data.id
-          const tagId = tagMap.get(r.type)
-          if (tagId) {
+          const reviewTypeId = tagMap.get(r.type)
+          if (reviewTypeId) {
             await unwrap(
-              rpc.api.v1.reviews[":id"].tags.$post({
+              rpc.api.v1.reviews[":id"]["review-types"].$post({
                 param: { id: newRevId },
-                json: { tag_id: tagId },
+                json: { review_type_id: reviewTypeId },
               }),
             )
           }

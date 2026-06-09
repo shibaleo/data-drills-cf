@@ -4,9 +4,9 @@ import { db } from "@/lib/db";
 import { subject } from "@/lib/db/schema";
 import { and, eq } from "drizzle-orm";
 import { randomCode } from "@/lib/utils";
-import { masterCreateInputSchema, masterUpdateInputSchema } from "@/lib/schemas/project";
+import { masterCreateInputSchema, masterUpdateInputSchema } from "@/lib/schemas/field";
 import { reorderInputSchema } from "@/lib/schemas/common";
-import { ownsProject } from "@/lib/ownership";
+import { ownsField } from "@/lib/ownership";
 import type { AuthResult } from "@/lib/auth";
 
 type Env = { Variables: { authResult: AuthResult } };
@@ -14,20 +14,20 @@ type Env = { Variables: { authResult: AuthResult } };
 const app = new Hono<Env>()
   .get("/", async (c) => {
     const userId = c.get("authResult").userId;
-    const projectId = c.req.param("id")!;
-    if (!(await ownsProject(projectId, userId))) return c.json({ data: [], next_cursor: null });
-    const rows = await db.select().from(subject).where(eq(subject.fieldId, projectId)).orderBy(subject.sortOrder);
+    const fieldId = c.req.param("id")!;
+    if (!(await ownsField(fieldId, userId))) return c.json({ data: [], next_cursor: null });
+    const rows = await db.select().from(subject).where(eq(subject.fieldId, fieldId)).orderBy(subject.sortOrder);
     return c.json({ data: rows, next_cursor: null });
   })
   .post("/", zValidator("json", masterCreateInputSchema), async (c) => {
     const userId = c.get("authResult").userId;
-    const projectId = c.req.param("id")!;
-    if (!(await ownsProject(projectId, userId))) return c.json({ error: "Not found" }, 404);
+    const fieldId = c.req.param("id")!;
+    if (!(await ownsField(fieldId, userId))) return c.json({ error: "Not found" }, 404);
     const body = c.req.valid("json");
     const values = {
       code: body.code || randomCode(),
       name: body.name,
-      fieldId: projectId,
+      fieldId,
       color: body.color ?? null,
       sortOrder: body.sort_order ?? 0,
       ...(body.id ? { id: body.id } : {}),
@@ -37,21 +37,21 @@ const app = new Hono<Env>()
   })
   .patch("/reorder", zValidator("json", reorderInputSchema), async (c) => {
     const userId = c.get("authResult").userId;
-    const projectId = c.req.param("id")!;
-    if (!(await ownsProject(projectId, userId))) return c.json({ ok: false }, 404);
+    const fieldId = c.req.param("id")!;
+    if (!(await ownsField(fieldId, userId))) return c.json({ ok: false }, 404);
     const { ids } = c.req.valid("json");
     await Promise.all(
       ids.map((id, i) =>
         db.update(subject).set({ sortOrder: i, updatedAt: new Date() })
-          .where(and(eq(subject.id, id), eq(subject.fieldId, projectId))),
+          .where(and(eq(subject.id, id), eq(subject.fieldId, fieldId))),
       ),
     );
     return c.json({ ok: true });
   })
   .put("/:entityId", zValidator("json", masterUpdateInputSchema), async (c) => {
     const userId = c.get("authResult").userId;
-    const projectId = c.req.param("id")!;
-    if (!(await ownsProject(projectId, userId))) return c.json({ error: "Not found" }, 404);
+    const fieldId = c.req.param("id")!;
+    if (!(await ownsField(fieldId, userId))) return c.json({ error: "Not found" }, 404);
     const body = c.req.valid("json");
     const updates: Record<string, unknown> = { updatedAt: new Date() };
     if (body.code !== undefined) updates.code = body.code;
@@ -59,16 +59,16 @@ const app = new Hono<Env>()
     if (body.color !== undefined) updates.color = body.color;
     if (body.sort_order !== undefined) updates.sortOrder = body.sort_order;
     const [row] = await db.update(subject).set(updates)
-      .where(and(eq(subject.id, c.req.param("entityId")), eq(subject.fieldId, projectId))).returning();
+      .where(and(eq(subject.id, c.req.param("entityId")), eq(subject.fieldId, fieldId))).returning();
     if (!row) return c.json({ error: "Not found" }, 404);
     return c.json({ data: row });
   })
   .delete("/:entityId", async (c) => {
     const userId = c.get("authResult").userId;
-    const projectId = c.req.param("id")!;
-    if (!(await ownsProject(projectId, userId))) return c.json({ error: "Not found" }, 404);
+    const fieldId = c.req.param("id")!;
+    if (!(await ownsField(fieldId, userId))) return c.json({ error: "Not found" }, 404);
     const [row] = await db.delete(subject)
-      .where(and(eq(subject.id, c.req.param("entityId")), eq(subject.fieldId, projectId))).returning();
+      .where(and(eq(subject.id, c.req.param("entityId")), eq(subject.fieldId, fieldId))).returning();
     if (!row) return c.json({ error: "Not found" }, 404);
     return c.json({ data: row });
   });

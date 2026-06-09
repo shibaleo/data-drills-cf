@@ -7,7 +7,7 @@ import {
   useLevels,
   useStatuses,
   useInvalidateFieldData,
-  type Project,
+  type Field,
   type LookupItem,
   type StatusItem,
 } from "@/hooks/queries/use-field-data";
@@ -15,9 +15,9 @@ import {
 export type { StatusItem };
 
 interface FieldContextValue {
-  projects: Project[];
-  currentField: Project | null;
-  setCurrentProject: (p: Project) => void;
+  fields: Field[];
+  currentField: Field | null;
+  setCurrentField: (f: Field) => void;
   refresh: () => Promise<void>;
   subjects: LookupItem[];
   levels: LookupItem[];
@@ -53,35 +53,35 @@ export function useLookup() {
   return { levelName, levelColor, subjectName, subjectColor, statusColor, statusStability };
 }
 
-const STORAGE_KEY = "dd_current_project";
+const STORAGE_KEY = "dd_current_field";
 
 export function FieldProvider({ children }: { children: ReactNode }) {
-  const [currentField, setCurrentProjectState] = useState<Project | null>(null);
+  const [currentField, setCurrentFieldState] = useState<Field | null>(null);
   const [filterSubjectId, setFilterSubjectId] = useState<string | null>(null);
   const [filterLevelId, setFilterLevelId] = useState<string | null>(null);
 
-  const projectsQuery = useFields();
+  const fieldsQuery = useFields();
   const subjectsQuery = useSubjects(currentField?.id);
   const levelsQuery = useLevels(currentField?.id);
   const statusesQuery = useStatuses();
   const invalidate = useInvalidateFieldData();
 
-  const projects = projectsQuery.data ?? [];
+  const fields = fieldsQuery.data ?? [];
 
-  // Pick initial project from localStorage once the list loads
+  // Pick initial field from localStorage once the list loads
   useEffect(() => {
-    if (currentField || projects.length === 0) return;
+    if (currentField || fields.length === 0) return;
     const savedId = typeof window !== "undefined" ? localStorage.getItem(STORAGE_KEY) : null;
-    const saved = savedId ? projects.find((p) => p.id === savedId) : null;
-    setCurrentProjectState(saved ?? projects[0]);
-  }, [projects, currentField]);
+    const saved = savedId ? fields.find((f) => f.id === savedId) : null;
+    setCurrentFieldState(saved ?? fields[0]);
+  }, [fields, currentField]);
 
-  const setCurrentProject = useCallback((p: Project) => {
-    setCurrentProjectState(p);
+  const setCurrentField = useCallback((f: Field) => {
+    setCurrentFieldState(f);
     setFilterSubjectId(null);
     setFilterLevelId(null);
     if (typeof window !== "undefined") {
-      localStorage.setItem(STORAGE_KEY, p.id);
+      localStorage.setItem(STORAGE_KEY, f.id);
     }
   }, []);
 
@@ -90,9 +90,9 @@ export function FieldProvider({ children }: { children: ReactNode }) {
   }, [invalidate]);
 
   const value = useMemo<FieldContextValue>(() => ({
-    projects,
+    fields,
     currentField,
-    setCurrentProject,
+    setCurrentField,
     refresh,
     subjects: subjectsQuery.data ?? [],
     levels: levelsQuery.data ?? [],
@@ -102,9 +102,9 @@ export function FieldProvider({ children }: { children: ReactNode }) {
     filterLevelId,
     setFilterLevelId,
   }), [
-    projects,
+    fields,
     currentField,
-    setCurrentProject,
+    setCurrentField,
     refresh,
     subjectsQuery.data,
     levelsQuery.data,

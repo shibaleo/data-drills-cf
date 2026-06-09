@@ -4,25 +4,25 @@ import type { FlashcardCreateInput, FlashcardUpdateInput } from "@/lib/schemas/f
 
 export type FlashcardRow = RpcData<typeof rpc.api.v1.flashcards.$get>["data"][number];
 export type FlashcardReviewRow = RpcData<typeof rpc.api.v1["flashcard-reviews"]["$get"]>["data"][number];
-export type TopicItem = RpcData<typeof rpc.api.v1.projects[":id"]["topics"]["$get"]>["data"][number];
+export type TopicItem = RpcData<typeof rpc.api.v1.fields[":id"]["topics"]["$get"]>["data"][number];
 
 export const flashcardsKeys = {
   all: ["flashcards"] as const,
-  cards: (projectId: string) => [...flashcardsKeys.all, "cards", projectId] as const,
+  cards: (fieldId: string) => [...flashcardsKeys.all, "cards", fieldId] as const,
   reviews: () => [...flashcardsKeys.all, "reviews"] as const,
-  topics: (projectId: string) => ["flashcards", "topics", projectId] as const,
+  topics: (fieldId: string) => ["flashcards", "topics", fieldId] as const,
 };
 
-export function useFlashcardsData(projectId: string | undefined) {
+export function useFlashcardsData(fieldId: string | undefined) {
   const cards = useQuery({
-    queryKey: projectId ? flashcardsKeys.cards(projectId) : flashcardsKeys.all,
+    queryKey: fieldId ? flashcardsKeys.cards(fieldId) : flashcardsKeys.all,
     queryFn: async () => {
       const json = await unwrap(
-        rpc.api.v1.flashcards.$get({ query: { project_id: projectId! } }),
+        rpc.api.v1.flashcards.$get({ query: { field_id: fieldId! } }),
       );
       return json.data;
     },
-    enabled: !!projectId,
+    enabled: !!fieldId,
   });
   const reviews = useQuery({
     queryKey: flashcardsKeys.reviews(),
@@ -30,17 +30,17 @@ export function useFlashcardsData(projectId: string | undefined) {
       const json = await unwrap(rpc.api.v1["flashcard-reviews"].$get({ query: {} }));
       return json.data;
     },
-    enabled: !!projectId,
+    enabled: !!fieldId,
   });
   const topics = useQuery({
-    queryKey: projectId ? flashcardsKeys.topics(projectId) : flashcardsKeys.all,
+    queryKey: fieldId ? flashcardsKeys.topics(fieldId) : flashcardsKeys.all,
     queryFn: async () => {
       const json = await unwrap(
-        rpc.api.v1.projects[":id"].topics.$get({ param: { id: projectId! } }),
+        rpc.api.v1.fields[":id"].topics.$get({ param: { id: fieldId! } }),
       );
       return json.data;
     },
-    enabled: !!projectId,
+    enabled: !!fieldId,
     staleTime: 5 * 60_000,
   });
   return {
@@ -51,18 +51,18 @@ export function useFlashcardsData(projectId: string | undefined) {
   };
 }
 
-export function useCreateFlashcard(projectId: string | undefined) {
+export function useCreateFlashcard(fieldId: string | undefined) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (payload: FlashcardCreateInput) =>
       unwrap(rpc.api.v1.flashcards.$post({ json: payload })),
     onSuccess: () => {
-      if (projectId) qc.invalidateQueries({ queryKey: flashcardsKeys.cards(projectId) });
+      if (fieldId) qc.invalidateQueries({ queryKey: flashcardsKeys.cards(fieldId) });
     },
   });
 }
 
-export function useUpdateFlashcard(projectId: string | undefined) {
+export function useUpdateFlashcard(fieldId: string | undefined) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (vars: { id: string; payload: FlashcardUpdateInput }) =>
@@ -73,18 +73,18 @@ export function useUpdateFlashcard(projectId: string | undefined) {
         }),
       ),
     onSuccess: () => {
-      if (projectId) qc.invalidateQueries({ queryKey: flashcardsKeys.cards(projectId) });
+      if (fieldId) qc.invalidateQueries({ queryKey: flashcardsKeys.cards(fieldId) });
     },
   });
 }
 
-export function useDeleteFlashcard(projectId: string | undefined) {
+export function useDeleteFlashcard(fieldId: string | undefined) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) =>
       unwrap(rpc.api.v1.flashcards[":id"].$delete({ param: { id } })),
     onSuccess: () => {
-      if (projectId) qc.invalidateQueries({ queryKey: flashcardsKeys.cards(projectId) });
+      if (fieldId) qc.invalidateQueries({ queryKey: flashcardsKeys.cards(fieldId) });
     },
   });
 }

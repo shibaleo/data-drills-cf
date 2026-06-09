@@ -17,7 +17,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { problemColor } from "@/lib/problem-color";
 import { secondsToHmsNullable } from "@/lib/duration";
 import { toJSTDateString } from "@/lib/date-utils";
-import { projectIdQuerySchema } from "@/lib/schemas/common";
+import { fieldIdQuerySchema } from "@/lib/schemas/common";
 import type { ReviewType } from "@/lib/types";
 import type { AuthResult } from "@/lib/auth";
 
@@ -30,16 +30,16 @@ const app = new Hono<Env>()
    * subject / level / answer_status / tag をサーバーで解決し、
    * クライアントが `ProblemWithAnswers[]` をそのまま `setState` できる形で返す。
    */
-  .get("/", zValidator("query", projectIdQuerySchema), async (c) => {
+  .get("/", zValidator("query", fieldIdQuerySchema), async (c) => {
     const userId = c.get("authResult").userId;
-    const { project_id: projectId } = c.req.valid("query");
+    const { field_id: fieldId } = c.req.valid("query");
     if (!userId) return c.json({ data: [], next_cursor: null });
 
     // ownership 確認は別 RTT せず problems 取得時に JOIN で 1 発で済ませる
     const problemRows = await db.select({ p: problem })
       .from(problem)
       .innerJoin(field, eq(problem.fieldId, field.id))
-      .where(and(eq(problem.fieldId, projectId), eq(field.userId, userId)))
+      .where(and(eq(problem.fieldId, fieldId), eq(field.userId, userId)))
       .orderBy(problem.createdAt);
     const problems = problemRows.map((r) => r.p);
     if (problems.length === 0) return c.json({ data: [], next_cursor: null });
@@ -57,8 +57,8 @@ const app = new Hono<Env>()
         .where(inArray(answer.problemId, problemIds))
         .orderBy(answer.date, answer.createdAt),
       db.select().from(answerStatus).where(eq(answerStatus.userId, userId)),
-      db.select().from(subject).where(eq(subject.fieldId, projectId)),
-      db.select().from(level).where(eq(level.fieldId, projectId)),
+      db.select().from(subject).where(eq(subject.fieldId, fieldId)),
+      db.select().from(level).where(eq(level.fieldId, fieldId)),
       db.select().from(reviewType).where(eq(reviewType.userId, userId)),
       db.select().from(problemFile).where(inArray(problemFile.problemId, problemIds)),
       db.select().from(review).where(inArray(review.answerId, answerIdSubq)),
@@ -76,7 +76,7 @@ const app = new Hono<Env>()
     const reviewTagsMap = new Map<string, string[]>();
     for (const rt of reviewTags) {
       const list = reviewTagsMap.get(rt.reviewId) ?? [];
-      list.push(tagNameMap.get(rt.tagId) ?? "");
+      list.push(tagNameMap.get(rt.reviewTypeId) ?? "");
       reviewTagsMap.set(rt.reviewId, list);
     }
 
@@ -176,7 +176,7 @@ const app = new Hono<Env>()
         topic_id: null as string | null,
         checkpoint: p.checkpoint,
         standard_time: p.standardTime ?? null,
-        project_id: p.fieldId,
+        field_id: p.fieldId,
         created_at: p.createdAt.toISOString(),
         updated_at: p.updatedAt.toISOString(),
         // Server-resolved meta

@@ -23,7 +23,7 @@ export default function ThroughputScopeNewPage() {
     e.preventDefault();
     if (!name.trim()) return;
     const res = await create.mutateAsync({
-      project_id: currentField!.id,
+      field_id: currentField!.id,
       name: name.trim(),
       filter,
     });
@@ -41,7 +41,7 @@ export default function ThroughputScopeNewPage() {
 
       <div className="space-y-2">
         <Label>Member filter (empty category = all)</Label>
-        <MemberFilterPicker projectId={currentField.id} value={filter} onChange={setFilter} />
+        <MemberFilterPicker fieldId={currentField.id} value={filter} onChange={setFilter} />
       </div>
 
       <div className="flex gap-2">

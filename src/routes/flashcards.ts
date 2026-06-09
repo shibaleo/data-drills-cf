@@ -12,19 +12,19 @@ import {
   flashcardReviewCreateInputSchema,
 } from "@/lib/schemas/flashcard";
 import { z } from "zod";
-import { ownsProject, ownsFlashcard } from "@/lib/ownership";
+import { ownsField, ownsFlashcard } from "@/lib/ownership";
 import type { AuthResult } from "@/lib/auth";
 
 type Env = { Variables: { authResult: AuthResult } };
 
 const app = new Hono<Env>()
-  .get("/", zValidator("query", z.object({ project_id: z.string().uuid().optional() })), async (c) => {
+  .get("/", zValidator("query", z.object({ field_id: z.string().uuid().optional() })), async (c) => {
     const userId = c.get("authResult").userId;
-    const { project_id: projectId } = c.req.valid("query");
-    if (projectId) {
-      if (!(await ownsProject(projectId, userId))) return c.json({ data: [], next_cursor: null });
+    const { field_id: fieldId } = c.req.valid("query");
+    if (fieldId) {
+      if (!(await ownsField(fieldId, userId))) return c.json({ data: [], next_cursor: null });
       const rows = await db.select().from(flashcard)
-        .where(eq(flashcard.fieldId, projectId)).orderBy(flashcard.createdAt);
+        .where(eq(flashcard.fieldId, fieldId)).orderBy(flashcard.createdAt);
       return c.json({ data: rows, next_cursor: null });
     }
     const rows = await db.select({ f: flashcard }).from(flashcard)
@@ -35,10 +35,10 @@ const app = new Hono<Env>()
   .post("/", zValidator("json", flashcardCreateInputSchema), async (c) => {
     const userId = c.get("authResult").userId;
     const body = c.req.valid("json");
-    if (!(await ownsProject(body.project_id, userId))) return c.json({ error: "Not found" }, 404);
+    if (!(await ownsField(body.field_id, userId))) return c.json({ error: "Not found" }, 404);
     const values = {
       code: body.code || randomCode(),
-      fieldId: body.project_id,
+      fieldId: body.field_id,
       front: body.front,
       back: body.back,
       ...(body.id ? { id: body.id } : {}),
@@ -74,24 +74,24 @@ const app = new Hono<Env>()
     if (!row) return c.json({ error: "Not found" }, 404);
     return c.json({ data: row });
   })
-  // ── Tags ──
-  .get("/:id/tags", async (c) => {
+  // ── Review types ──
+  .get("/:id/review-types", async (c) => {
     const userId = c.get("authResult").userId;
     if (!(await ownsFlashcard(c.req.param("id"), userId))) return c.json({ data: [] });
     const rows = await db.select().from(flashcardTag).where(eq(flashcardTag.flashcardId, c.req.param("id")));
     return c.json({ data: rows });
   })
-  .post("/:id/tags", zValidator("json", flashcardTagCreateInputSchema), async (c) => {
+  .post("/:id/review-types", zValidator("json", flashcardTagCreateInputSchema), async (c) => {
     const userId = c.get("authResult").userId;
     if (!(await ownsFlashcard(c.req.param("id"), userId))) return c.json({ error: "Not found" }, 404);
     const body = c.req.valid("json");
-    const [row] = await db.insert(flashcardTag).values({ flashcardId: c.req.param("id"), tagId: body.tag_id }).returning();
+    const [row] = await db.insert(flashcardTag).values({ flashcardId: c.req.param("id"), reviewTypeId: body.review_type_id }).returning();
     return c.json({ data: row }, 201);
   })
-  .delete("/:id/tags/:tagId", async (c) => {
+  .delete("/:id/review-types/:reviewTypeId", async (c) => {
     const userId = c.get("authResult").userId;
     if (!(await ownsFlashcard(c.req.param("id"), userId))) return c.json({ error: "Not found" }, 404);
-    await db.delete(flashcardTag).where(and(eq(flashcardTag.flashcardId, c.req.param("id")), eq(flashcardTag.tagId, c.req.param("tagId"))));
+    await db.delete(flashcardTag).where(and(eq(flashcardTag.flashcardId, c.req.param("id")), eq(flashcardTag.reviewTypeId, c.req.param("reviewTypeId"))));
     return c.json({ data: { ok: true } });
   })
   // ── Problems ──

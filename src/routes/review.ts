@@ -7,27 +7,27 @@ import { and, desc, eq, inArray, isNull, lte, sql } from "drizzle-orm";
 import { computeNextReview, computeDaysOverdue } from "@/lib/review-scoring";
 import { toJSTDateString } from "@/lib/date-utils";
 import { problemColor } from "@/lib/problem-color";
-import { ownsProject } from "@/lib/ownership";
+import { ownsField } from "@/lib/ownership";
 import type { AuthResult } from "@/lib/auth";
 
 type Env = { Variables: { authResult: AuthResult } };
 
 const app = new Hono<Env>()
   /**
-   * GET / — プロジェクトの復習スケジュール（描画に必要な全フィールドを確定）
+   * GET / — field の復習スケジュール（描画に必要な全フィールドを確定）
    *
    * subject / level / answer_status まで join し、色もサーバーで決定する。
    * クライアント側は受け取ったまま表示するだけでよい。
    */
   .get("/", zValidator("query", z.object({
-    project_id: z.string().uuid(),
+    field_id: z.string().uuid(),
     as_of: z.string().optional(),
     /** Phase 2: 指定すると scope.status_stabilities で status 別 stability を override */
     scope_id: z.string().uuid().optional(),
   })), async (c) => {
     const userId = c.get("authResult").userId;
-    const { project_id: projectId, as_of: asOfStr, scope_id: scopeId } = c.req.valid("query");
-    if (!(await ownsProject(projectId, userId))) return c.json({ data: [], next_cursor: null });
+    const { field_id: fieldId, as_of: asOfStr, scope_id: scopeId } = c.req.valid("query");
+    if (!(await ownsField(fieldId, userId))) return c.json({ data: [], next_cursor: null });
 
     // scope_id 指定時: status_stabilities override map を引く (空ならグローバル fallback)
     let statusStabilityOverride: Record<string, number> = {};
@@ -45,7 +45,7 @@ const app = new Hono<Env>()
     }
 
     const problems = await db.select().from(problem)
-      .where(eq(problem.fieldId, projectId))
+      .where(eq(problem.fieldId, fieldId))
       .orderBy(problem.createdAt);
 
     const problemIds = problems.map((p) => p.id);
@@ -66,8 +66,8 @@ const app = new Hono<Env>()
               .where(answerWhere)
               .orderBy(answer.date, answer.createdAt),
             db.select().from(answerStatus).orderBy(answerStatus.sortOrder),
-            db.select().from(subject).where(eq(subject.fieldId, projectId)),
-            db.select().from(level).where(eq(level.fieldId, projectId)),
+            db.select().from(subject).where(eq(subject.fieldId, fieldId)),
+            db.select().from(level).where(eq(level.fieldId, fieldId)),
           ]);
 
     const statusMap = new Map(statuses.map((s) => [s.id, s]));

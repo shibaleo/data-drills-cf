@@ -15,7 +15,7 @@ export interface FlashcardReviewRow {
 export interface FlashcardRow {
   id: string;
   code: string;
-  projectId: string;
+  fieldId: string;
   topicId: string | null;
   front: string;
   back: string;

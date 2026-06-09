@@ -35,7 +35,7 @@ interface ProblemEditDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   problem: ProblemRow | null; // null = create mode
-  projectId: string;
+  fieldId: string;
   subjects: LookupItem[];
   levels: LookupItem[];
   onSaved: () => void;
@@ -43,7 +43,7 @@ interface ProblemEditDialogProps {
 }
 
 export function ProblemEditDialog({
-  open, onOpenChange, problem, projectId, subjects, levels, onSaved, onDelete,
+  open, onOpenChange, problem, fieldId, subjects, levels, onSaved, onDelete,
 }: ProblemEditDialogProps) {
   const [saving, setSaving] = useState(false);
   const [formCode, setFormCode] = useState("");
@@ -87,7 +87,7 @@ export function ProblemEditDialog({
       level_id: formLevel || null,
       checkpoint: formCheckpoint.trim() || null,
       standard_time: formStandardTime.trim() ? hmsToSeconds(formStandardTime.trim()) : null,
-      project_id: projectId,
+      field_id: fieldId,
     };
 
     try {

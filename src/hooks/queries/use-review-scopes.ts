@@ -11,18 +11,18 @@ export type ReviewScopeMember = ReviewScopeDetail["members"][number];
 
 export const reviewScopeKeys = {
   all: ["review-scopes"] as const,
-  list: (projectId: string) => [...reviewScopeKeys.all, "list", projectId] as const,
+  list: (fieldId: string) => [...reviewScopeKeys.all, "list", fieldId] as const,
   detail: (id: string) => [...reviewScopeKeys.all, "detail", id] as const,
 };
 
-export function useReviewScopesList(projectId: string | undefined) {
+export function useReviewScopesList(fieldId: string | undefined) {
   return useQuery({
-    queryKey: projectId ? reviewScopeKeys.list(projectId) : reviewScopeKeys.all,
+    queryKey: fieldId ? reviewScopeKeys.list(fieldId) : reviewScopeKeys.all,
     queryFn: async () => {
-      const json = await unwrap(rpc.api.v1["review-scopes"].$get({ query: { project_id: projectId! } }));
+      const json = await unwrap(rpc.api.v1["review-scopes"].$get({ query: { field_id: fieldId! } }));
       return json.data;
     },
-    enabled: !!projectId,
+    enabled: !!fieldId,
   });
 }
 
@@ -53,37 +53,37 @@ export function useReviewScopeRevisions(id: string | undefined) {
   });
 }
 
-export function useCreateReviewScope(projectId: string | undefined) {
+export function useCreateReviewScope(fieldId: string | undefined) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (payload: ReviewScopeCreateInput) =>
       unwrap(rpc.api.v1["review-scopes"].$post({ json: payload })),
     onSuccess: () => {
-      if (projectId) qc.invalidateQueries({ queryKey: reviewScopeKeys.list(projectId) });
+      if (fieldId) qc.invalidateQueries({ queryKey: reviewScopeKeys.list(fieldId) });
     },
   });
 }
 
-export function useUpdateReviewScope(id: string, projectId: string | undefined) {
+export function useUpdateReviewScope(id: string, fieldId: string | undefined) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (payload: ReviewScopeUpdateInput) =>
       unwrap(rpc.api.v1["review-scopes"][":id"].$put({ param: { id }, json: payload })),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: reviewScopeKeys.detail(id) });
-      if (projectId) qc.invalidateQueries({ queryKey: reviewScopeKeys.list(projectId) });
+      if (fieldId) qc.invalidateQueries({ queryKey: reviewScopeKeys.list(fieldId) });
     },
   });
 }
 
-export function useArchiveReviewScope(projectId: string | undefined) {
+export function useArchiveReviewScope(fieldId: string | undefined) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) =>
       unwrap(rpc.api.v1["review-scopes"][":id"].$delete({ param: { id } })),
     onSuccess: (_data, id) => {
       qc.invalidateQueries({ queryKey: reviewScopeKeys.detail(id) });
-      if (projectId) qc.invalidateQueries({ queryKey: reviewScopeKeys.list(projectId) });
+      if (fieldId) qc.invalidateQueries({ queryKey: reviewScopeKeys.list(fieldId) });
     },
   });
 }

@@ -57,7 +57,7 @@ export default function ScopeNewPage() {
 
       <div className="space-y-2">
         <Label>Member filter (empty category = all)</Label>
-        <MemberFilterPicker projectId={currentField.id} value={filter} onChange={setFilter} />
+        <MemberFilterPicker fieldId={currentField.id} value={filter} onChange={setFilter} />
       </div>
 
       <div className="text-xs text-muted-foreground italic">

@@ -70,24 +70,24 @@ const app = new Hono<Env>()
     if (!row) return c.json({ error: "Not found" }, 404);
     return c.json({ data: row });
   })
-  // ── Tags ──
-  .get("/:id/tags", async (c) => {
+  // ── Review types ──
+  .get("/:id/review-types", async (c) => {
     const userId = c.get("authResult").userId;
     if (!(await ownsReview(c.req.param("id"), userId))) return c.json({ data: [] });
     const rows = await db.select().from(reviewTag).where(eq(reviewTag.reviewId, c.req.param("id")));
     return c.json({ data: rows });
   })
-  .post("/:id/tags", zValidator("json", reviewTagCreateInputSchema), async (c) => {
+  .post("/:id/review-types", zValidator("json", reviewTagCreateInputSchema), async (c) => {
     const userId = c.get("authResult").userId;
     if (!(await ownsReview(c.req.param("id"), userId))) return c.json({ error: "Not found" }, 404);
     const body = c.req.valid("json");
-    const [row] = await db.insert(reviewTag).values({ reviewId: c.req.param("id"), tagId: body.tag_id }).returning();
+    const [row] = await db.insert(reviewTag).values({ reviewId: c.req.param("id"), reviewTypeId: body.review_type_id }).returning();
     return c.json({ data: row }, 201);
   })
-  .delete("/:id/tags/:tagId", async (c) => {
+  .delete("/:id/review-types/:reviewTypeId", async (c) => {
     const userId = c.get("authResult").userId;
     if (!(await ownsReview(c.req.param("id"), userId))) return c.json({ error: "Not found" }, 404);
-    await db.delete(reviewTag).where(and(eq(reviewTag.reviewId, c.req.param("id")), eq(reviewTag.tagId, c.req.param("tagId"))));
+    await db.delete(reviewTag).where(and(eq(reviewTag.reviewId, c.req.param("id")), eq(reviewTag.reviewTypeId, c.req.param("reviewTypeId"))));
     return c.json({ data: { ok: true } });
   });
 

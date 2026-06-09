@@ -1,8 +1,8 @@
 # Scope / Field 大改造プラン
 
 > 起案: 2026-06-08
-> 状態: Phase 1 完了 (ローカル commit)
-> 関連: [CLAUDE.md](../CLAUDE.md) §Pending Development #9
+> 状態: **Phase 1〜4.1 完了 (2026-06-09)**。option C で停止中。Phase 6 (cosmetic rename) は未着手。
+> 関連: [scope-refactor-handoff.md](./scope-refactor-handoff.md) (進捗詳細), [CLAUDE.md](../CLAUDE.md) §Pending Development #9
 >
 > 命名の遷移: 当初 `member_filter` で着手したが、UX 上 `scope` の方が直観的と判断して途中で改名。
 > 既存の `review_scope` / `throughput_scope` 等は Phase 4 で削除されるので、最終的には新 `scope` 1 つに統一される。

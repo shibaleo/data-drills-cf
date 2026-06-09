@@ -3,7 +3,7 @@ import { z } from "zod";
 export const flashcardCreateInputSchema = z.object({
   id: z.string().uuid().optional(),
   code: z.string().min(1).optional(),
-  project_id: z.string().uuid(),
+  field_id: z.string().uuid(),
   topic_id: z.string().uuid().nullish(),
   front: z.string().min(1),
   back: z.string().min(1),
@@ -18,7 +18,7 @@ export type FlashcardCreateInput = z.infer<typeof flashcardCreateInputSchema>;
 export type FlashcardUpdateInput = z.infer<typeof flashcardUpdateInputSchema>;
 
 export const flashcardTagCreateInputSchema = z.object({
-  tag_id: z.string().uuid(),
+  review_type_id: z.string().uuid(),
 });
 
 export const flashcardProblemCreateInputSchema = z.object({

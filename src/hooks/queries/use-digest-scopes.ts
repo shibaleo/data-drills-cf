@@ -10,18 +10,18 @@ export type DigestScopeDetail = RpcData<typeof rpc.api.v1["digest-scopes"][":id"
 
 export const digestScopeKeys = {
   all: ["digest-scopes"] as const,
-  list: (projectId: string) => [...digestScopeKeys.all, "list", projectId] as const,
+  list: (fieldId: string) => [...digestScopeKeys.all, "list", fieldId] as const,
   detail: (id: string) => [...digestScopeKeys.all, "detail", id] as const,
 };
 
-export function useDigestScopesList(projectId: string | undefined) {
+export function useDigestScopesList(fieldId: string | undefined) {
   return useQuery({
-    queryKey: projectId ? digestScopeKeys.list(projectId) : digestScopeKeys.all,
+    queryKey: fieldId ? digestScopeKeys.list(fieldId) : digestScopeKeys.all,
     queryFn: async () => {
-      const json = await unwrap(rpc.api.v1["digest-scopes"].$get({ query: { project_id: projectId! } }));
+      const json = await unwrap(rpc.api.v1["digest-scopes"].$get({ query: { field_id: fieldId! } }));
       return json.data;
     },
-    enabled: !!projectId,
+    enabled: !!fieldId,
   });
 }
 
@@ -39,37 +39,37 @@ export function useDigestScope(id: string | undefined) {
   });
 }
 
-export function useCreateDigestScope(projectId: string | undefined) {
+export function useCreateDigestScope(fieldId: string | undefined) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (payload: DigestScopeCreateInput) =>
       unwrap(rpc.api.v1["digest-scopes"].$post({ json: payload })),
     onSuccess: () => {
-      if (projectId) qc.invalidateQueries({ queryKey: digestScopeKeys.list(projectId) });
+      if (fieldId) qc.invalidateQueries({ queryKey: digestScopeKeys.list(fieldId) });
     },
   });
 }
 
-export function useUpdateDigestScope(id: string, projectId: string | undefined) {
+export function useUpdateDigestScope(id: string, fieldId: string | undefined) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (payload: DigestScopeUpdateInput) =>
       unwrap(rpc.api.v1["digest-scopes"][":id"].$put({ param: { id }, json: payload })),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: digestScopeKeys.detail(id) });
-      if (projectId) qc.invalidateQueries({ queryKey: digestScopeKeys.list(projectId) });
+      if (fieldId) qc.invalidateQueries({ queryKey: digestScopeKeys.list(fieldId) });
     },
   });
 }
 
-export function useArchiveDigestScope(projectId: string | undefined) {
+export function useArchiveDigestScope(fieldId: string | undefined) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) =>
       unwrap(rpc.api.v1["digest-scopes"][":id"].$delete({ param: { id } })),
     onSuccess: (_data, id) => {
       qc.invalidateQueries({ queryKey: digestScopeKeys.detail(id) });
-      if (projectId) qc.invalidateQueries({ queryKey: digestScopeKeys.list(projectId) });
+      if (fieldId) qc.invalidateQueries({ queryKey: digestScopeKeys.list(fieldId) });
     },
   });
 }

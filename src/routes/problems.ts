@@ -10,22 +10,22 @@ import {
   problemFileCreateInputSchema,
 } from "@/lib/schemas/problem";
 import { z } from "zod";
-import { ownsProject, ownsProblem } from "@/lib/ownership";
+import { ownsField, ownsProblem } from "@/lib/ownership";
 import type { AuthResult } from "@/lib/auth";
 
 type Env = { Variables: { authResult: AuthResult } };
 
 const app = new Hono<Env>()
-  .get("/", zValidator("query", z.object({ project_id: z.string().uuid().optional() })), async (c) => {
+  .get("/", zValidator("query", z.object({ field_id: z.string().uuid().optional() })), async (c) => {
     const userId = c.get("authResult").userId;
-    const { project_id: projectId } = c.req.valid("query");
-    if (projectId) {
-      if (!(await ownsProject(projectId, userId))) return c.json({ data: [], next_cursor: null });
+    const { field_id: fieldId } = c.req.valid("query");
+    if (fieldId) {
+      if (!(await ownsField(fieldId, userId))) return c.json({ data: [], next_cursor: null });
       const rows = await db.select().from(problem)
-        .where(eq(problem.fieldId, projectId)).orderBy(problem.createdAt);
+        .where(eq(problem.fieldId, fieldId)).orderBy(problem.createdAt);
       return c.json({ data: rows, next_cursor: null });
     }
-    // 全件は user の全 project を JOIN で絞り込み
+    // 全件は user の全 field を JOIN で絞り込み
     const rows = await db.select({ p: problem }).from(problem)
       .innerJoin(field, eq(problem.fieldId, field.id))
       .where(eq(field.userId, userId)).orderBy(problem.createdAt);
@@ -34,10 +34,10 @@ const app = new Hono<Env>()
   .post("/", zValidator("json", problemCreateInputSchema), async (c) => {
     const userId = c.get("authResult").userId;
     const body = c.req.valid("json");
-    if (!(await ownsProject(body.project_id, userId))) return c.json({ error: "Not found" }, 404);
+    if (!(await ownsField(body.field_id, userId))) return c.json({ error: "Not found" }, 404);
     const values = {
       code: body.code || randomCode(),
-      fieldId: body.project_id,
+      fieldId: body.field_id,
       subjectId: body.subject_id ?? null,
       levelId: body.level_id ?? null,
       name: body.name ?? null,

@@ -15,7 +15,7 @@ export type Problem = Pick<
   | "level_id"
   | "checkpoint"
   | "standard_time"
-  | "project_id"
+  | "field_id"
   | "created_at"
   | "updated_at"
   | "problem_files"

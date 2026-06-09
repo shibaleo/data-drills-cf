@@ -16,7 +16,7 @@ export type ProblemRow = z.infer<typeof problemRowSchema>;
 export const problemCreateInputSchema = z.object({
   id: z.string().uuid().optional(),
   code: z.string().min(1).optional(),
-  project_id: z.string().uuid(),
+  field_id: z.string().uuid(),
   subject_id: z.string().uuid().nullish(),
   level_id: z.string().uuid().nullish(),
   topic_id: z.string().uuid().nullish(),
@@ -38,7 +38,7 @@ export const problemUpdateInputSchema = z.object({
 export type ProblemUpdateInput = z.infer<typeof problemUpdateInputSchema>;
 
 export const problemTagCreateInputSchema = z.object({
-  tag_id: z.string().uuid(),
+  review_type_id: z.string().uuid(),
 });
 
 export const problemFileCreateInputSchema = z.object({
