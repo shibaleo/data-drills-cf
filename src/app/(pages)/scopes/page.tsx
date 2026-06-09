@@ -126,13 +126,16 @@ type SectorDef = {
   color: string;
 };
 
+// カラースキームは block-color.ts のライフサイクル (Planned/First/Miss/Rough/Fluent/Done)
+// に揃える。意味は別途検討としていったん視覚一致のみ。
+// 配置: 長文字の Throughput は左下 (SW)、Stats は右 (E) に。
 const SECTORS: SectorDef[] = [
-  { startDeg: -150, endDeg: -90, label: "Edit", view: "edit", color: "#64748b" },
-  { startDeg: -90, endDeg: -30, label: "Review", view: "review", color: "#0ea5e9" },
-  { startDeg: -30, endDeg: 30, label: "Throughput", view: "throughput", color: "#f59e0b" },
-  { startDeg: 30, endDeg: 90, label: "Plan", view: "plan", color: "#8b5cf6" },
-  { startDeg: 90, endDeg: 150, label: "Stats", view: "stats", color: "#10b981" },
-  { startDeg: 150, endDeg: 210, label: "Digest", view: "digest", color: "#f43f5e" },
+  { startDeg: -150, endDeg: -90, label: "Edit", view: "edit", color: "#ec4899" },        // pink (Planned)
+  { startDeg: -90, endDeg: -30, label: "Review", view: "review", color: "#8b5cf6" },      // violet (First)
+  { startDeg: -30, endDeg: 30, label: "Stats", view: "stats", color: "#ef4444" },         // red (Miss)
+  { startDeg: 30, endDeg: 90, label: "Plan", view: "plan", color: "#f97316" },            // orange (Rough)
+  { startDeg: 90, endDeg: 150, label: "Throughput", view: "throughput", color: "#22c55e" }, // green (Fluent)
+  { startDeg: 150, endDeg: 210, label: "Digest", view: "digest", color: "#3b82f6" },      // blue (Done)
 ];
 
 function truncate(s: string, n: number): string {
@@ -605,11 +608,22 @@ export default function ScopesHubPage() {
                       adjStart,
                       adjEnd,
                     );
-                    const midDeg = (adjStart + adjEnd) / 2;
-                    const midRad = (midDeg * Math.PI) / 180;
-                    const midR = (MENU_INNER_R + outerR) / 2;
-                    const lx = cx + midR * Math.cos(midRad);
-                    const ly = cy + midR * Math.sin(midRad);
+                    // textPath 用の arc 半径と方向。
+                    // 下半円 (Plan SE / Throughput SW) は outer arc に baseline を載せる
+                    // (text の上 ↑ 方向 = center 向き = 読みやすい)。他は inner arc。
+                    const useOuter = sec.label === "Plan" || sec.label === "Throughput";
+                    const textArcR = useOuter ? outerR - 8 : MENU_INNER_R + 8;
+                    const aStart = (adjStart * Math.PI) / 180;
+                    const aEnd = (adjEnd * Math.PI) / 180;
+                    const p1x = cx + textArcR * Math.cos(aStart);
+                    const p1y = cy + textArcR * Math.sin(aStart);
+                    const p2x = cx + textArcR * Math.cos(aEnd);
+                    const p2y = cy + textArcR * Math.sin(aEnd);
+                    // 下半円は反時計回りで draw (sweep=0)、上半円は時計回り (sweep=1)
+                    const textArcPath = useOuter
+                      ? `M ${p2x} ${p2y} A ${textArcR} ${textArcR} 0 0 0 ${p1x} ${p1y}`
+                      : `M ${p1x} ${p1y} A ${textArcR} ${textArcR} 0 0 1 ${p2x} ${p2y}`;
+                    const arcId = `arc-${scope.id}-${sec.label}`;
                     // 他 sector が hover 中ならこの sector はスモーク (dim)
                     const anySecHovered = hoveredSec !== null;
                     const dim = anySecHovered && !isSecHover;
@@ -652,20 +666,22 @@ export default function ScopesHubPage() {
                                 : "none",
                             }}
                           />
+                          {/* hidden path for textPath */}
+                          <path id={arcId} d={textArcPath} fill="none" stroke="none" />
                           <text
-                            x={lx}
-                            y={ly}
-                            textAnchor="middle"
-                            dominantBaseline="central"
-                            fontSize={10}
-                            fontWeight={700}
-                            fill={isSecHover ? sec.color : "var(--background)"}
+                            fontSize={13}
+                            fontWeight={800}
+                            fill="white"
+                            letterSpacing={0.5}
                             className="pointer-events-none select-none"
-                            style={{ paintOrder: "stroke" }}
-                            stroke="var(--background)"
-                            strokeWidth={isSecHover ? 0.4 : 0}
                           >
-                            {sec.label}
+                            <textPath
+                              href={`#${arcId}`}
+                              startOffset="50%"
+                              textAnchor="middle"
+                            >
+                              {sec.label}
+                            </textPath>
                           </text>
                         </g>
                       </g>
