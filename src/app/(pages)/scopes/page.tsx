@@ -480,20 +480,20 @@ export default function ScopesHubPage() {
                 />
                 <text
                   x={cx}
-                  y={cy - 6}
+                  y={cy - 10}
                   textAnchor="middle"
                   dominantBaseline="central"
-                  className="fill-foreground text-[11px] font-semibold pointer-events-none select-none"
+                  className="fill-foreground text-[15px] font-semibold pointer-events-none select-none"
                 >
-                  {truncate(scope.name, 7)}
+                  {truncate(scope.name, 10)}
                 </text>
                 {subtitle && (
                   <text
                     x={cx}
-                    y={cy + 10}
+                    y={cy + 14}
                     textAnchor="middle"
                     dominantBaseline="central"
-                    fontSize={9}
+                    fontSize={12}
                     fontWeight={600}
                     className="fill-muted-foreground pointer-events-none select-none"
                   >
