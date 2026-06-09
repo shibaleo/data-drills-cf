@@ -458,11 +458,7 @@ export default function ScopesHubPage() {
                 )}
                 <polygon
                   points={hexPoints(cx, cy, SIDE)}
-                  className={
-                    hovered
-                      ? "fill-accent stroke-primary transition-colors"
-                      : "fill-card stroke-border transition-colors"
-                  }
+                  className={`${hovered ? "fill-accent" : "fill-card"} stroke-border transition-colors`}
                   strokeWidth={1.8}
                   strokeLinejoin="round"
                 />
