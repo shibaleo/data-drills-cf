@@ -404,8 +404,29 @@ export default function ScopesHubPage() {
           // 進捗リング: scope hex の外周「六角形の辺」に沿って描画
           const RING_SIDE = SIDE + 6;
           const RING_PERIMETER = 6 * RING_SIDE;
-          // subtitle: scope filter にマッチする members 総数
-          const subtitle = stats.total > 0 ? `${stats.total}件` : "";
+          // 多行 name (= 9 字超は 2 行に折返し、合計 18 字超は ellipsis)
+          const NAME_LINE = 9;
+          const nameLines: string[] = (() => {
+            const n = scope.name;
+            if (n.length <= NAME_LINE) return [n];
+            if (n.length <= NAME_LINE * 2) {
+              const split = Math.ceil(n.length / 2);
+              return [n.slice(0, split), n.slice(split)];
+            }
+            return [n.slice(0, NAME_LINE), n.slice(NAME_LINE, NAME_LINE * 2 - 1) + "…"];
+          })();
+          // subtitle 1: 全体件数 + 未消化バッジ風
+          const countLine = stats.total > 0 ? `${stats.total}件` : "";
+          const pendingLine =
+            stats.pending > 0
+              ? `${stats.pending} due`
+              : stats.active > 0
+                ? "✓ caught up"
+                : "";
+          const nextLine =
+            stats.pending === 0 && stats.nextDue !== null && stats.active > 0
+              ? `next ${stats.nextDue}d`
+              : "";
           return (
             <g
               key={scope.id}
@@ -460,26 +481,65 @@ export default function ScopesHubPage() {
                   strokeWidth={1.8}
                   strokeLinejoin="round"
                 />
-                <text
-                  x={cx}
-                  y={cy - 10}
-                  textAnchor="middle"
-                  dominantBaseline="central"
-                  className="fill-foreground text-[15px] font-semibold pointer-events-none select-none"
-                >
-                  {truncate(scope.name, 10)}
-                </text>
-                {subtitle && (
+                {/* タイトル: 1 行 or 2 行折返し。font サイズは行数で調整 */}
+                {nameLines.map((line, i) => {
+                  const isTwoLines = nameLines.length > 1;
+                  const fontPx = isTwoLines ? 14 : 16;
+                  // 2 行のときは中心からの y 配置
+                  const baseY = isTwoLines ? cy - 22 + i * (fontPx + 2) : cy - 18;
+                  return (
+                    <text
+                      key={i}
+                      x={cx}
+                      y={baseY}
+                      textAnchor="middle"
+                      dominantBaseline="central"
+                      fontSize={fontPx}
+                      fontWeight={600}
+                      className="fill-foreground pointer-events-none select-none"
+                    >
+                      {line}
+                    </text>
+                  );
+                })}
+                {/* 件数 + 未消化/状態 */}
+                {countLine && (
                   <text
                     x={cx}
-                    y={cy + 14}
+                    y={cy + 10}
                     textAnchor="middle"
                     dominantBaseline="central"
                     fontSize={12}
-                    fontWeight={600}
-                    className="fill-muted-foreground pointer-events-none select-none"
+                    fontWeight={700}
+                    className="fill-foreground/80 pointer-events-none select-none"
                   >
-                    {subtitle}
+                    {countLine}
+                  </text>
+                )}
+                {pendingLine && (
+                  <text
+                    x={cx}
+                    y={cy + 26}
+                    textAnchor="middle"
+                    dominantBaseline="central"
+                    fontSize={10}
+                    fontWeight={600}
+                    fill={stats.pending > 0 ? heat.ring : "hsl(var(--muted-foreground))"}
+                    className="pointer-events-none select-none"
+                  >
+                    {pendingLine}
+                  </text>
+                )}
+                {nextLine && (
+                  <text
+                    x={cx}
+                    y={cy + 40}
+                    textAnchor="middle"
+                    dominantBaseline="central"
+                    fontSize={9}
+                    className="fill-muted-foreground/70 pointer-events-none select-none"
+                  >
+                    {nextLine}
                   </text>
                 )}
               </g>
