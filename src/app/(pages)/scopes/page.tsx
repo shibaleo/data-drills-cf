@@ -639,13 +639,14 @@ export default function ScopesHubPage() {
                         >
                           <path
                             d={path}
-                            fill="var(--background)"
+                            // 中心 hex hover (menu 出現) 時の sector は色塗り。
+                            // 個別 sector hover 時は黒背景 + 色枠 + blur に切替
+                            fill={isSecHover ? "var(--background)" : sec.color}
                             stroke={sec.color}
                             strokeWidth={isSecHover ? 2.4 : 1.8}
                             strokeLinejoin="round"
                             style={{
-                              transition: "stroke-width 180ms, d 180ms cubic-bezier(0.34, 1.56, 0.64, 1), filter 180ms ease-out",
-                              // sector hover 時に同色 drop-shadow を多重で輪郭沿い blur halo に
+                              transition: "fill 160ms, stroke-width 180ms, d 180ms cubic-bezier(0.34, 1.56, 0.64, 1), filter 180ms ease-out",
                               filter: isSecHover
                                 ? `drop-shadow(0 0 10px ${sec.color}) drop-shadow(0 0 24px ${sec.color}) drop-shadow(0 0 48px ${sec.color})`
                                 : "none",
@@ -658,11 +659,11 @@ export default function ScopesHubPage() {
                             dominantBaseline="central"
                             fontSize={10}
                             fontWeight={700}
-                            fill={sec.color}
+                            fill={isSecHover ? sec.color : "var(--background)"}
                             className="pointer-events-none select-none"
                             style={{ paintOrder: "stroke" }}
                             stroke="var(--background)"
-                            strokeWidth={0.4}
+                            strokeWidth={isSecHover ? 0.4 : 0}
                           >
                             {sec.label}
                           </text>
