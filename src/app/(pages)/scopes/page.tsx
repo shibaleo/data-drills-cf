@@ -117,6 +117,8 @@ function truncate(s: string, n: number): string {
 }
 
 type ScopeStats = {
+  /** filter にマッチする members の総数 */
+  total: number;
   active: number;
   overdue: number;
   dueToday: number;
@@ -163,7 +165,7 @@ function computeStats(rows: { answerCount: number; daysUntil: number }[]): Scope
   }
   const pending = overdue + dueToday;
   const goodPct = active > 0 ? ((active - pending) / active) * 100 : 0;
-  return { active, overdue, dueToday, pending, goodPct, nextDue };
+  return { total: rows.length, active, overdue, dueToday, pending, goodPct, nextDue };
 }
 
 function heatColor(stats: ScopeStats): { glow: string; ring: string; label: string } {
@@ -361,17 +363,13 @@ export default function ScopesHubPage() {
         {scopes.map((scope, idx) => {
           const { cx, cy } = bigCenterAt(idx, cols);
           const hovered = hoveredId === scope.id;
-          const stats = statsByScope.get(scope.id) ?? { active: 0, overdue: 0, dueToday: 0, pending: 0, goodPct: 0, nextDue: null };
+          const stats = statsByScope.get(scope.id) ?? { total: 0, active: 0, overdue: 0, dueToday: 0, pending: 0, goodPct: 0, nextDue: null };
           const heat = heatColor(stats);
           // 進捗リング: scope hex の外周「六角形の辺」に沿って描画
           const RING_SIDE = SIDE + 6;
           const RING_PERIMETER = 6 * RING_SIDE;
-          // subtitle 表示 (hex の下半分付近)
-          const subtitle = stats.pending > 0
-            ? `${stats.pending}件`
-            : stats.nextDue !== null
-              ? `next ${stats.nextDue}d`
-              : stats.active > 0 ? "✓ all clear" : "";
+          // subtitle: scope filter にマッチする members 総数
+          const subtitle = stats.total > 0 ? `${stats.total}件` : "";
           return (
             <g
               key={scope.id}
@@ -443,8 +441,7 @@ export default function ScopesHubPage() {
                   dominantBaseline="central"
                   fontSize={9}
                   fontWeight={600}
-                  fill={heat.ring}
-                  className="pointer-events-none select-none"
+                  className="fill-muted-foreground pointer-events-none select-none"
                 >
                   {subtitle}
                 </text>
@@ -578,10 +575,6 @@ function ScopeEditDialog({ scope, onClose }: { scope: ScopeRow; onClose: () => v
     setFilter((scope.filter as MemberFilterInput) ?? {});
   }, [scope.id, scope.name, scope.filter]);
 
-  // member filter picker は単一 field を基準に subject/level を引く。
-  // 選択中の fieldIds[0] が無ければ最初の user field を使う。
-  const pickerFieldId = filter.fieldIds?.[0] ?? fields[0]?.id;
-
   async function onSave() {
     await update.mutateAsync({
       id: scope.id,
@@ -592,7 +585,7 @@ function ScopeEditDialog({ scope, onClose }: { scope: ScopeRow; onClose: () => v
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-3xl">
         <DialogHeader>
           <DialogTitle>Edit scope</DialogTitle>
         </DialogHeader>
@@ -607,17 +600,13 @@ function ScopeEditDialog({ scope, onClose }: { scope: ScopeRow; onClose: () => v
             />
           </div>
           <div className="space-y-1.5">
-            <Label>Members (Field / Subject / Level)</Label>
-            {pickerFieldId ? (
-              <MemberFilterPicker
-                fieldId={pickerFieldId}
-                value={filter}
-                onChange={setFilter}
-              />
-            ) : (
+            <Label>Members</Label>
+            {fields.length === 0 ? (
               <div className="text-sm text-muted-foreground">
                 Fields がまだ作られていません
               </div>
+            ) : (
+              <MemberFilterPicker value={filter} onChange={setFilter} />
             )}
           </div>
         </div>
