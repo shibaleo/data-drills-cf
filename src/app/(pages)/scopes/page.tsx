@@ -29,19 +29,19 @@ const SIDE = 90;
 const CELL_W = SQRT3 * SMALL_SIDE;
 const CELL_H = 1.5 * SMALL_SIDE;
 
-// 放射状メニュー (1.5x scale)。hex から離して overlap を防ぐ
-const MENU_INNER_R = SIDE + 16;
-const MENU_OUTER_R = MENU_INNER_R + 28;
+// 放射状メニュー。hex から十分離し、ボタン (sector) も背高に
+const MENU_INNER_R = SIDE + 28;
+const MENU_OUTER_R = MENU_INNER_R + 44;
 // sector 間の角度 gap (= 扇形を独立した petal に見せる)
 const SECTOR_GAP_DEG = 5;
 // 個別 sector hover 時に外側へ伸びる量 (= 「段差」)
 const SECTOR_HOVER_LIFT = 12;
 
 // 大六角の top vertex を「小六角の top vertex」に snap (= 全 6 頂点が snap)
-// menu 外径拡大に合わせて step も少し広げる
+// menu 外径拡大に合わせて step も広げて隣接 hex の menu と overlap させない
 const ANCHOR_ROW_T = 8;
-const COL_STEP_T = 12;
-const ROW_STEP_T = 18; // 要 even
+const COL_STEP_T = 13;
+const ROW_STEP_T = 22; // 要 even
 const COLS_MAX = 3;
 
 /** viewport 幅から表示可能な最大 col 数を求める */
@@ -489,10 +489,6 @@ export default function ScopesHubPage() {
                       <g
                         key={sec.label}
                         className="cursor-pointer sector-pop"
-                        style={{
-                          opacity: dim ? 0.25 : 1,
-                          transition: "opacity 160ms ease-out",
-                        }}
                         onMouseEnter={() => setHoveredSec(secKey)}
                         onMouseLeave={() => setHoveredSec(null)}
                         onClick={(e) => {
@@ -505,29 +501,38 @@ export default function ScopesHubPage() {
                           onSectorClick(scope.id, sec.view);
                         }}
                       >
-                        <path
-                          d={path}
-                          fill={isSecHover ? sec.color : "var(--card)"}
-                          stroke={sec.color}
-                          strokeWidth={1.8}
-                          strokeLinejoin="round"
-                          style={{ transition: "fill 140ms, d 180ms cubic-bezier(0.34, 1.56, 0.64, 1)" }}
-                        />
-                        <text
-                          x={lx}
-                          y={ly}
-                          textAnchor="middle"
-                          dominantBaseline="central"
-                          fontSize={10}
-                          fontWeight={700}
-                          fill={isSecHover ? "var(--background)" : sec.color}
-                          className="pointer-events-none select-none"
-                          style={{ paintOrder: "stroke" }}
-                          stroke="var(--background)"
-                          strokeWidth={isSecHover ? 0 : 0.4}
+                        {/* 内側 group で dim 制御。sector-pop animation の opacity:1
+                            上書きを避けるため別 group に分離 */}
+                        <g
+                          style={{
+                            opacity: dim ? 0.22 : 1,
+                            transition: "opacity 160ms ease-out",
+                          }}
                         >
-                          {sec.label}
-                        </text>
+                          <path
+                            d={path}
+                            fill={isSecHover ? sec.color : "var(--card)"}
+                            stroke={sec.color}
+                            strokeWidth={1.8}
+                            strokeLinejoin="round"
+                            style={{ transition: "fill 140ms, d 180ms cubic-bezier(0.34, 1.56, 0.64, 1)" }}
+                          />
+                          <text
+                            x={lx}
+                            y={ly}
+                            textAnchor="middle"
+                            dominantBaseline="central"
+                            fontSize={10}
+                            fontWeight={700}
+                            fill={isSecHover ? "var(--background)" : sec.color}
+                            className="pointer-events-none select-none"
+                            style={{ paintOrder: "stroke" }}
+                            stroke="var(--background)"
+                            strokeWidth={isSecHover ? 0 : 0.4}
+                          >
+                            {sec.label}
+                          </text>
+                        </g>
                       </g>
                     );
                   })}
