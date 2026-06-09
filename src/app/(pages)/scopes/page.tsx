@@ -1,14 +1,17 @@
 "use client";
 import { useMemo } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
+import { useQueryClient } from "@tanstack/react-query";
 import { useScopes } from "@/hooks/queries/use-scopes";
 import { useProblemsList } from "@/hooks/queries/use-problems";
 import { usePageTitle } from "@/lib/page-context";
+import { prefetchScopeFromFilter } from "@/lib/prefetch-scope";
 import { Plus } from "lucide-react";
 
 export default function ScopesPage() {
   usePageTitle("Scopes");
   const navigate = useNavigate();
+  const qc = useQueryClient();
   const { data: scopes = [], isLoading } = useScopes();
   const { data: allProblems = [] } = useProblemsList();
 
@@ -46,6 +49,8 @@ export default function ScopesPage() {
           const pct = prog.total > 0 ? Math.round((prog.done * 100) / prog.total) : 0;
           return (
             <Link key={s.id} to="/scopes/$scope_id" params={{ scope_id: s.id }}
+              onMouseEnter={() => prefetchScopeFromFilter(qc, s.filter as { fieldIds?: string[] })}
+              onFocus={() => prefetchScopeFromFilter(qc, s.filter as { fieldIds?: string[] })}
               className="block border rounded p-4 hover:bg-accent transition space-y-2">
               <div className="font-semibold">{s.name}</div>
               <div className="flex items-center gap-2">

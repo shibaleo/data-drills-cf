@@ -12,8 +12,10 @@
 
 import { useEffect } from "react";
 import { Link, useSearch, useNavigate } from "@tanstack/react-router";
+import { useQueryClient } from "@tanstack/react-query";
 import { useReviewScopesList } from "@/hooks/queries/use-review-scopes";
 import { usePageTitle } from "@/lib/page-context";
+import { prefetchScopeFieldResources } from "@/lib/prefetch-scope";
 
 const LAST_SCOPE_LS_KEY = "dd_last_scope_id";
 
@@ -21,6 +23,7 @@ export default function ReviewEntryPage() {
   usePageTitle("Review");
   const search = useSearch({ strict: false }) as { scope_id?: string };
   const navigate = useNavigate();
+  const qc = useQueryClient();
   const { data: reviewScopes = [], isLoading } = useReviewScopesList();
 
   // ?scope_id= が指定されたら、scope_id 一致の review_scope に飛ばす。
@@ -47,6 +50,8 @@ export default function ReviewEntryPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {reviewScopes.map((s) => (
           <Link key={s.id} to="/review/$scope_id" params={{ scope_id: s.id }}
+            onMouseEnter={() => s.field_id && prefetchScopeFieldResources(qc, s.field_id)}
+            onFocus={() => s.field_id && prefetchScopeFieldResources(qc, s.field_id)}
             className="block border rounded p-4 hover:bg-accent transition">
             <div className="font-semibold">{s.name}</div>
             <div className="text-xs text-muted-foreground mt-1">revision {s.revision}</div>
