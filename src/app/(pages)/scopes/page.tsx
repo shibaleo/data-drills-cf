@@ -391,9 +391,9 @@ export default function ScopesHubPage() {
               onMouseEnter={() => setHoveredId(scope.id)}
               onMouseLeave={() => setHoveredId(null)}
               style={{
-                transform: hovered ? "scale(1.06)" : "scale(1)",
-                transformOrigin: `${cx}px ${cy}px`,
-                transformBox: "fill-box" as React.CSSProperties["transformBox"],
+                transform: hovered
+                  ? `translate(${cx}px, ${cy}px) scale(1.06) translate(${-cx}px, ${-cy}px)`
+                  : "none",
                 transition: "transform 220ms cubic-bezier(0.34, 1.56, 0.64, 1)",
               }}
             >
