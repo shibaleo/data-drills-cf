@@ -185,14 +185,13 @@ function computeStats(rows: { answerCount: number; daysUntil: number }[]): Scope
   return { total: rows.length, active, overdue, dueToday, pending, goodPct, nextDue };
 }
 
-function heatColor(stats: ScopeStats): { glow: string; ring: string; label: string } {
-  if (stats.pending === 0) {
-    return { glow: "rgba(16,185,129,0.55)", ring: "#10b981", label: stats.active > 0 ? "✓ clear" : "—" };
-  }
-  if (stats.pending < 6) {
-    return { glow: "rgba(245,158,11,0.55)", ring: "#f59e0b", label: `${stats.pending} due` };
-  }
-  return { glow: "rgba(239,68,68,0.6)", ring: "#ef4444", label: `${stats.pending} due!` };
+// テーマプライマリ (globals.css の --accent-value = hsl(19 58% 56%))。
+// 進捗バー / グロー / hover アクセントを全部これに揃える。
+const THEME_PRIMARY = "hsl(var(--accent-value))";
+const THEME_PRIMARY_GLOW_SOFT = "hsl(var(--accent-value) / 0.35)";
+
+function heatColor(): { glow: string; ring: string } {
+  return { glow: THEME_PRIMARY_GLOW_SOFT, ring: THEME_PRIMARY };
 }
 
 function arcPath(cx: number, cy: number, r: number, startDeg: number, endDeg: number): string {
@@ -412,7 +411,7 @@ export default function ScopesHubPage() {
           const { cx, cy } = bigCenterAt(idx, cols, anchorColT);
           const hovered = hoveredId === scope.id;
           const stats = statsByScope.get(scope.id) ?? { total: 0, active: 0, overdue: 0, dueToday: 0, pending: 0, goodPct: 0, nextDue: null };
-          const heat = heatColor(stats);
+          const heat = heatColor();
           // 進捗リング: scope hex の外周「六角形の辺」に沿って描画
           const RING_SIDE = SIDE + 6;
           const RING_PERIMETER = 6 * RING_SIDE;
@@ -427,10 +426,7 @@ export default function ScopesHubPage() {
                 transform: hovered ? "scale(1.06)" : "scale(1)",
                 transformOrigin: `${cx}px ${cy}px`,
                 transformBox: "fill-box" as React.CSSProperties["transformBox"],
-                transition: "transform 220ms cubic-bezier(0.34, 1.56, 0.64, 1), filter 220ms ease-out",
-                filter: hovered
-                  ? "drop-shadow(0 0 18px rgba(249,115,22,0.65))"
-                  : "drop-shadow(0 0 6px rgba(249,115,22,0.35))",
+                transition: "transform 220ms cubic-bezier(0.34, 1.56, 0.64, 1)",
               }}
             >
               <circle
@@ -440,60 +436,68 @@ export default function ScopesHubPage() {
                 fill="transparent"
                 pointerEvents="all"
               />
-              {/* 進捗バー track (hex の辺に沿う) */}
-              <polygon
-                points={hexPoints(cx, cy, RING_SIDE)}
-                fill="none"
-                stroke="currentColor"
-                strokeOpacity={0.16}
-                strokeWidth={3}
-                strokeLinejoin="round"
-              />
-              {/* 進捗バー fill: top vertex から時計回りに goodPct% 分 */}
-              {stats.active > 0 && stats.goodPct > 0 && (
+              {/* hex 本体 + progress ring + label を内側 group に分離し、
+                  glow filter はここだけに当てる (sector menu には掛けない) */}
+              <g
+                style={{
+                  filter: `drop-shadow(0 0 6px ${THEME_PRIMARY_GLOW_SOFT})`,
+                }}
+              >
+                {/* 進捗バー track (hex の辺に沿う) */}
                 <polygon
                   points={hexPoints(cx, cy, RING_SIDE)}
                   fill="none"
-                  stroke={heat.ring}
+                  stroke="currentColor"
+                  strokeOpacity={0.16}
                   strokeWidth={3}
                   strokeLinejoin="round"
-                  strokeLinecap="round"
-                  strokeDasharray={RING_PERIMETER}
-                  strokeDashoffset={RING_PERIMETER * (1 - stats.goodPct / 100)}
                 />
-              )}
-              <polygon
-                points={hexPoints(cx, cy, SIDE)}
-                className={
-                  hovered
-                    ? "fill-accent stroke-primary transition-colors"
-                    : "fill-card stroke-border transition-colors"
-                }
-                strokeWidth={1.8}
-                strokeLinejoin="round"
-              />
-              <text
-                x={cx}
-                y={cy - 6}
-                textAnchor="middle"
-                dominantBaseline="central"
-                className="fill-foreground text-[11px] font-semibold pointer-events-none select-none"
-              >
-                {truncate(scope.name, 7)}
-              </text>
-              {subtitle && (
+                {/* 進捗バー fill: top vertex から時計回りに goodPct% 分 */}
+                {stats.active > 0 && stats.goodPct > 0 && (
+                  <polygon
+                    points={hexPoints(cx, cy, RING_SIDE)}
+                    fill="none"
+                    stroke={heat.ring}
+                    strokeWidth={3}
+                    strokeLinejoin="round"
+                    strokeLinecap="round"
+                    strokeDasharray={RING_PERIMETER}
+                    strokeDashoffset={RING_PERIMETER * (1 - stats.goodPct / 100)}
+                  />
+                )}
+                <polygon
+                  points={hexPoints(cx, cy, SIDE)}
+                  className={
+                    hovered
+                      ? "fill-accent stroke-primary transition-colors"
+                      : "fill-card stroke-border transition-colors"
+                  }
+                  strokeWidth={1.8}
+                  strokeLinejoin="round"
+                />
                 <text
                   x={cx}
-                  y={cy + 10}
+                  y={cy - 6}
                   textAnchor="middle"
                   dominantBaseline="central"
-                  fontSize={9}
-                  fontWeight={600}
-                  className="fill-muted-foreground pointer-events-none select-none"
+                  className="fill-foreground text-[11px] font-semibold pointer-events-none select-none"
                 >
-                  {subtitle}
+                  {truncate(scope.name, 7)}
                 </text>
-              )}
+                {subtitle && (
+                  <text
+                    x={cx}
+                    y={cy + 10}
+                    textAnchor="middle"
+                    dominantBaseline="central"
+                    fontSize={9}
+                    fontWeight={600}
+                    className="fill-muted-foreground pointer-events-none select-none"
+                  >
+                    {subtitle}
+                  </text>
+                )}
+              </g>
               {hovered && (
                 <g>
                   {SECTORS.map((sec) => {
