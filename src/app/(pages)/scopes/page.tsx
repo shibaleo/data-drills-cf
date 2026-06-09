@@ -486,15 +486,9 @@ export default function ScopesHubPage() {
                 )}
                 <polygon
                   points={hexPoints(cx, cy, SIDE)}
-                  fill={
-                    hovered
-                      ? "hsl(var(--accent))"
-                      : stats.pending > 0
-                        ? "url(#hexFillWarm)"
-                        : "url(#hexFillCalm)"
-                  }
+                  fill={hovered ? "url(#hexFillWarm)" : "url(#hexFillCalm)"}
                   stroke={
-                    stats.pending > 0
+                    hovered || stats.pending > 0
                       ? "hsl(var(--primary) / 0.55)"
                       : "hsl(var(--border))"
                   }
