@@ -4,7 +4,7 @@ import { useState, useCallback, type ReactNode } from "react";
 import { toast } from "sonner";
 import { ApiError } from "@/lib/api-client";
 import { rpc, unwrap } from "@/lib/rpc-client";
-import { useField } from "@/hooks/use-field";
+import { useSubjects, useLevels } from "@/hooks/queries/use-field-data";
 import { useAnswerForm, useEditAnswerForm } from "@/hooks/use-answer-form";
 import { ProblemDetailDialog } from "@/components/problem-detail-dialog";
 import { ProblemEditDialog } from "@/components/problem-edit-dialog";
@@ -19,13 +19,16 @@ import type { Problem } from "@/lib/types";
  * Returns `renderDialogs()` which should be placed at the end of the JSX.
  */
 export function useProblemDialogs({
+  fieldId,
   allProblems,
   onDataChanged,
 }: {
+  fieldId: string | null;
   allProblems: ProblemWithAnswers[];
   onDataChanged: () => void;
 }) {
-  const { currentField, subjects, levels } = useField();
+  const { data: subjects = [] } = useSubjects(fieldId ?? undefined);
+  const { data: levels = [] } = useLevels(fieldId ?? undefined);
 
   // Detail dialog
   const [detailOpen, setDetailOpen] = useState(false);
@@ -46,8 +49,8 @@ export function useProblemDialogs({
   }, [onDataChanged]);
 
   // Answer forms
-  const answerForm = useAnswerForm(() => { notifyAndRefresh(); });
-  const editForm = useEditAnswerForm(() => { notifyAndRefresh(); });
+  const answerForm = useAnswerForm(fieldId, () => { notifyAndRefresh(); });
+  const editForm = useEditAnswerForm(fieldId, () => { notifyAndRefresh(); });
 
   const openDetail = useCallback((problemId: string) => {
     setDetailProblemId(problemId);
@@ -77,7 +80,7 @@ export function useProblemDialogs({
   }, [notifyAndRefresh]);
 
   const renderDialogs = useCallback((): ReactNode => {
-    if (!currentField) return null;
+    if (!fieldId) return null;
     return (
       <>
         <ProblemDetailDialog
@@ -110,7 +113,7 @@ export function useProblemDialogs({
             checkpoint: editProblem.checkpoint,
             standardTime: editProblem.standard_time,
           } : null}
-          fieldId={currentField.id}
+          fieldId={fieldId}
           subjects={subjects}
           levels={levels}
           onSaved={() => { setEditDialogOpen(false); notifyAndRefresh(); }}
@@ -121,6 +124,9 @@ export function useProblemDialogs({
           open={answerForm.open}
           onOpenChange={answerForm.setOpen}
           title="解答を登録"
+          fieldId={fieldId}
+          subjects={subjects}
+          levels={levels}
           form={answerForm.form}
           reviewsField={answerForm.reviewsField}
           codeSuggestions={answerForm.codeSuggestions}
@@ -134,6 +140,9 @@ export function useProblemDialogs({
           open={editForm.open}
           onOpenChange={editForm.setOpen}
           title="解答を編集"
+          fieldId={fieldId}
+          subjects={subjects}
+          levels={levels}
           form={editForm.form}
           reviewsField={editForm.reviewsField}
           codeSuggestions={editForm.codeSuggestions}
@@ -146,7 +155,7 @@ export function useProblemDialogs({
       </>
     );
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentField, detailOpen, detailProblem, editDialogOpen, editProblem,
+  }, [fieldId, detailOpen, detailProblem, editDialogOpen, editProblem,
       answerForm, editForm, subjects, levels, handleEditProblem, handleDeleteProblem,
       notifyAndRefresh, openCreate]);
 

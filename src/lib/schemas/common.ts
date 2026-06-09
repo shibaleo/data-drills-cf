@@ -5,7 +5,7 @@ export const reorderInputSchema = z.object({
   ids: z.array(z.string().uuid()),
 });
 
-/** Query with required `field_id` */
+/** Query with optional `field_id`. Routes treat undefined as "all user-scoped rows". */
 export const fieldIdQuerySchema = z.object({
-  field_id: z.string().uuid(),
+  field_id: z.string().uuid().optional(),
 });

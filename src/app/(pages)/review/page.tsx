@@ -12,7 +12,6 @@
 
 import { useEffect } from "react";
 import { Link, useSearch, useNavigate } from "@tanstack/react-router";
-import { useField } from "@/hooks/use-field";
 import { useReviewScopesList } from "@/hooks/queries/use-review-scopes";
 import { usePageTitle } from "@/lib/page-context";
 
@@ -20,15 +19,14 @@ const LAST_SCOPE_LS_KEY = "dd_last_scope_id";
 
 export default function ReviewEntryPage() {
   usePageTitle("Review");
-  const { currentField } = useField();
   const search = useSearch({ strict: false }) as { scope_id?: string };
   const navigate = useNavigate();
-  const { data: reviewScopes = [], isLoading } = useReviewScopesList(currentField?.id);
+  const { data: reviewScopes = [], isLoading } = useReviewScopesList();
 
   // ?scope_id= が指定されたら、scope_id 一致の review_scope に飛ばす。
   // 未指定なら localStorage の前回値を試す。
   useEffect(() => {
-    if (isLoading || !currentField) return;
+    if (isLoading) return;
     const queryScopeId = search.scope_id
       ?? (typeof window !== "undefined" ? localStorage.getItem(LAST_SCOPE_LS_KEY) : null);
     if (!queryScopeId) return;
@@ -39,9 +37,7 @@ export default function ReviewEntryPage() {
       }
       navigate({ to: "/review/$scope_id" as string, params: { scope_id: match.id }, replace: true });
     }
-  }, [search.scope_id, reviewScopes, isLoading, currentField, navigate]);
-
-  if (!currentField) return <div className="p-6 text-muted-foreground">Please select a project</div>;
+  }, [search.scope_id, reviewScopes, isLoading, navigate]);
 
   // Fallback: scope picker (= 移行期、明示的に scope を選ばせる)。
   return (

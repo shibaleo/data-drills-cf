@@ -10,6 +10,7 @@ import { toJSTDate, jstDayDiff, todayJST } from '@/lib/date-utils'
 import { computeForgettingInfo } from '@/lib/forgetting-curve'
 import { computeNextReview } from '@/lib/review-scoring'
 import { useLookup } from '@/hooks/use-field'
+import { useSubjects, useLevels } from '@/hooks/queries/use-field-data'
 import { Markdown } from '@/components/markdown'
 import { DurationSparkline } from '@/components/duration-sparkline'
 import { ProblemPdfLink } from '@/components/problem-pdf-link'
@@ -119,7 +120,12 @@ export function ProblemCard({
   onPdfLinked,
   bare,
 }: ProblemCardProps) {
-  const lookup = useLookup()
+  // problem-card は色付け用に lookup を使う。card は ProblemWithAnswers を
+  // 受け取るので、p.field_id を起点に subjects/levels を引く (page-local picker
+  // の影響を受けない形)。
+  const { data: subjects = [] } = useSubjects(p.field_id)
+  const { data: levels = [] } = useLevels(p.field_id)
+  const lookup = useLookup(subjects, levels)
   const answers = [...p.answers].sort(
     (a, b) => (b.date ?? '').localeCompare(a.date ?? '') || (b.created_at ?? '').localeCompare(a.created_at ?? ''),
   )

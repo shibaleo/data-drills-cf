@@ -30,11 +30,13 @@ export default function StatsDetailPage() {
   const { scope_id: scopeId } = useParams({ strict: false }) as { scope_id: string };
   const navigate = useNavigate();
   usePageBack(useCallback(() => navigate({ to: "/stats" as string }), [navigate]));
-  const { currentField, statuses } = useField();
+  const { statuses, setCurrentScopeId } = useField();
 
   const scopeQuery = useStatsScope(scopeId);
-  const updateScope = useUpdateStatsScope(scopeId, currentField?.id);
-  const archiveScope = useArchiveStatsScope(currentField?.id);
+  const scopeFieldId = scopeQuery.data?.scope?.field_id ?? null;
+  const updateScope = useUpdateStatsScope(scopeId, scopeFieldId ?? undefined);
+  const archiveScope = useArchiveStatsScope(scopeFieldId ?? undefined);
+  useEffect(() => { setCurrentScopeId(scopeId); }, [scopeId, setCurrentScopeId]);
 
   const [localName, setLocalName] = useState("");
   const [localFilter, setLocalFilter] = useState<MemberFilterInput>({});
@@ -58,8 +60,8 @@ export default function StatsDetailPage() {
     }
   }, [scopeQuery.data]);
 
-  const { data: rawRows = [] } = useThroughputList(currentField?.id);
-  const { data: allProblems = [] } = useProblemsList(currentField?.id);
+  const { data: rawRows = [] } = useThroughputList(scopeFieldId ?? undefined);
+  const { data: allProblems = [] } = useProblemsList(scopeFieldId ?? undefined);
   // scope の member filter を throughput rows と problems の両方に適用
   const rows = useMemo(() => {
     if (!localFilter.subjectIds?.length && !localFilter.levelIds?.length) return rawRows;
@@ -80,7 +82,7 @@ export default function StatsDetailPage() {
     ).map(({ _p }) => _p);
   }, [allProblems, localFilter]);
 
-  const { openDetail, renderDialogs } = useProblemDialogs({ allProblems, onDataChanged: () => {} });
+  const { openDetail, renderDialogs } = useProblemDialogs({ fieldId: scopeFieldId, allProblems, onDataChanged: () => {} });
 
   const scope = scopeQuery.data?.scope;
   const synced = !!scope && lastSyncRevRef.current === scope.revision;
@@ -107,7 +109,7 @@ export default function StatsDetailPage() {
     navigate({ to: "/stats" as string });
   }
 
-  if (!currentField) return <div className="p-6 text-muted-foreground">Please select a project</div>;
+  if (!scopeFieldId) return <div className="p-6 text-muted-foreground">Loading...</div>;
 
   return (
     <div className="p-3 md:p-4 flex flex-col gap-2 max-w-4xl">
@@ -172,7 +174,7 @@ export default function StatsDetailPage() {
             <X className="size-3.5"/>
           </button>
           <MemberFilterPicker
-            fieldId={currentField.id}
+            fieldId={scopeFieldId}
             value={localFilter}
             onChange={setLocalFilter}
             trailing={

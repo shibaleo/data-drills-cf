@@ -32,16 +32,20 @@ type Row = {
  */
 const app = new Hono<Env>()
   .get("/", zValidator("query", z.object({
-    field_id: z.string().uuid(),
+    field_id: z.string().uuid().optional(),
     as_of: z.string().optional(),
   })), async (c) => {
     const userId = c.get("authResult").userId;
     const { field_id: fieldId, as_of: asOf } = c.req.valid("query");
-    if (!(await ownsField(fieldId, userId))) return c.json({ data: [] });
+    if (!userId) return c.json({ data: [] });
+    if (fieldId && !(await ownsField(fieldId, userId))) return c.json({ data: [] });
     // asOf 指定中は JST のその日以前の answer のみ対象。
     // LAG over partition は WHERE 適用後に評価されるため "前回 status" も
     // 巻き戻し後の系列でちゃんと計算される。
     const asOfCond = asOf ? sql`AND (a.date AT TIME ZONE 'Asia/Tokyo')::date <= ${asOf}::date` : sql``;
+    const fieldCond = fieldId
+      ? sql`p.field_id = ${fieldId}`
+      : sql`p.field_id IN (SELECT id FROM data_drills.field WHERE user_id = ${userId})`;
     const rows = await db.execute<Row>(sql`
       SELECT
         a.id,
@@ -62,7 +66,7 @@ const app = new Hono<Env>()
       FROM data_drills.answer a
       JOIN data_drills.problem p ON p.id = a.problem_id
       LEFT JOIN data_drills.answer_status s ON s.id = a.answer_status_id
-      WHERE p.field_id = ${fieldId}
+      WHERE ${fieldCond}
       ${asOfCond}
       ORDER BY a.date ASC, a.created_at ASC
     `);

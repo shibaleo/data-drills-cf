@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { zValidator } from "@hono/zod-validator";
 import { db } from "@/lib/db";
-import { statsScope, problem } from "@/lib/db/schema";
+import { statsScope, problem, field as fieldTbl } from "@/lib/db/schema";
 import { and, asc, desc, eq, gt, isNull, lte, or } from "drizzle-orm";
 import { statsScopeCreateInputSchema, statsScopeUpdateInputSchema } from "@/lib/schemas/stats-scope";
 import { fieldIdQuerySchema } from "@/lib/schemas/common";
@@ -61,10 +61,16 @@ const app = new Hono<Env>()
   .get("/", zValidator("query", fieldIdQuerySchema), async (c) => {
     const userId = c.get("authResult").userId;
     const { field_id: fieldId } = c.req.valid("query");
-    if (!(await ownsField(fieldId, userId))) return c.json({ data: [] });
-    const rows = await db.select().from(statsScope)
-      .where(and(eq(statsScope.fieldId, fieldId), isNull(statsScope.validTo), eq(statsScope.isActive, true)))
-      .orderBy(desc(statsScope.createdAt));
+    if (!userId) return c.json({ data: [] });
+    if (fieldId && !(await ownsField(fieldId, userId))) return c.json({ data: [] });
+    const rows = fieldId
+      ? await db.select().from(statsScope)
+          .where(and(eq(statsScope.fieldId, fieldId), isNull(statsScope.validTo), eq(statsScope.isActive, true)))
+          .orderBy(desc(statsScope.createdAt))
+      : (await db.select({ r: statsScope }).from(statsScope)
+          .innerJoin(fieldTbl, eq(statsScope.fieldId, fieldTbl.id))
+          .where(and(eq(fieldTbl.userId, userId), isNull(statsScope.validTo), eq(statsScope.isActive, true)))
+          .orderBy(desc(statsScope.createdAt))).map((row) => row.r);
     return c.json({ data: rows.map(scopeToApi) });
   })
   .post("/", zValidator("json", statsScopeCreateInputSchema), async (c) => {

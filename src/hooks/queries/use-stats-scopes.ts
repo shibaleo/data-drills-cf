@@ -10,18 +10,17 @@ export type StatsScopeDetail = RpcData<typeof rpc.api.v1["stats-scopes"][":id"][
 
 export const statsScopeKeys = {
   all: ["stats-scopes"] as const,
-  list: (fieldId: string) => [...statsScopeKeys.all, "list", fieldId] as const,
+  list: (fieldId: string | null) => [...statsScopeKeys.all, "list", fieldId] as const,
   detail: (id: string) => [...statsScopeKeys.all, "detail", id] as const,
 };
 
-export function useStatsScopesList(fieldId: string | undefined) {
+export function useStatsScopesList(fieldId?: string | undefined) {
   return useQuery({
-    queryKey: fieldId ? statsScopeKeys.list(fieldId) : statsScopeKeys.all,
+    queryKey: statsScopeKeys.list(fieldId ?? null),
     queryFn: async () => {
-      const json = await unwrap(rpc.api.v1["stats-scopes"].$get({ query: { field_id: fieldId! } }));
+      const json = await unwrap(rpc.api.v1["stats-scopes"].$get({ query: fieldId ? { field_id: fieldId } : {} }));
       return json.data;
     },
-    enabled: !!fieldId,
   });
 }
 

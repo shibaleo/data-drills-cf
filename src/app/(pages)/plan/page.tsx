@@ -3,6 +3,8 @@ import { useMemo, useState, useEffect } from "react";
 import { useQueries } from "@tanstack/react-query";
 import { useSearch, useNavigate } from "@tanstack/react-router";
 import { useField } from "@/hooks/use-field";
+import { useMasterField } from "@/hooks/use-master-field";
+import { MasterFieldPicker } from "@/components/master-field-picker";
 import { useReviewList } from "@/hooks/queries/use-review";
 import { usePageTitle } from "@/lib/page-context";
 import { rpc, unwrap } from "@/lib/rpc-client";
@@ -95,8 +97,9 @@ function addDays(s: string, n: number): string {
 
 export default function PlanPage() {
   usePageTitle("Plan");
-  const { currentField, statuses } = useField();
-  const fieldId = currentField?.id;
+  const { statuses } = useField();
+  const { field } = useMasterField();
+  const fieldId = field?.id;
   const today = todayJST();
   const [hideFirst, setHideFirst] = useState(false);
   const [hideFuture, setHideFuture] = useState(false);
@@ -370,10 +373,18 @@ export default function PlanPage() {
     return entries;
   }, [hideFirst, hideFuture, hiddenStatuses, overBudgetOnly, overflowOnly, statuses]);
 
-  if (!currentField) return <div className="p-6 text-muted-foreground">Please select a project</div>;
+  if (!field) {
+    return (
+      <div className="p-4 md:p-6 space-y-3">
+        <MasterFieldPicker />
+        <div className="text-center py-12 text-muted-foreground">Select a field</div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-3 md:p-4 flex flex-col gap-3">
+      <div><MasterFieldPicker /></div>
       <div className="rounded-md border p-3 space-y-2">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 flex-wrap">

@@ -10,18 +10,17 @@ export type ThroughputScopeDetail = RpcData<typeof rpc.api.v1["throughput-scopes
 
 export const throughputScopeKeys = {
   all: ["throughput-scopes"] as const,
-  list: (fieldId: string) => [...throughputScopeKeys.all, "list", fieldId] as const,
+  list: (fieldId: string | null) => [...throughputScopeKeys.all, "list", fieldId] as const,
   detail: (id: string) => [...throughputScopeKeys.all, "detail", id] as const,
 };
 
-export function useThroughputScopesList(fieldId: string | undefined) {
+export function useThroughputScopesList(fieldId?: string | undefined) {
   return useQuery({
-    queryKey: fieldId ? throughputScopeKeys.list(fieldId) : throughputScopeKeys.all,
+    queryKey: throughputScopeKeys.list(fieldId ?? null),
     queryFn: async () => {
-      const json = await unwrap(rpc.api.v1["throughput-scopes"].$get({ query: { field_id: fieldId! } }));
+      const json = await unwrap(rpc.api.v1["throughput-scopes"].$get({ query: fieldId ? { field_id: fieldId } : {} }));
       return json.data;
     },
-    enabled: !!fieldId,
   });
 }
 

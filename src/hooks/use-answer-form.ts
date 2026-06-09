@@ -8,6 +8,7 @@ import { toast } from 'sonner'
 import { rpc, unwrap } from '@/lib/rpc-client'
 import { nextStatus } from '@/lib/answer-utils'
 import { useField } from '@/hooks/use-field'
+import { useSubjects, useLevels } from '@/hooks/queries/use-field-data'
 import { answerFormSchema, type AnswerFormData } from '@/lib/schemas/answer-form'
 import type { ReviewType, Problem, AnswerWithReviews } from '@/lib/types'
 
@@ -121,8 +122,10 @@ export type AnswerFormHandle = {
 
 /* ── Create answer form ── */
 
-export function useAnswerForm(onSaved: (problemId: string) => void) {
-  const { currentField, subjects, levels, statuses } = useField()
+export function useAnswerForm(fieldId: string | null, onSaved: (problemId: string) => void) {
+  const { statuses } = useField()
+  const { data: subjects = [] } = useSubjects(fieldId ?? undefined)
+  const { data: levels = [] } = useLevels(fieldId ?? undefined)
   const [open, setOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [problemId, setProblemId] = useState<string | null>(null)
@@ -142,7 +145,7 @@ export function useAnswerForm(onSaved: (problemId: string) => void) {
   const level = form.watch('level')
 
   const { suggestions: codeSuggestions, checkpointMap, nameMap } = useCodeSuggestions(
-    currentField?.id, subject, level,
+    fieldId ?? undefined, subject, level,
   )
   const tagMap = useTagMap()
 
@@ -182,7 +185,7 @@ export function useAnswerForm(onSaved: (problemId: string) => void) {
 
   async function save(overrides?: { date?: string }) {
     if (saving) return
-    if (!currentField) return
+    if (!fieldId) return
     const valid = await form.trigger()
     if (!valid) {
       const first = Object.values(form.formState.errors)[0]
@@ -195,7 +198,7 @@ export function useAnswerForm(onSaved: (problemId: string) => void) {
     const unchanged = problemId && data.subject === origSubject && data.level === origLevel && data.code.trim() === origCode.trim()
     const pid = unchanged
       ? problemId!
-      : await resolveProblemId(currentField.id, data.subject, data.level, data.code)
+      : await resolveProblemId(fieldId, data.subject, data.level, data.code)
     if (!pid) { setSaving(false); return }
 
     const statusId = statuses.find((s) => s.name === data.status)?.id ?? null
@@ -258,8 +261,8 @@ export function useAnswerForm(onSaved: (problemId: string) => void) {
 
 /* ── Edit answer form ── */
 
-export function useEditAnswerForm(onSaved: (problemId: string) => void) {
-  const { currentField, statuses } = useField()
+export function useEditAnswerForm(fieldId: string | null, onSaved: (problemId: string) => void) {
+  const { statuses } = useField()
   const [open, setOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [answerId, setAnswerId] = useState('')
@@ -279,7 +282,7 @@ export function useEditAnswerForm(onSaved: (problemId: string) => void) {
   const level = form.watch('level')
 
   const { suggestions: codeSuggestions, checkpointMap, nameMap } = useCodeSuggestions(
-    currentField?.id, subject, level,
+    fieldId ?? undefined, subject, level,
   )
   const tagMap = useTagMap()
 
@@ -306,7 +309,7 @@ export function useEditAnswerForm(onSaved: (problemId: string) => void) {
 
   async function save() {
     if (saving) return
-    if (!currentField) return
+    if (!fieldId) return
     const valid = await form.trigger()
     if (!valid) {
       const first = Object.values(form.formState.errors)[0]
@@ -319,7 +322,7 @@ export function useEditAnswerForm(onSaved: (problemId: string) => void) {
     const unchanged = data.subject === origSubject && data.level === origLevel && data.code.trim() === origCode.trim()
     const pid = unchanged
       ? problemId
-      : await resolveProblemId(currentField.id, data.subject, data.level, data.code)
+      : await resolveProblemId(fieldId, data.subject, data.level, data.code)
     if (!pid) { setSaving(false); return }
 
     const statusId = statuses.find((s) => s.name === data.status)?.id ?? null

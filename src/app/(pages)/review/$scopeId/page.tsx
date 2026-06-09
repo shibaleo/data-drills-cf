@@ -26,6 +26,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { rpc } from "@/lib/rpc-client";
 import { useField } from "@/hooks/use-field";
+import { useSubjects, useLevels } from "@/hooks/queries/use-field-data";
 import { useFilterPrefs, useSaveFilterPrefs } from "@/hooks/queries/use-filter-prefs";
 import { usePageTitle, useHeaderSlot, usePageBack } from "@/lib/page-context";
 import { OpaqueTag } from "@/components/problem-card";
@@ -346,15 +347,19 @@ export default function SchedulePage() {
   const { scope_id: scopeId } = useParams({ strict: false }) as { scope_id: string };
   const navigate = useNavigate();
   usePageBack(useCallback(() => navigate({ to: "/review" as string }), [navigate]));
-  const { currentField, subjects, levels, statuses } = useField();
+  const { statuses, setCurrentScopeId } = useField();
 
   const [asOf, setAsOf] = useState<string | null>(null);
   const readOnly = asOf != null;
   // 注: asOf はチャート側の client-side フィルタ専用にし、エンティティ取得は常に最新を引く。
   const scopeQuery = useReviewScope(scopeId);
+  const scopeFieldId = scopeQuery.data?.scope?.field_id ?? null;
+  const { data: subjects = [] } = useSubjects(scopeFieldId ?? undefined);
+  const { data: levels = [] } = useLevels(scopeFieldId ?? undefined);
   const revisionsQuery = useReviewScopeRevisions(scopeId);
-  const updateScope = useUpdateReviewScope(scopeId, currentField?.id);
-  const archiveScope = useArchiveReviewScope(currentField?.id);
+  const updateScope = useUpdateReviewScope(scopeId, scopeFieldId ?? undefined);
+  const archiveScope = useArchiveReviewScope(scopeFieldId ?? undefined);
+  useEffect(() => { setCurrentScopeId(scopeId); }, [scopeId, setCurrentScopeId]);
 
   // Local editable state (backlog ミラー)
   const [localName, setLocalName] = useState("");
@@ -389,13 +394,13 @@ export default function SchedulePage() {
   const qc = useQueryClient();
 
   // /problems-list — full problem + answer data (for client-side asOf recomputation)
-  const dialogProblemsQuery = useProblemsList(currentField?.id);
+  const dialogProblemsQuery = useProblemsList(scopeFieldId ?? undefined);
   const allProblems = dialogProblemsQuery.data ?? [];
 
   // Fast path: /api/v1/review (driven by TanStack Query)
   // 注: asOf を渡さない。asOf 適用はクライアント計算で行い、アニメーション再生時の
   // サーバ往復を回避する。
-  const scheduleQuery = useReviewList(currentField?.id);
+  const scheduleQuery = useReviewList(scopeFieldId ?? undefined);
   const serverRows = useMemo<ScheduleRow[]>(() => {
     // Review は forecast view: cursor (asOf) を過去にすると「その時点で
     // 知っていた answer だけで再計算した schedule」を見せる。
@@ -535,24 +540,24 @@ export default function SchedulePage() {
   const [filterLevels, setFilterLevels] = useState<Set<string>>(new Set());
   const [filterLastStatuses, setFilterLastStatuses] = useState<Set<string>>(new Set());
   // DB 永続化
-  const filterPrefsQuery = useFilterPrefs(currentField?.id);
-  const saveFilterPrefs = useSaveFilterPrefs(currentField?.id);
+  const filterPrefsQuery = useFilterPrefs(scopeFieldId ?? undefined);
+  const saveFilterPrefs = useSaveFilterPrefs(scopeFieldId ?? undefined);
   const prefsLoadedRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!currentField || prefsLoadedRef.current === currentField.id) return;
+    if (!scopeFieldId || prefsLoadedRef.current === scopeFieldId!) return;
     const data = filterPrefsQuery.data?.review;
     if (data) {
       setFilterSubjects(new Set(data.subjectIds ?? []));
       setFilterLevels(new Set(data.levelIds ?? []));
       setFilterLastStatuses(new Set(data.lastStatuses ?? []));
     }
-    prefsLoadedRef.current = currentField.id;
-  }, [filterPrefsQuery.data, currentField]);
+    prefsLoadedRef.current = scopeFieldId!;
+  }, [filterPrefsQuery.data, scopeFieldId]);
   // 変更時に save (debounce 不要、変化が低頻度)。
   // 直前の snapshot と一致するなら server と同期済み → 冗長な PUT を防ぐ。
   const lastSavedPrefsRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!currentField || prefsLoadedRef.current !== currentField.id) return;
+    if (!scopeFieldId || prefsLoadedRef.current !== scopeFieldId!) return;
     const snapshot = JSON.stringify({
       s: [...filterSubjects].sort(),
       l: [...filterLevels].sort(),
@@ -615,12 +620,13 @@ export default function SchedulePage() {
   }, [serverRows, stabilityOverrides, statuses, todayStr]);
 
   const handleDataChanged = useCallback(() => {
-    if (!currentField) return;
-    qc.invalidateQueries({ queryKey: reviewKeys.list(currentField.id) });
-    qc.invalidateQueries({ queryKey: problemsKeys.list(currentField.id) });
-  }, [qc, currentField]);
+    if (!scopeFieldId) return;
+    qc.invalidateQueries({ queryKey: reviewKeys.list(scopeFieldId!) });
+    qc.invalidateQueries({ queryKey: problemsKeys.list(scopeFieldId!) });
+  }, [qc, scopeFieldId]);
 
   const { openDetail, renderDialogs } = useProblemDialogs({
+    fieldId: scopeFieldId,
     allProblems,
     onDataChanged: handleDataChanged,
   });
@@ -765,7 +771,7 @@ export default function SchedulePage() {
     navigate({ to: "/review" as string });
   }
 
-  if (!currentField) {
+  if (!scopeFieldId) {
     return (
       <div className="p-4 md:p-6">
         <div className="text-center py-12 text-muted-foreground">
@@ -887,7 +893,7 @@ export default function SchedulePage() {
             <X className="size-3.5"/>
           </button>
           <MemberFilterPicker
-            fieldId={currentField.id}
+            fieldId={scopeFieldId!}
             value={localFilter}
             onChange={setLocalFilter}
             trailing={

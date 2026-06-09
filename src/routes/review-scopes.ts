@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { zValidator } from "@hono/zod-validator";
 import { db } from "@/lib/db";
-import { reviewScope, problem } from "@/lib/db/schema";
+import { reviewScope, problem, field as fieldTbl } from "@/lib/db/schema";
 import { and, asc, desc, eq, gt, isNull, lte, or } from "drizzle-orm";
 import { reviewScopeCreateInputSchema, reviewScopeUpdateInputSchema } from "@/lib/schemas/review-scope";
 import { fieldIdQuerySchema } from "@/lib/schemas/common";
@@ -61,10 +61,16 @@ const app = new Hono<Env>()
   .get("/", zValidator("query", fieldIdQuerySchema), async (c) => {
     const userId = c.get("authResult").userId;
     const { field_id: fieldId } = c.req.valid("query");
-    if (!(await ownsField(fieldId, userId))) return c.json({ data: [] });
-    const rows = await db.select().from(reviewScope)
-      .where(and(eq(reviewScope.fieldId, fieldId), isNull(reviewScope.validTo), eq(reviewScope.isActive, true)))
-      .orderBy(desc(reviewScope.createdAt));
+    if (!userId) return c.json({ data: [] });
+    if (fieldId && !(await ownsField(fieldId, userId))) return c.json({ data: [] });
+    const rows = fieldId
+      ? await db.select().from(reviewScope)
+          .where(and(eq(reviewScope.fieldId, fieldId), isNull(reviewScope.validTo), eq(reviewScope.isActive, true)))
+          .orderBy(desc(reviewScope.createdAt))
+      : (await db.select({ r: reviewScope }).from(reviewScope)
+          .innerJoin(fieldTbl, eq(reviewScope.fieldId, fieldTbl.id))
+          .where(and(eq(fieldTbl.userId, userId), isNull(reviewScope.validTo), eq(reviewScope.isActive, true)))
+          .orderBy(desc(reviewScope.createdAt))).map((row) => row.r);
     return c.json({ data: rows.map(scopeToApi) });
   })
   .post("/", zValidator("json", reviewScopeCreateInputSchema), async (c) => {

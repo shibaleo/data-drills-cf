@@ -8,19 +8,18 @@ export type AnswerWithReviews = ProblemWithAnswers["answers"][number];
 
 export const problemsKeys = {
   all: ["problems"] as const,
-  list: (fieldId: string) => [...problemsKeys.all, "list", fieldId] as const,
+  list: (fieldId: string | null) => [...problemsKeys.all, "list", fieldId] as const,
 };
 
-export function useProblemsList(fieldId: string | undefined) {
+export function useProblemsList(fieldId?: string | undefined) {
   return useQuery({
-    queryKey: fieldId ? problemsKeys.list(fieldId) : problemsKeys.all,
+    queryKey: problemsKeys.list(fieldId ?? null),
     queryFn: async () => {
       const json = await unwrap(
-        rpc.api.v1["problems-list"].$get({ query: { field_id: fieldId! } }),
+        rpc.api.v1["problems-list"].$get({ query: fieldId ? { field_id: fieldId } : {} }),
       );
       return json.data;
     },
-    enabled: !!fieldId,
     // problems-list は 7 join で重い。ナビゲーションのたびに再 fetch しないよう
     // staleTime を長め (5 分) に。mutation で invalidate されたら必ず再取得される。
     staleTime: 5 * 60_000,

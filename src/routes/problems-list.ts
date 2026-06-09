@@ -39,7 +39,7 @@ const app = new Hono<Env>()
     const problemRows = await db.select({ p: problem })
       .from(problem)
       .innerJoin(field, eq(problem.fieldId, field.id))
-      .where(and(eq(problem.fieldId, fieldId), eq(field.userId, userId)))
+      .where(fieldId ? and(eq(problem.fieldId, fieldId), eq(field.userId, userId)) : eq(field.userId, userId))
       .orderBy(problem.createdAt);
     const problems = problemRows.map((r) => r.p);
     if (problems.length === 0) return c.json({ data: [], next_cursor: null });
@@ -57,8 +57,14 @@ const app = new Hono<Env>()
         .where(inArray(answer.problemId, problemIds))
         .orderBy(answer.date, answer.createdAt),
       db.select().from(answerStatus).where(eq(answerStatus.userId, userId)),
-      db.select().from(subject).where(eq(subject.fieldId, fieldId)),
-      db.select().from(level).where(eq(level.fieldId, fieldId)),
+      fieldId
+        ? db.select().from(subject).where(eq(subject.fieldId, fieldId))
+        : db.select({ id: subject.id, code: subject.code, name: subject.name, color: subject.color, sortOrder: subject.sortOrder, fieldId: subject.fieldId, createdAt: subject.createdAt, updatedAt: subject.updatedAt })
+            .from(subject).innerJoin(field, eq(subject.fieldId, field.id)).where(eq(field.userId, userId)),
+      fieldId
+        ? db.select().from(level).where(eq(level.fieldId, fieldId))
+        : db.select({ id: level.id, code: level.code, name: level.name, color: level.color, sortOrder: level.sortOrder, fieldId: level.fieldId, createdAt: level.createdAt, updatedAt: level.updatedAt })
+            .from(level).innerJoin(field, eq(level.fieldId, field.id)).where(eq(field.userId, userId)),
       db.select().from(reviewType).where(eq(reviewType.userId, userId)),
       db.select().from(problemFile).where(inArray(problemFile.problemId, problemIds)),
       db.select().from(review).where(inArray(review.answerId, answerIdSubq)),

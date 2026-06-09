@@ -3,8 +3,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, useMemo, type ReactNode } from "react";
 import {
   useFields,
-  useSubjects,
-  useLevels,
   useStatuses,
   useInvalidateFieldData,
   type Field,
@@ -16,16 +14,11 @@ export type { StatusItem };
 
 interface FieldContextValue {
   fields: Field[];
-  currentField: Field | null;
-  setCurrentField: (f: Field) => void;
   refresh: () => Promise<void>;
-  subjects: LookupItem[];
-  levels: LookupItem[];
   statuses: StatusItem[];
-  filterSubjectId: string | null;
-  setFilterSubjectId: (id: string | null) => void;
-  filterLevelId: string | null;
-  setFilterLevelId: (id: string | null) => void;
+  /** "前回見た scope" メモリ。URL に scope_id を持たないページ用。 */
+  currentScopeId: string | null;
+  setCurrentScopeId: (id: string | null) => void;
 }
 
 const FieldContext = createContext<FieldContextValue | null>(null);
@@ -36,11 +29,12 @@ export function useField() {
   return ctx;
 }
 
-/** Lookup helpers for level/subject by id (same API as LD) */
-export function useLookup() {
+/**
+ * Lookup helpers for level/subject by id. subject/level lists are passed in
+ * because they are per-field state and no longer live in context.
+ */
+export function useLookup(subjects: LookupItem[], levels: LookupItem[]) {
   const ctx = useContext(FieldContext);
-  const subjects = ctx?.subjects ?? [];
-  const levels = ctx?.levels ?? [];
   const statuses = ctx?.statuses ?? [];
 
   function levelName(id: string) { return levels.find((l) => l.id === id)?.name ?? ''; }
@@ -53,35 +47,33 @@ export function useLookup() {
   return { levelName, levelColor, subjectName, subjectColor, statusColor, statusStability };
 }
 
-const STORAGE_KEY = "dd_current_field";
+const SCOPE_STORAGE_KEY = "dd_current_scope_id";
+const LEGACY_FIELD_STORAGE_KEY = "dd_current_field";
 
 export function FieldProvider({ children }: { children: ReactNode }) {
-  const [currentField, setCurrentFieldState] = useState<Field | null>(null);
-  const [filterSubjectId, setFilterSubjectId] = useState<string | null>(null);
-  const [filterLevelId, setFilterLevelId] = useState<string | null>(null);
+  const [currentScopeId, setCurrentScopeIdState] = useState<string | null>(() =>
+    typeof window !== "undefined" ? localStorage.getItem(SCOPE_STORAGE_KEY) : null,
+  );
 
   const fieldsQuery = useFields();
-  const subjectsQuery = useSubjects(currentField?.id);
-  const levelsQuery = useLevels(currentField?.id);
   const statusesQuery = useStatuses();
   const invalidate = useInvalidateFieldData();
 
   const fields = fieldsQuery.data ?? [];
 
-  // Pick initial field from localStorage once the list loads
+  // One-time cleanup of legacy localStorage key.
   useEffect(() => {
-    if (currentField || fields.length === 0) return;
-    const savedId = typeof window !== "undefined" ? localStorage.getItem(STORAGE_KEY) : null;
-    const saved = savedId ? fields.find((f) => f.id === savedId) : null;
-    setCurrentFieldState(saved ?? fields[0]);
-  }, [fields, currentField]);
+    if (typeof window === "undefined") return;
+    if (localStorage.getItem(LEGACY_FIELD_STORAGE_KEY) !== null) {
+      localStorage.removeItem(LEGACY_FIELD_STORAGE_KEY);
+    }
+  }, []);
 
-  const setCurrentField = useCallback((f: Field) => {
-    setCurrentFieldState(f);
-    setFilterSubjectId(null);
-    setFilterLevelId(null);
+  const setCurrentScopeId = useCallback((id: string | null) => {
+    setCurrentScopeIdState(id);
     if (typeof window !== "undefined") {
-      localStorage.setItem(STORAGE_KEY, f.id);
+      if (id) localStorage.setItem(SCOPE_STORAGE_KEY, id);
+      else localStorage.removeItem(SCOPE_STORAGE_KEY);
     }
   }, []);
 
@@ -91,27 +83,11 @@ export function FieldProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<FieldContextValue>(() => ({
     fields,
-    currentField,
-    setCurrentField,
     refresh,
-    subjects: subjectsQuery.data ?? [],
-    levels: levelsQuery.data ?? [],
     statuses: statusesQuery.data ?? [],
-    filterSubjectId,
-    setFilterSubjectId,
-    filterLevelId,
-    setFilterLevelId,
-  }), [
-    fields,
-    currentField,
-    setCurrentField,
-    refresh,
-    subjectsQuery.data,
-    levelsQuery.data,
-    statusesQuery.data,
-    filterSubjectId,
-    filterLevelId,
-  ]);
+    currentScopeId,
+    setCurrentScopeId,
+  }), [fields, refresh, statusesQuery.data, currentScopeId, setCurrentScopeId]);
 
   return <FieldContext.Provider value={value}>{children}</FieldContext.Provider>;
 }

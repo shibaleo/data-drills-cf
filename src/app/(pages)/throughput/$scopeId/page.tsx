@@ -1,6 +1,7 @@
 "use client";
 import { useMemo, useRef, useEffect, useState, useCallback } from "react";
 import { useField } from "@/hooks/use-field";
+import { useSubjects, useLevels } from "@/hooks/queries/use-field-data";
 import { useThroughputList, type ThroughputRow } from "@/hooks/queries/use-throughput";
 import { useProblemsList } from "@/hooks/queries/use-problems";
 import { useProblemDialogs } from "@/hooks/use-problem-dialogs";
@@ -51,14 +52,18 @@ export default function ThroughputPage() {
   const { scope_id: scopeId } = useParams({ strict: false }) as { scope_id: string };
   const navigate = useNavigate();
   usePageBack(useCallback(() => navigate({ to: "/throughput" as string }), [navigate]));
-  const { currentField, subjects, levels, statuses } = useField();
+  const { statuses, setCurrentScopeId } = useField();
+  const scopeQuery = useThroughputScope(scopeId);
+  const scopeFieldId = scopeQuery.data?.scope?.field_id ?? null;
+  const { data: subjects = [] } = useSubjects(scopeFieldId ?? undefined);
+  const { data: levels = [] } = useLevels(scopeFieldId ?? undefined);
   const subjectMap = useMemo(() => new Map(subjects.map((s) => [s.id, s])), [subjects]);
   const levelMap = useMemo(() => new Map(levels.map((l) => [l.id, l])), [levels]);
 
-  const scopeQuery = useThroughputScope(scopeId);
   const revisionsQuery = useThroughputScopeRevisions(scopeId);
-  const updateScope = useUpdateThroughputScope(scopeId, currentField?.id);
-  const archiveScope = useArchiveThroughputScope(currentField?.id);
+  const updateScope = useUpdateThroughputScope(scopeId, scopeFieldId ?? undefined);
+  const archiveScope = useArchiveThroughputScope(scopeFieldId ?? undefined);
+  useEffect(() => { setCurrentScopeId(scopeId); }, [scopeId, setCurrentScopeId]);
 
   const [asOf, setAsOf] = useState<string | null>(null);
   const [localName, setLocalName] = useState("");
@@ -83,7 +88,7 @@ export default function ThroughputPage() {
   }, [scopeQuery.data]);
 
   // 常に全データを fetch、asOf によるフィルタはクライアントで適用 (= アニメーション再生に必要)。
-  const { data: rawRows = [], isLoading } = useThroughputList(currentField?.id);
+  const { data: rawRows = [], isLoading } = useThroughputList(scopeFieldId ?? undefined);
   const rows = useMemo(() => {
     let base = rawRows;
     if (asOf) base = base.filter((r) => r.date <= asOf);
@@ -96,8 +101,8 @@ export default function ThroughputPage() {
     }
     return base;
   }, [rawRows, asOf, localFilter]);
-  const allProblems = useProblemsList(currentField?.id).data ?? [];
-  const { openDetail, renderDialogs } = useProblemDialogs({ allProblems, onDataChanged: () => {} });
+  const allProblems = useProblemsList(scopeFieldId ?? undefined).data ?? [];
+  const { openDetail, renderDialogs } = useProblemDialogs({ fieldId: scopeFieldId, allProblems, onDataChanged: () => {} });
   const tableRef = useRef<HTMLDivElement>(null);
 
   const [filterSubjects, setFilterSubjects] = useState<Set<string>>(new Set());
@@ -111,11 +116,11 @@ export default function ThroughputPage() {
   const [sortState, setSortState] = useState<SortState>({ key: "date", dir: "desc" });
 
   // Filter prefs persistence
-  const filterPrefsQuery = useFilterPrefs(currentField?.id);
-  const saveFilterPrefs = useSaveFilterPrefs(currentField?.id);
+  const filterPrefsQuery = useFilterPrefs(scopeFieldId ?? undefined);
+  const saveFilterPrefs = useSaveFilterPrefs(scopeFieldId ?? undefined);
   const prefsLoadedRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!currentField || prefsLoadedRef.current === currentField.id) return;
+    if (!scopeFieldId || prefsLoadedRef.current === scopeFieldId!) return;
     if (filterPrefsQuery.data === undefined) return;
     const p = filterPrefsQuery.data?.throughput;
     if (p) {
@@ -124,11 +129,11 @@ export default function ThroughputPage() {
       setFilterPrevStatuses(new Set(p.prevStatuses ?? []));
       if (p.maxRowsCap !== undefined) setMaxRowsCap(p.maxRowsCap);
     }
-    prefsLoadedRef.current = currentField.id;
-  }, [currentField, filterPrefsQuery.data]);
+    prefsLoadedRef.current = scopeFieldId!;
+  }, [scopeFieldId, filterPrefsQuery.data]);
   const lastSavedPrefsRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!currentField || prefsLoadedRef.current !== currentField.id) return;
+    if (!scopeFieldId || prefsLoadedRef.current !== scopeFieldId!) return;
     const snapshot = JSON.stringify({
       s: [...filterSubjects].sort(),
       l: [...filterLevels].sort(),
@@ -264,7 +269,7 @@ export default function ThroughputPage() {
     return entries;
   }, [statuses, filterPrevStatuses, togglePrevStatus]);
 
-  if (!currentField) return <div className="p-6 text-muted-foreground">Please select a project</div>;
+  if (!scopeFieldId) return <div className="p-6 text-muted-foreground">Please select a project</div>;
 
   const activeFilterCount = filterSubjects.size + filterLevels.size + filterPrevStatuses.size;
 
@@ -396,7 +401,7 @@ export default function ThroughputPage() {
             <X className="size-3.5"/>
           </button>
           <MemberFilterPicker
-            fieldId={currentField.id}
+            fieldId={scopeFieldId!}
             value={localFilter}
             onChange={setLocalFilter}
             trailing={

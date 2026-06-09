@@ -1,7 +1,8 @@
 "use client";
 import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { useField } from "@/hooks/use-field";
+import { useMasterField } from "@/hooks/use-master-field";
+import { MasterFieldPicker } from "@/components/master-field-picker";
 import { useCreateThroughputScope } from "@/hooks/queries/use-throughput-scopes";
 import { MemberFilterPicker } from "@/components/member-filter-picker";
 import { Input } from "@/components/ui/input";
@@ -10,20 +11,20 @@ import { Label } from "@/components/ui/label";
 import type { MemberFilterInput } from "@/lib/schemas/member-filter";
 
 export default function ThroughputScopeNewPage() {
-  const { currentField } = useField();
+  const { field } = useMasterField();
   const navigate = useNavigate();
-  const create = useCreateThroughputScope(currentField?.id);
+  const create = useCreateThroughputScope(field?.id);
 
   const [name, setName] = useState("");
   const [filter, setFilter] = useState<MemberFilterInput>({});
 
-  if (!currentField) return <div className="p-6 text-muted-foreground">Please select a project</div>;
+  if (!field) return <div className="p-6 text-muted-foreground">Select a field</div>;
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!name.trim()) return;
     const res = await create.mutateAsync({
-      field_id: currentField!.id,
+      field_id: field!.id,
       name: name.trim(),
       filter,
     });
@@ -35,13 +36,18 @@ export default function ThroughputScopeNewPage() {
       <h1 className="text-2xl font-semibold">Create new throughput</h1>
 
       <div className="space-y-2">
+        <Label>Field</Label>
+        <MasterFieldPicker />
+      </div>
+
+      <div className="space-y-2">
         <Label>Name</Label>
         <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Bookkeeping throughput" required />
       </div>
 
       <div className="space-y-2">
         <Label>Member filter (empty category = all)</Label>
-        <MemberFilterPicker fieldId={currentField.id} value={filter} onChange={setFilter} />
+        <MemberFilterPicker fieldId={field.id} value={filter} onChange={setFilter} />
       </div>
 
       <div className="flex gap-2">

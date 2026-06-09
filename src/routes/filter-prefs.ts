@@ -8,7 +8,6 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { filterPref } from "@/lib/db/schema";
 import { and, eq, sql } from "drizzle-orm";
-import { fieldIdQuerySchema } from "@/lib/schemas/common";
 import { ownsField } from "@/lib/ownership";
 import type { AuthResult } from "@/lib/auth";
 
@@ -19,8 +18,12 @@ const upsertSchema = z.object({
   filters: z.record(z.string(), z.unknown()),
 });
 
+const localFieldIdQuerySchema = z.object({
+  field_id: z.string().uuid(),
+});
+
 const app = new Hono<Env>()
-  .get("/", zValidator("query", fieldIdQuerySchema), async (c) => {
+  .get("/", zValidator("query", localFieldIdQuerySchema), async (c) => {
     const userId = c.get("authResult").userId;
     const { field_id: fieldId } = c.req.valid("query");
     if (!(await ownsField(fieldId, userId))) return c.json({ error: "Not found" }, 404);

@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { problem, answer, answerStatus, subject, level, scope } from "@/lib/db/schema";
+import { problem, answer, answerStatus, subject, level, scope, field } from "@/lib/db/schema";
 import { and, desc, eq, inArray, isNull, lte, sql } from "drizzle-orm";
 import { computeNextReview, computeDaysOverdue } from "@/lib/review-scoring";
 import { toJSTDateString } from "@/lib/date-utils";
@@ -20,14 +20,15 @@ const app = new Hono<Env>()
    * クライアント側は受け取ったまま表示するだけでよい。
    */
   .get("/", zValidator("query", z.object({
-    field_id: z.string().uuid(),
+    field_id: z.string().uuid().optional(),
     as_of: z.string().optional(),
     /** Phase 2: 指定すると scope.status_stabilities で status 別 stability を override */
     scope_id: z.string().uuid().optional(),
   })), async (c) => {
     const userId = c.get("authResult").userId;
     const { field_id: fieldId, as_of: asOfStr, scope_id: scopeId } = c.req.valid("query");
-    if (!(await ownsField(fieldId, userId))) return c.json({ data: [], next_cursor: null });
+    if (!userId) return c.json({ data: [], next_cursor: null });
+    if (fieldId && !(await ownsField(fieldId, userId))) return c.json({ data: [], next_cursor: null });
 
     // scope_id 指定時: status_stabilities override map を引く (空ならグローバル fallback)
     let statusStabilityOverride: Record<string, number> = {};
@@ -44,9 +45,18 @@ const app = new Hono<Env>()
       if (scopeRow) statusStabilityOverride = scopeRow.statusStabilities ?? {};
     }
 
-    const problems = await db.select().from(problem)
-      .where(eq(problem.fieldId, fieldId))
-      .orderBy(problem.createdAt);
+    const problems = fieldId
+      ? await db.select().from(problem)
+          .where(eq(problem.fieldId, fieldId))
+          .orderBy(problem.createdAt)
+      : await db.select({
+          id: problem.id, code: problem.code, name: problem.name, checkpoint: problem.checkpoint,
+          standardTime: problem.standardTime, fieldId: problem.fieldId, subjectId: problem.subjectId,
+          levelId: problem.levelId, createdAt: problem.createdAt, updatedAt: problem.updatedAt,
+        }).from(problem)
+          .innerJoin(field, eq(problem.fieldId, field.id))
+          .where(eq(field.userId, userId))
+          .orderBy(problem.createdAt);
 
     const problemIds = problems.map((p) => p.id);
 
@@ -66,8 +76,14 @@ const app = new Hono<Env>()
               .where(answerWhere)
               .orderBy(answer.date, answer.createdAt),
             db.select().from(answerStatus).orderBy(answerStatus.sortOrder),
-            db.select().from(subject).where(eq(subject.fieldId, fieldId)),
-            db.select().from(level).where(eq(level.fieldId, fieldId)),
+            fieldId
+              ? db.select().from(subject).where(eq(subject.fieldId, fieldId))
+              : db.select({ id: subject.id, code: subject.code, name: subject.name, color: subject.color, sortOrder: subject.sortOrder, fieldId: subject.fieldId, createdAt: subject.createdAt, updatedAt: subject.updatedAt })
+                  .from(subject).innerJoin(field, eq(subject.fieldId, field.id)).where(eq(field.userId, userId)),
+            fieldId
+              ? db.select().from(level).where(eq(level.fieldId, fieldId))
+              : db.select({ id: level.id, code: level.code, name: level.name, color: level.color, sortOrder: level.sortOrder, fieldId: level.fieldId, createdAt: level.createdAt, updatedAt: level.updatedAt })
+                  .from(level).innerJoin(field, eq(level.fieldId, field.id)).where(eq(field.userId, userId)),
           ]);
 
     const statusMap = new Map(statuses.map((s) => [s.id, s]));

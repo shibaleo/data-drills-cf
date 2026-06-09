@@ -11,18 +11,17 @@ export type ReviewScopeMember = ReviewScopeDetail["members"][number];
 
 export const reviewScopeKeys = {
   all: ["review-scopes"] as const,
-  list: (fieldId: string) => [...reviewScopeKeys.all, "list", fieldId] as const,
+  list: (fieldId: string | null) => [...reviewScopeKeys.all, "list", fieldId] as const,
   detail: (id: string) => [...reviewScopeKeys.all, "detail", id] as const,
 };
 
-export function useReviewScopesList(fieldId: string | undefined) {
+export function useReviewScopesList(fieldId?: string | undefined) {
   return useQuery({
-    queryKey: fieldId ? reviewScopeKeys.list(fieldId) : reviewScopeKeys.all,
+    queryKey: reviewScopeKeys.list(fieldId ?? null),
     queryFn: async () => {
-      const json = await unwrap(rpc.api.v1["review-scopes"].$get({ query: { field_id: fieldId! } }));
+      const json = await unwrap(rpc.api.v1["review-scopes"].$get({ query: fieldId ? { field_id: fieldId } : {} }));
       return json.data;
     },
-    enabled: !!fieldId,
   });
 }
 

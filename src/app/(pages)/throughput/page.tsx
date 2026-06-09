@@ -6,7 +6,6 @@
 
 import { useEffect } from "react";
 import { Link, useSearch, useNavigate } from "@tanstack/react-router";
-import { useField } from "@/hooks/use-field";
 import { useThroughputScopesList } from "@/hooks/queries/use-throughput-scopes";
 import { usePageTitle } from "@/lib/page-context";
 
@@ -14,13 +13,12 @@ const LAST_SCOPE_LS_KEY = "dd_last_scope_id";
 
 export default function ThroughputEntryPage() {
   usePageTitle("Throughput");
-  const { currentField } = useField();
   const search = useSearch({ strict: false }) as { scope_id?: string };
   const navigate = useNavigate();
-  const { data: throughputScopes = [], isLoading } = useThroughputScopesList(currentField?.id);
+  const { data: throughputScopes = [], isLoading } = useThroughputScopesList();
 
   useEffect(() => {
-    if (isLoading || !currentField) return;
+    if (isLoading) return;
     const queryScopeId = search.scope_id
       ?? (typeof window !== "undefined" ? localStorage.getItem(LAST_SCOPE_LS_KEY) : null);
     if (!queryScopeId) return;
@@ -31,9 +29,7 @@ export default function ThroughputEntryPage() {
       }
       navigate({ to: "/throughput/$scope_id" as string, params: { scope_id: match.id }, replace: true });
     }
-  }, [search.scope_id, throughputScopes, isLoading, currentField, navigate]);
-
-  if (!currentField) return <div className="p-6 text-muted-foreground">Please select a project</div>;
+  }, [search.scope_id, throughputScopes, isLoading, navigate]);
 
   return (
     <div className="p-3 md:p-4 flex flex-col gap-2">

@@ -19,9 +19,7 @@ import {
   Tag,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useField } from "@/hooks/use-field";
 import { useReviewList } from "@/hooks/queries/use-review";
-import { useFilterPrefs } from "@/hooks/queries/use-filter-prefs";
 import { useScopeTodayCount } from "@/hooks/queries/use-scopes";
 import { useQueryClient } from "@tanstack/react-query";
 import { reviewKeys } from "@/hooks/queries/use-review";
@@ -41,31 +39,17 @@ interface NavItem {
 /* ── Overdue badge ── */
 
 function OverdueBadge() {
-  const { currentField } = useField();
   const qc = useQueryClient();
-  const { data = [] } = useReviewList(currentField?.id);
-  const { data: prefs } = useFilterPrefs(currentField?.id);
-  const rev = prefs?.review ?? {};
-  const subjSet = new Set(rev.subjectIds ?? []);
-  const lvlSet = new Set(rev.levelIds ?? []);
-  const stSet = new Set(rev.lastStatuses ?? []);
-  const count = data.filter((r) => {
-    if (r.answerCount === 0 || r.daysUntil !== 0) return false;
-    if (subjSet.size > 0 && (!r.subjectId || !subjSet.has(r.subjectId))) return false;
-    if (lvlSet.size > 0 && (!r.levelId || !lvlSet.has(r.levelId))) return false;
-    if (stSet.size > 0 && !stSet.has(r.lastStatus)) return false;
-    return true;
-  }).length;
+  const { data = [] } = useReviewList();
+  const count = data.filter((r) => r.answerCount > 0 && r.daysUntil === 0).length;
 
   useEffect(() => {
     const invalidate = () => {
-      if (currentField) {
-        qc.invalidateQueries({ queryKey: reviewKeys.list(currentField.id) });
-      }
+      qc.invalidateQueries({ queryKey: reviewKeys.all });
     };
     window.addEventListener("review-changed", invalidate);
     return () => window.removeEventListener("review-changed", invalidate);
-  }, [qc, currentField]);
+  }, [qc]);
 
   if (count <= 0) return null;
   return (

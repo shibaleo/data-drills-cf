@@ -1,7 +1,6 @@
 "use client";
 import { useMemo } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { useField } from "@/hooks/use-field";
 import { useScopes } from "@/hooks/queries/use-scopes";
 import { useProblemsList } from "@/hooks/queries/use-problems";
 import { usePageTitle } from "@/lib/page-context";
@@ -9,10 +8,9 @@ import { Plus } from "lucide-react";
 
 export default function ScopesPage() {
   usePageTitle("Scopes");
-  const { currentField } = useField();
   const navigate = useNavigate();
   const { data: scopes = [], isLoading } = useScopes();
-  const { data: allProblems = [] } = useProblemsList(currentField?.id);
+  const { data: allProblems = [] } = useProblemsList();
 
   // 各 scope の filter で members を絞り、進捗 (done / total) を出す。
   // 中間 map 作成を避け、1パス per scope で直接判定 (allocation 不要)
@@ -37,8 +35,6 @@ export default function ScopesPage() {
     }
     return m;
   }, [scopes, allProblems]);
-
-  if (!currentField) return <div className="p-6 text-muted-foreground">Please select a project</div>;
 
   return (
     <div className="p-3 md:p-4 flex flex-col gap-2">

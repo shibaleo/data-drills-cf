@@ -16,6 +16,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ApiError } from "@/lib/api-client";
 import { useField } from "@/hooks/use-field";
+import { useMasterField } from "@/hooks/use-master-field";
+import { MasterFieldPicker } from "@/components/master-field-picker";
 import {
   useFlashcardsData,
   useCreateFlashcard,
@@ -86,11 +88,13 @@ function cardRetention(reviews: FlashcardReviewRow[], now: Date) {
 
 export default function FlashcardsPage() {
   usePageTitle("Flashcards");
-  const { currentField, statuses } = useField();
-  const { cards: rawCards, reviews, topics, isLoading } = useFlashcardsData(currentField?.id);
-  const createCard = useCreateFlashcard(currentField?.id);
-  const updateCard = useUpdateFlashcard(currentField?.id);
-  const deleteCard = useDeleteFlashcard(currentField?.id);
+  const { statuses } = useField();
+  const { field } = useMasterField();
+  const fieldId = field?.id;
+  const { cards: rawCards, reviews, topics, isLoading } = useFlashcardsData(fieldId);
+  const createCard = useCreateFlashcard(fieldId);
+  const updateCard = useUpdateFlashcard(fieldId);
+  const deleteCard = useDeleteFlashcard(fieldId);
   const rateCard = useRateFlashcard();
   const isSaving = createCard.isPending || updateCard.isPending;
 
@@ -161,7 +165,7 @@ export default function FlashcardsPage() {
       updateCard.mutate({ id: editItem.id, payload: base }, onDone);
     } else {
       createCard.mutate(
-        { ...base, field_id: currentField!.id, code: randomCode() },
+        { ...base, field_id: field!.id, code: randomCode() },
         onDone,
       );
     }
@@ -196,10 +200,11 @@ export default function FlashcardsPage() {
     });
   };
 
-  if (!currentField) {
+  if (!field) {
     return (
-      <div className="p-4 md:p-6">
-        <div className="text-center py-12 text-muted-foreground">Please select a project</div>
+      <div className="p-4 md:p-6 space-y-3">
+        <MasterFieldPicker />
+        <div className="text-center py-12 text-muted-foreground">Select a field</div>
       </div>
     );
   }
@@ -208,6 +213,7 @@ export default function FlashcardsPage() {
 
   return (
     <div className="p-4 md:p-6">
+      <div className="mb-3"><MasterFieldPicker /></div>
       {isLoading ? (
         <div className="text-center py-12 text-muted-foreground">読み込み中...</div>
       ) : (

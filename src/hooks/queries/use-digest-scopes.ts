@@ -10,18 +10,17 @@ export type DigestScopeDetail = RpcData<typeof rpc.api.v1["digest-scopes"][":id"
 
 export const digestScopeKeys = {
   all: ["digest-scopes"] as const,
-  list: (fieldId: string) => [...digestScopeKeys.all, "list", fieldId] as const,
+  list: (fieldId: string | null) => [...digestScopeKeys.all, "list", fieldId] as const,
   detail: (id: string) => [...digestScopeKeys.all, "detail", id] as const,
 };
 
-export function useDigestScopesList(fieldId: string | undefined) {
+export function useDigestScopesList(fieldId?: string | undefined) {
   return useQuery({
-    queryKey: fieldId ? digestScopeKeys.list(fieldId) : digestScopeKeys.all,
+    queryKey: digestScopeKeys.list(fieldId ?? null),
     queryFn: async () => {
-      const json = await unwrap(rpc.api.v1["digest-scopes"].$get({ query: { field_id: fieldId! } }));
+      const json = await unwrap(rpc.api.v1["digest-scopes"].$get({ query: fieldId ? { field_id: fieldId } : {} }));
       return json.data;
     },
-    enabled: !!fieldId,
   });
 }
 

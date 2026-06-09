@@ -1,7 +1,8 @@
 "use client";
 import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { useField } from "@/hooks/use-field";
+import { useMasterField } from "@/hooks/use-master-field";
+import { MasterFieldPicker } from "@/components/master-field-picker";
 import { useCreateScope } from "@/hooks/queries/use-scopes";
 import { MemberFilterPicker } from "@/components/member-filter-picker";
 import { Input } from "@/components/ui/input";
@@ -10,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import type { MemberFilterInput } from "@/lib/schemas/member-filter";
 
 export default function ScopeNewPage() {
-  const { currentField } = useField();
+  const { field } = useMasterField();
   const navigate = useNavigate();
   const create = useCreateScope();
 
@@ -19,7 +20,7 @@ export default function ScopeNewPage() {
   const [timeMultiplier, setTimeMultiplier] = useState(1.0);
   const [filter, setFilter] = useState<MemberFilterInput>({});
 
-  if (!currentField) return <div className="p-6 text-muted-foreground">Please select a field</div>;
+  if (!field) return <div className="p-6 text-muted-foreground">Select a field</div>;
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -40,6 +41,11 @@ export default function ScopeNewPage() {
       <h1 className="text-2xl font-semibold">Create new scope</h1>
 
       <div className="space-y-2">
+        <Label>Field</Label>
+        <MasterFieldPicker />
+      </div>
+
+      <div className="space-y-2">
         <Label>Name</Label>
         <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Bookkeeping past 5 years" required />
       </div>
@@ -57,7 +63,7 @@ export default function ScopeNewPage() {
 
       <div className="space-y-2">
         <Label>Member filter (empty category = all)</Label>
-        <MemberFilterPicker fieldId={currentField.id} value={filter} onChange={setFilter} />
+        <MemberFilterPicker fieldId={field.id} value={filter} onChange={setFilter} />
       </div>
 
       <div className="text-xs text-muted-foreground italic">

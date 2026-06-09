@@ -6,7 +6,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { zValidator } from "@hono/zod-validator";
 import { db } from "@/lib/db";
-import { digestScope, problem } from "@/lib/db/schema";
+import { digestScope, problem, field as fieldTbl } from "@/lib/db/schema";
 import { and, asc, desc, eq, gt, isNull, lte, or } from "drizzle-orm";
 import { digestScopeCreateInputSchema, digestScopeUpdateInputSchema } from "@/lib/schemas/digest-scope";
 import { fieldIdQuerySchema } from "@/lib/schemas/common";
@@ -65,10 +65,16 @@ const app = new Hono<Env>()
   .get("/", zValidator("query", fieldIdQuerySchema), async (c) => {
     const userId = c.get("authResult").userId;
     const { field_id: fieldId } = c.req.valid("query");
-    if (!(await ownsField(fieldId, userId))) return c.json({ data: [] });
-    const rows = await db.select().from(digestScope)
-      .where(and(eq(digestScope.fieldId, fieldId), isNull(digestScope.validTo), eq(digestScope.isActive, true)))
-      .orderBy(desc(digestScope.createdAt));
+    if (!userId) return c.json({ data: [] });
+    if (fieldId && !(await ownsField(fieldId, userId))) return c.json({ data: [] });
+    const rows = fieldId
+      ? await db.select().from(digestScope)
+          .where(and(eq(digestScope.fieldId, fieldId), isNull(digestScope.validTo), eq(digestScope.isActive, true)))
+          .orderBy(desc(digestScope.createdAt))
+      : (await db.select({ r: digestScope }).from(digestScope)
+          .innerJoin(fieldTbl, eq(digestScope.fieldId, fieldTbl.id))
+          .where(and(eq(fieldTbl.userId, userId), isNull(digestScope.validTo), eq(digestScope.isActive, true)))
+          .orderBy(desc(digestScope.createdAt))).map((row) => row.r);
     return c.json({ data: rows.map(scopeToApi) });
   })
   .post("/", zValidator("json", digestScopeCreateInputSchema), async (c) => {

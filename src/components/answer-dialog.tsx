@@ -8,6 +8,7 @@ import { StatusTag } from '@/components/color-tags'
 import { Markdown } from '@/components/markdown'
 import { CodeCombobox } from '@/components/code-combobox'
 import { useField } from '@/hooks/use-field'
+import type { LookupItem } from '@/hooks/queries/use-field-data'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { MarkdownEditor } from '@/components/markdown-editor'
@@ -25,6 +26,9 @@ interface AnswerDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   title: string
+  fieldId: string | null
+  subjects: LookupItem[]
+  levels: LookupItem[]
   form: UseFormReturn<AnswerFormData>
   reviewsField: UseFieldArrayReturn<AnswerFormData, 'reviews', '_key'>
   codeSuggestions?: string[]
@@ -38,6 +42,9 @@ export function AnswerDialog({
   open,
   onOpenChange,
   title,
+  fieldId,
+  subjects,
+  levels,
   form,
   reviewsField,
   codeSuggestions = [],
@@ -46,7 +53,7 @@ export function AnswerDialog({
   saveLabel,
   onSave,
 }: AnswerDialogProps) {
-  const { currentField, subjects, levels, statuses } = useField()
+  const { statuses } = useField()
   const [saving, setSaving] = useState(false)
 
   const code = form.watch('code')
@@ -61,7 +68,7 @@ export function AnswerDialog({
     }
   }
 
-  if (!currentField) return null
+  if (!fieldId) return null
 
   const cpName = nameMap[code]
   const cpText = checkpointMap[code]

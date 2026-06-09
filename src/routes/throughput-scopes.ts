@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { zValidator } from "@hono/zod-validator";
 import { db } from "@/lib/db";
-import { throughputScope, problem } from "@/lib/db/schema";
+import { throughputScope, problem, field as fieldTbl } from "@/lib/db/schema";
 import { and, asc, desc, eq, gt, isNull, lte, or } from "drizzle-orm";
 import { throughputScopeCreateInputSchema, throughputScopeUpdateInputSchema } from "@/lib/schemas/throughput-scope";
 import { fieldIdQuerySchema } from "@/lib/schemas/common";
@@ -61,10 +61,16 @@ const app = new Hono<Env>()
   .get("/", zValidator("query", fieldIdQuerySchema), async (c) => {
     const userId = c.get("authResult").userId;
     const { field_id: fieldId } = c.req.valid("query");
-    if (!(await ownsField(fieldId, userId))) return c.json({ data: [] });
-    const rows = await db.select().from(throughputScope)
-      .where(and(eq(throughputScope.fieldId, fieldId), isNull(throughputScope.validTo), eq(throughputScope.isActive, true)))
-      .orderBy(desc(throughputScope.createdAt));
+    if (!userId) return c.json({ data: [] });
+    if (fieldId && !(await ownsField(fieldId, userId))) return c.json({ data: [] });
+    const rows = fieldId
+      ? await db.select().from(throughputScope)
+          .where(and(eq(throughputScope.fieldId, fieldId), isNull(throughputScope.validTo), eq(throughputScope.isActive, true)))
+          .orderBy(desc(throughputScope.createdAt))
+      : (await db.select({ r: throughputScope }).from(throughputScope)
+          .innerJoin(fieldTbl, eq(throughputScope.fieldId, fieldTbl.id))
+          .where(and(eq(fieldTbl.userId, userId), isNull(throughputScope.validTo), eq(throughputScope.isActive, true)))
+          .orderBy(desc(throughputScope.createdAt))).map((row) => row.r);
     return c.json({ data: rows.map(scopeToApi) });
   })
   .post("/", zValidator("json", throughputScopeCreateInputSchema), async (c) => {
