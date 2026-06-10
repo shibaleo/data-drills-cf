@@ -230,21 +230,28 @@ export const BacklogChart = forwardRef<BacklogChartHandle, BacklogChartProps>(fu
       list.push({ kind: "overlay", ov });
       map.set(ov.date, list);
     }
-    const rank = (it: StackItem, isPast: boolean): number => {
-      if (isPast) {
+    // item 内在の actual/planned 判別 (column 位置に依存しない):
+    //   - alloc.side === "past" → 実績
+    //   - past throughput overlay は stabilityDays を持たない → 実績
+    //   - alloc.side === "future" → 予定
+    //   - smooth-future overlay は stabilityDays を持つ → 予定
+    const itemIsActual = (it: StackItem): boolean =>
+      it.kind === "alloc"
+        ? it.alloc.side === "past"
+        : it.ov.stabilityDays === undefined;
+    const rank = (it: StackItem): number => {
+      if (itemIsActual(it)) {
         const name = it.kind === "alloc" ? null : it.ov.statusName;
         return actualStatusOrder(name);                                 // 0..5
       }
-      // 未解消: stability 昇順
-      if (it.kind === "alloc") return 100;                              // 未着手 (First) = 下端
+      if (it.kind === "alloc") return 100;                              // 未着手 (First) = 予定下端
       return 100 + (it.ov.stabilityDays ?? 9999);
     };
-    for (const [date, list] of map) {
-      const isPast = date < today;
-      list.sort((a, b) => rank(a, isPast) - rank(b, isPast));
+    for (const list of map.values()) {
+      list.sort((a, b) => rank(a) - rank(b));
     }
     return map;
-  }, [items, overlayItems, today]);
+  }, [items, overlayItems]);
 
   const { dates, todayIdx } = useMemo(() => {
     const allDates = [
