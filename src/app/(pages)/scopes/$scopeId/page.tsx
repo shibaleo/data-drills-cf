@@ -218,6 +218,7 @@ export default function ScopeDetailPage() {
     if (allProblems.length === 0) return data.members;
     const filtered = applyMemberFilter(
       allProblems.map((p) => ({
+        fieldId: p.field_id ?? null,
         subjectId: p.subject_id || null,
         levelId: p.level_id || null,
         _orig: p,
@@ -234,6 +235,7 @@ export default function ScopeDetailPage() {
           code: p.code,
           name: p.name || null,
           standard_time: p.standard_time,
+          field_id: p.field_id ?? "",
           subject_id: p.subject_id || null,
           level_id: p.level_id || null,
           topic_id: p.topic_id,

@@ -13,8 +13,8 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { db } from "@/lib/db";
-import { scope, problem, field, goalLayer, goalMilestone } from "@/lib/db/schema";
-import { and, asc, desc, eq, isNull, sql } from "drizzle-orm";
+import { scope, problem, field, subject, level, goalLayer, goalMilestone } from "@/lib/db/schema";
+import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { scopeCreateInputSchema, scopeUpdateInputSchema, scopeBatchInputSchema } from "@/lib/schemas/scope";
 import { applyMemberFilter } from "@/lib/member-filter";
@@ -172,6 +172,16 @@ const app = new Hono<Env>()
           `)).map((r) => [r.problem_id, r.min_date.slice(0, 10)]),
         );
 
+    // subjects / levels — filter で member 化された問題が属する field 全体分を同梱
+    // (cross-field scope の detail page で名前/色解決に使う)
+    const memberFieldIds = Array.from(new Set(members.map((m) => m.fieldId).filter((id): id is string => !!id)));
+    const [subjects, levels] = memberFieldIds.length === 0
+      ? [[], []] as const
+      : await Promise.all([
+          db.select().from(subject).where(inArray(subject.fieldId, memberFieldIds)).orderBy(asc(subject.sortOrder)),
+          db.select().from(level).where(inArray(level.fieldId, memberFieldIds)).orderBy(asc(level.sortOrder)),
+        ]);
+
     // goal_layer / goal_milestone は scope_id 経由
     const layers = await db.select().from(goalLayer)
       .where(and(eq(goalLayer.scopeId, scopeId), isNull(goalLayer.validTo), eq(goalLayer.isActive, true)))
@@ -187,10 +197,19 @@ const app = new Hono<Env>()
           code: m.code,
           name: m.name,
           standard_time: m.standardTime,
+          field_id: m.fieldId,
           subject_id: m.subjectId,
           level_id: m.levelId,
           topic_id: null as string | null,
           first_answer_date: firstAnswers.get(m.id) ?? null,
+        })),
+        subjects: subjects.map((s) => ({
+          id: s.id, code: s.code, name: s.name, color: s.color,
+          sort_order: s.sortOrder, field_id: s.fieldId,
+        })),
+        levels: levels.map((l) => ({
+          id: l.id, code: l.code, name: l.name, color: l.color,
+          sort_order: l.sortOrder, field_id: l.fieldId,
         })),
         layers: layers.map((l) => ({
           id: l.id,
