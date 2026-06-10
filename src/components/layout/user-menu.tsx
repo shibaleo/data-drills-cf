@@ -25,15 +25,16 @@ function Avatar({ name, className }: { name: string; className?: string }) {
  * /scopes と同じ edge nav 流儀。avatar をハブにして hover で上半円に 2 sector
  * (Settings, Logout) を扇状展開する。geometry は scopes の縮小版。
  */
-// 右上 1/4 (=90°) を 2 sector で割る。各 sector は 45° (= 1/8 円)。
+// 右上方向 60° の fan を 2 sector で割る (各 30°)。flat-fan 寄りで縦方向を抑え、
+// scaleY のような distortion を入れず自然な circular geometry を保つ。
 const SECTORS = [
-  { startDeg: -90, endDeg: -45, label: "Settings", icon: Settings, color: "#846ce5", action: "settings" as const },
-  { startDeg: -45, endDeg: 0,   label: "Logout",   icon: LogOut,   color: "#da5865", action: "logout"   as const },
+  { startDeg: -60, endDeg: -30, label: "Settings", icon: Settings, color: "#846ce5", action: "settings" as const },
+  { startDeg: -30, endDeg: 0,   label: "Logout",   icon: LogOut,   color: "#da5865", action: "logout"   as const },
 ];
 
-const INNER_R = 70;
-const OUTER_R = 160;
-const GAP_DEG = 4;
+const INNER_R = 80;
+const OUTER_R = 180;
+const GAP_DEG = 3;
 
 function annularSector(
   cx: number,
@@ -98,14 +99,15 @@ export function UserMenu({ collapsed = false }: { collapsed?: boolean }) {
     else handleLogout();
   }
 
-  // SVG canvas: avatar を bottom-left、右上 1/4 (NE quadrant) に sector を展開。
-  // 表示時は CSS scaleY(0.5) で半分の高さに圧縮 (扇形ではなく扁平な fan)。
+  // SVG canvas: avatar を bottom-left、右上方向の fan に sector を展開。
+  // 縦方向の最大到達点は OUTER_R * sin(60°) ≈ 0.87 * OUTER_R。
   const PAD = 8;
   const W = OUTER_R + PAD;
-  const H = OUTER_R + PAD;
+  // angle が -60° までなので縦の bbox は 0.87 * OUTER_R で済む。tighter canvas で
+  // 描画。proper aspect ratio を維持して distortion を回避。
+  const H = Math.ceil(OUTER_R * Math.sin((60 * Math.PI) / 180)) + PAD;
   const cx = 0;
   const cy = H;
-  const renderedH = H / 2; // scaleY 後の見かけ高さ
 
   return (
     <>
@@ -123,14 +125,13 @@ export function UserMenu({ collapsed = false }: { collapsed?: boolean }) {
             bottom: `calc(0.75rem + 16px)`,
             opacity: open ? 1 : 0,
             width: W,
-            height: renderedH,
+            height: H,
           }}
         >
           <svg
             width={W}
-            height={renderedH}
+            height={H}
             viewBox={`0 0 ${W} ${H}`}
-            preserveAspectRatio="none"
             className="pointer-events-auto overflow-visible"
             style={{ display: open ? "block" : "none" }}
           >
