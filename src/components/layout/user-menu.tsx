@@ -25,13 +25,14 @@ function Avatar({ name, className }: { name: string; className?: string }) {
  * /scopes と同じ edge nav 流儀。avatar をハブにして hover で上半円に 2 sector
  * (Settings, Logout) を扇状展開する。geometry は scopes の縮小版。
  */
+// 右上 1/4 (=90°) を 2 sector で割る。各 sector は 45° (= 1/8 円)。
 const SECTORS = [
-  { startDeg: -170, endDeg: -95, label: "Settings", icon: Settings, color: "#846ce5", action: "settings" as const },
-  { startDeg: -85, endDeg: -10, label: "Logout", icon: LogOut, color: "#da5865", action: "logout" as const },
+  { startDeg: -90, endDeg: -45, label: "Settings", icon: Settings, color: "#846ce5", action: "settings" as const },
+  { startDeg: -45, endDeg: 0,   label: "Logout",   icon: LogOut,   color: "#da5865", action: "logout"   as const },
 ];
 
-const INNER_R = 28;
-const OUTER_R = 56;
+const INNER_R = 70;
+const OUTER_R = 160;
 const GAP_DEG = 4;
 
 function annularSector(
@@ -97,11 +98,12 @@ export function UserMenu({ collapsed = false }: { collapsed?: boolean }) {
     else handleLogout();
   }
 
-  // SVG canvas: avatar 位置 (cx, cy) を bottom-center に置いて上半円に sector を展開。
-  const W = 2 * OUTER_R + 16; // 余白込み
-  const H = OUTER_R + 8;
-  const cx = W / 2;
-  const cy = H; // avatar の中心位置 (svg 下端)
+  // SVG canvas: avatar を bottom-left に置いて右上 1/4 (NE quadrant) に sector を展開。
+  const PAD = 8;
+  const W = OUTER_R + PAD;
+  const H = OUTER_R + PAD;
+  const cx = 0;       // avatar の x = svg 左端
+  const cy = H;       // avatar の y = svg 下端
 
   return (
     <>
@@ -110,12 +112,15 @@ export function UserMenu({ collapsed = false }: { collapsed?: boolean }) {
         onMouseEnter={() => setOpen(true)}
         onMouseLeave={() => { setOpen(false); setHoveredSec(null); }}
       >
-        {/* Floating wheel (avatar 上に展開) */}
+        {/* Floating wheel: avatar の bottom-left を起点に右上 1/4 へ展開 */}
         <div
           aria-hidden={!open}
-          className="pointer-events-none absolute left-1/2 -translate-x-1/2 transition-opacity duration-200"
+          className="pointer-events-none absolute transition-opacity duration-200"
           style={{
-            bottom: `calc(100% - 24px)`,
+            // avatar center が svg の bottom-left になるよう absolute 配置
+            // (avatar size-8 = 32px、px-3 py-3 を考慮した位置補正)
+            left: `calc(0.75rem + 16px)`,
+            bottom: `calc(0.75rem + 16px)`,
             opacity: open ? 1 : 0,
             width: W,
             height: H,
@@ -132,8 +137,8 @@ export function UserMenu({ collapsed = false }: { collapsed?: boolean }) {
               const adjStart = sec.startDeg + GAP_DEG / 2;
               const adjEnd = sec.endDeg - GAP_DEG / 2;
               const isHover = hoveredSec === sec.action;
-              const outerR = OUTER_R + (isHover ? 4 : 0);
-              const path = annularSector(cx, cy, INNER_R, outerR, adjStart, adjEnd, 4);
+              const outerR = OUTER_R + (isHover ? 8 : 0);
+              const path = annularSector(cx, cy, INNER_R, outerR, adjStart, adjEnd, 6);
               const textR = (INNER_R + outerR) / 2;
               const aStart = (adjStart * Math.PI) / 180;
               const aEnd = (adjEnd * Math.PI) / 180;
@@ -167,10 +172,10 @@ export function UserMenu({ collapsed = false }: { collapsed?: boolean }) {
                   />
                   <path id={arcId} d={textArc} fill="none" stroke="none" />
                   <text
-                    fontSize={11}
+                    fontSize={16}
                     fontWeight={900}
                     fill={isHover ? sec.color : "white"}
-                    letterSpacing={0.4}
+                    letterSpacing={0.6}
                     dominantBaseline="central"
                     style={{ transition: "fill 140ms ease-out" }}
                     className="pointer-events-none select-none"
