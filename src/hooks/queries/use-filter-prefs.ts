@@ -41,10 +41,12 @@ export type PlanPrefs = {
   hiddenLayerIds?: string[];
   /** Tetris 最大段数 (null = full/auto)。 */
   chartMaxRows?: number | null;
-  /** 過去実績 (throughput + past First) 表示の隠し ON/OFF。 */
+  /** 過去 throughput overlay + alloc.past を隠す。 */
   hideThroughput?: boolean;
-  /** 未解消 (planned future) 表示の隠し ON/OFF。 */
-  hidePlanned?: boolean;
+  /** Review-next overlay (1 entry/problem) を隠す。 */
+  hideReview?: boolean;
+  /** Smooth-future overlay + alloc.future を隠す。 */
+  hideForecast?: boolean;
 };
 export type FilterPrefsBag = {
   review?: ReviewPrefs;

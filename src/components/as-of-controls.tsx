@@ -5,7 +5,7 @@
  * asOf=null は "now" を意味する。Play 押下時は earliest (= latest-30d 既定) から再生開始。
  */
 import { useEffect, useRef, useState } from "react";
-import { Pause, Play, X, History, Repeat, ChevronLeft, ChevronRight } from "lucide-react";
+import { Pause, Play, X, Repeat, ChevronLeft, ChevronRight } from "lucide-react";
 import { Input } from "@/components/ui/input";
 
 type Props = {
@@ -65,8 +65,6 @@ export function AsOfControls({ asOf, setAsOf, earliest, latest, onClose }: Props
 
   return (
     <div className="flex items-center gap-2 text-xs w-full">
-      <History className="size-3.5 text-muted-foreground"/>
-      <span className="text-muted-foreground">As of</span>
       <Input type="date" value={asOf ?? ""} min={start} max={latest}
         placeholder="now"
         onChange={(e) => { setPlaying(false); setAsOf(e.target.value || null); }}
@@ -123,9 +121,6 @@ export function AsOfControls({ asOf, setAsOf, earliest, latest, onClose }: Props
           </button>
         ))}
       </div>
-      <span className="text-[10px] text-muted-foreground">
-        {start} → {latest}
-      </span>
       {asOf && (
         <button type="button" onClick={() => { setPlaying(false); setAsOf(null); }}
           title="Back to now"

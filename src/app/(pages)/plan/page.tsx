@@ -11,6 +11,7 @@ import {
   Download,
   Filter,
   Activity,
+  RotateCw,
   Sparkles,
 } from "lucide-react";
 import {
@@ -192,8 +193,13 @@ export default function PlanPage() {
   const [filterLevels, setFilterLevels] = useState<Set<string>>(new Set());
   const [filterLastStatuses, setFilterLastStatuses] = useState<Set<string>>(new Set());
   // 過去実績 (throughput + past First) を隠す / 未解消エントリ (planned future) を隠す
+  // 表示カテゴリ独立 toggle (default 全表示):
+  // - Throughput = past throughput overlay + alloc.past (First)
+  // - Review     = review-next overlay (= 各 problem の最後 status 由来 1 段目)
+  // - Forecast   = smooth-future overlay + alloc.future (planned First)
   const [hideThroughput, setHideThroughput] = useState(false);
-  const [hidePlanned, setHidePlanned] = useState(false);
+  const [hideReview, setHideReview] = useState(false);
+  const [hideForecast, setHideForecast] = useState(false);
 
   // filter prefs 永続化 (review/scopes と同じ filter_prefs テーブル、key=plan)
   const filterPrefsQuery = useFilterPrefs(fieldId ?? undefined);
@@ -216,7 +222,8 @@ export default function PlanPage() {
       setHiddenLayerIds(new Set(p.hiddenLayerIds ?? []));
       if (p.chartMaxRows !== undefined) setChartMaxRows(p.chartMaxRows);
       setHideThroughput(!!p.hideThroughput);
-      setHidePlanned(!!p.hidePlanned);
+      setHideReview(!!p.hideReview);
+      setHideForecast(!!p.hideForecast);
     }
     prefsLoadedRef.current = fieldId;
   }, [fieldId, filterPrefsQuery.data]);
@@ -232,7 +239,8 @@ export default function PlanPage() {
       h: [...hiddenLayerIds].sort(),
       r: chartMaxRows,
       ht: hideThroughput,
-      hp: hidePlanned,
+      hr: hideReview,
+      hf: hideForecast,
     });
     if (lastSavedPrefsRef.current === null) {
       lastSavedPrefsRef.current = snapshot;
@@ -251,11 +259,12 @@ export default function PlanPage() {
         hiddenLayerIds: [...hiddenLayerIds],
         chartMaxRows,
         hideThroughput,
-        hidePlanned,
+        hideReview,
+        hideForecast,
       },
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filterSubjects, filterLevels, filterLastStatuses, allocKindFilter, allocFlagFilter, hiddenLayerIds, chartMaxRows, hideThroughput, hidePlanned]);
+  }, [filterSubjects, filterLevels, filterLastStatuses, allocKindFilter, allocFlagFilter, hiddenLayerIds, chartMaxRows, hideThroughput, hideReview, hideForecast]);
   const chartRef = useRef<BacklogChartHandle>(null);
   const tableRef = useRef<HTMLDivElement>(null);
 
@@ -366,18 +375,17 @@ export default function PlanPage() {
   const filteredOverlay = useMemo(() => {
     return overlayItems.filter((o) => {
       if (hideThroughput && o.kind === "past-throughput") return false;
-      // hidePlanned: smooth-future (= cascade 予測) と alloc.future を隠す。
-      // review-next (各 problem の最後 status から計算した 1 段目) は残す。
-      if (hidePlanned && o.kind === "smooth-future") return false;
+      if (hideReview && o.kind === "review-next") return false;
+      if (hideForecast && o.kind === "smooth-future") return false;
       if (filterLastStatuses.size > 0 && (!o.statusName || !filterLastStatuses.has(o.statusName))) return false;
       return true;
     });
-  }, [overlayItems, filterLastStatuses, hideThroughput, hidePlanned]);
+  }, [overlayItems, filterLastStatuses, hideThroughput, hideReview, hideForecast]);
 
   const filteredAllocated = useMemo(() => {
     return edit.allocated.filter((a) => {
       if (hideThroughput && a.side === "past") return false;
-      if (hidePlanned && a.side === "future") return false;
+      if (hideForecast && a.side === "future") return false;
       if (allocKindFilter.size > 0) {
         const kind = a.side === "past" ? "First" : "Planned";
         if (!allocKindFilter.has(kind)) return false;
@@ -389,7 +397,7 @@ export default function PlanPage() {
       }
       return true;
     });
-  }, [edit.allocated, allocKindFilter, allocFlagFilter, hideThroughput, hidePlanned]);
+  }, [edit.allocated, allocKindFilter, allocFlagFilter, hideThroughput, hideForecast]);
 
   const memberCount = edit.effectiveMembers.length;
   const doneCount = edit.effectiveMembers.filter((m) => m.first_answer_date).length;
@@ -568,29 +576,25 @@ export default function PlanPage() {
               )}
             </PopoverContent>
           </Popover>
-          {/* Throughput / Planned 表示 toggle。明るい = 表示中、暗い = 非表示中。 */}
-          <button type="button"
-            onClick={() => setHideThroughput((v) => !v)}
-            title={hideThroughput ? "Show throughput (past actuals)" : "Hide throughput (past actuals)"}
-            aria-pressed={!hideThroughput}
-            className={`inline-flex items-center justify-center size-6 rounded-md border transition-colors shrink-0 ${
-              hideThroughput
-                ? "text-muted-foreground/40 hover:text-muted-foreground"
-                : "text-foreground hover:bg-muted"
-            }`}>
-            <Activity className="size-3"/>
-          </button>
-          <button type="button"
-            onClick={() => setHidePlanned((v) => !v)}
-            title={hidePlanned ? "Show planned projections (smooth-future)" : "Hide planned projections (keep next review)"}
-            aria-pressed={!hidePlanned}
-            className={`inline-flex items-center justify-center size-6 rounded-md border transition-colors shrink-0 ${
-              hidePlanned
-                ? "text-muted-foreground/40 hover:text-muted-foreground"
-                : "text-foreground hover:bg-muted"
-            }`}>
-            <Sparkles className="size-3"/>
-          </button>
+          {/* Throughput / Review / Forecast 3 カテゴリ独立 toggle。
+              明るい = 表示中、暗い = 非表示中。 */}
+          {[
+            { hidden: hideThroughput, setH: setHideThroughput, Icon: Activity,  label: "throughput (past actuals)" },
+            { hidden: hideReview,     setH: setHideReview,     Icon: RotateCw,  label: "review (next review per problem)" },
+            { hidden: hideForecast,   setH: setHideForecast,   Icon: Sparkles,  label: "forecast (smooth-future projections)" },
+          ].map(({ hidden, setH, Icon, label }) => (
+            <button key={label} type="button"
+              onClick={() => setH((v) => !v)}
+              title={hidden ? `Show ${label}` : `Hide ${label}`}
+              aria-pressed={!hidden}
+              className={`inline-flex items-center justify-center size-6 rounded-md border transition-colors shrink-0 ${
+                hidden
+                  ? "text-muted-foreground/40 hover:text-muted-foreground"
+                  : "text-foreground hover:bg-muted"
+              }`}>
+              <Icon className="size-3"/>
+            </button>
+          ))}
           {(historyPanelOpen || asOf != null) && (
             <div className="flex-1 min-w-0 h-[26px] rounded-md border px-2 flex items-center text-xs">
               <AsOfControls
