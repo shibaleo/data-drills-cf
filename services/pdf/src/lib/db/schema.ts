@@ -31,12 +31,12 @@ export const subject = pgTable("subject", {
   id: id(),
   code: code(),
   name: name(),
-  projectId: uuid("project_id").notNull(),
+  fieldId: uuid("field_id").notNull(),
   color: text("color"),
   sortOrder: integer("sort_order").notNull().default(0),
   ...timestamps(),
 }, (t) => [
-  uniqueIndex("subject_project_code_key").on(t.projectId, t.code),
+  uniqueIndex("subject_field_code_key").on(t.fieldId, t.code),
 ]);
 
 // =============================================================================
@@ -47,12 +47,12 @@ export const level = pgTable("level", {
   id: id(),
   code: code(),
   name: name(),
-  projectId: uuid("project_id").notNull(),
+  fieldId: uuid("field_id").notNull(),
   color: text("color"),
   sortOrder: integer("sort_order").notNull().default(0),
   ...timestamps(),
 }, (t) => [
-  uniqueIndex("level_project_code_key").on(t.projectId, t.code),
+  uniqueIndex("level_field_code_key").on(t.fieldId, t.code),
 ]);
 
 // =============================================================================
@@ -62,16 +62,15 @@ export const level = pgTable("level", {
 export const problem = pgTable("problem", {
   id: id(),
   code: code(),
-  projectId: uuid("project_id").notNull(),
+  fieldId: uuid("field_id").notNull(),
   subjectId: uuid("subject_id").references(() => subject.id, { onDelete: "set null" }),
   levelId: uuid("level_id").references(() => level.id, { onDelete: "set null" }),
-  topicId: uuid("topic_id"),
   name: text("name"),
   checkpoint: text("checkpoint"),
   standardTime: integer("standard_time"),
   ...timestamps(),
 }, (t) => [
-  uniqueIndex("problem_project_code_key").on(t.projectId, t.code, t.subjectId, t.levelId),
+  uniqueIndex("problem_field_code_key").on(t.fieldId, t.code, t.subjectId, t.levelId),
 ]);
 
 // =============================================================================
