@@ -448,7 +448,7 @@ export const BacklogChart = forwardRef<BacklogChartHandle, BacklogChartProps>(fu
                           fill="none" stroke={color} strokeWidth={2} opacity={0.9} className="animate-pulse"/>
                       )}
                       <rect x={x} y={by} width={CELL} height={CELL} rx={2}
-                        fill={color} opacity={isSelected ? 1 : 0.85}
+                        fill={color} opacity={isSelected ? 1 : item.side === "past" ? PAST_OPACITY : 0.85}
                         stroke={stroke} strokeWidth={strokeWidth} strokeDasharray={strokeDasharray}
                         strokeOpacity={anchor ? anchorOpacity : 1}
                         className="cursor-pointer"
