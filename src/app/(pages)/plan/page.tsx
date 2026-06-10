@@ -171,6 +171,8 @@ export default function PlanPage() {
   const [allocFlagFilter, setAllocFlagFilter] = useState<Set<"overflow" | "overBudget">>(new Set());
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showMilestonePins, setShowMilestonePins] = useState(true);
+  // tetris 最大段数 (null = full / auto)。FSRS panel 右に表示するボタンで切替。
+  const [chartMaxRows, setChartMaxRows] = useState<number | null>(null);
   const [historyPanelOpen, setHistoryPanelOpen] = useState(false);
   const [hiddenLayerIds, setHiddenLayerIds] = useState<Set<string>>(new Set());
   const [sorting, setSorting] = useState<SortingState>([{ id: "daysUntil", desc: false }]);
@@ -590,22 +592,26 @@ export default function PlanPage() {
           </div>
         </div>
         {showMilestonePins && scopeQuery.data && (
-          <div className="-mt-1 -mb-1">
-            <ScopeFSRSOverridePanel
-              key={`${scopeQuery.data.revision}-${asOf ?? "live"}`}
-              statuses={statuses}
-              current={scopeQuery.data.status_stabilities ?? {}}
-              disabled={readOnly}
-              onSave={(next) =>
-                updateScope.mutateAsync({ id: scopeId, payload: { status_stabilities: next } })
-              }
-            />
+          <div className="-mt-1 -mb-1 flex items-center gap-2">
+            <div className="flex-1 min-w-0">
+              <ScopeFSRSOverridePanel
+                key={`${scopeQuery.data.revision}-${asOf ?? "live"}`}
+                statuses={statuses}
+                current={scopeQuery.data.status_stabilities ?? {}}
+                disabled={readOnly}
+                onSave={(next) =>
+                  updateScope.mutateAsync({ id: scopeId, payload: { status_stabilities: next } })
+                }
+              />
+            </div>
+            <ChartHeightPicker value={chartMaxRows} onChange={setChartMaxRows}/>
           </div>
         )}
         <BacklogChart
           ref={chartRef}
           realToday={realToday}
           onTodayDrag={(d) => setAsOf(d === realToday ? null : d)}
+          maxStackOverride={chartMaxRows}
           items={filteredAllocated}
           overlayItems={filteredOverlay}
           layers={edit.localLayers.map((l) => {
@@ -726,3 +732,33 @@ export default function PlanPage() {
     </div>
   );
 }
+
+function ChartHeightPicker({ value, onChange }: { value: number | null; onChange: (v: number | null) => void }) {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button type="button"
+          title="Max rows"
+          className="inline-flex items-center justify-center size-[26px] rounded-md border text-muted-foreground hover:bg-muted transition-colors">
+          <SlidersHorizontal className="size-3"/>
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-auto p-2" align="end">
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] text-muted-foreground">Max rows</span>
+          <div className="inline-flex rounded-md border text-[10px] overflow-hidden">
+            {([10, 20, null] as const).map((v) => (
+              <button key={String(v)}
+                type="button"
+                className={`px-2 py-0.5 transition-colors ${value === v ? "bg-accent text-accent-foreground" : "text-muted-foreground hover:bg-muted"}`}
+                onClick={() => onChange(v)}>
+                {v ?? "Auto"}
+              </button>
+            ))}
+          </div>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+

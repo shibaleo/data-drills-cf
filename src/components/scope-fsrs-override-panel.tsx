@@ -40,7 +40,7 @@ export function ScopeFSRSOverridePanel({
   );
   const sliderMax = useMemo(() => {
     const peak = Math.max(30, ...statuses.map((s) => s.stabilityDays), ...Object.values(local));
-    return Math.ceil((peak * 2) / 10) * 10;
+    return Math.ceil(Math.max(240, peak) / 10) * 10;
   }, [statuses, local]);
 
   if (sliderStatuses.length === 0) return null;

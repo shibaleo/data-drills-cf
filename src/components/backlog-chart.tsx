@@ -101,6 +101,8 @@ type BacklogChartProps = {
   onTodayDrag?: (newDate: string) => void;
   /** 日付軸ラベル基準 (M/D・relDay)。未指定なら today。 */
   realToday?: string;
+  /** tetris の最大段数を強制 (number)。未指定/null なら maxCount+2 自動。 */
+  maxStackOverride?: number | null;
 };
 
 
@@ -147,6 +149,7 @@ export const BacklogChart = forwardRef<BacklogChartHandle, BacklogChartProps>(fu
   onAddLayer,
   onReorderLayers,
   rightPanelExtra,
+  maxStackOverride,
   showMilestonePins,
   milestoneAnchors,
   hiddenLayerIds,
@@ -260,7 +263,9 @@ export const BacklogChart = forwardRef<BacklogChartHandle, BacklogChartProps>(fu
   }), [dates, today]);
 
   const maxCount = Math.max(0, ...dates.map((d) => (grouped.get(d) ?? []).length));
-  const maxStack = Math.max(MIN_ROWS, maxCount + 2);
+  const maxStack = maxStackOverride != null
+    ? Math.max(MIN_ROWS, maxStackOverride)
+    : Math.max(MIN_ROWS, maxCount + 2);
 
   const ROW_H = 22;
   const MS_TOP_PAD = 8;
