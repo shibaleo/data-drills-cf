@@ -177,7 +177,9 @@ export default function PlanPage() {
   const [allocKindFilter, setAllocKindFilter] = useState<Set<"First" | "Planned">>(new Set());
   const [allocFlagFilter, setAllocFlagFilter] = useState<Set<"overflow" | "overBudget">>(new Set());
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [showMilestonePins, setShowMilestonePins] = useState(true);
+  // デフォルトは表示モード (milestone pins / FSRS slider を出さない)。
+  // 編集したいときだけユーザーが toggle で開く。
+  const [showMilestonePins, setShowMilestonePins] = useState(false);
   // tetris 最大段数 (null = full / auto)。FSRS panel 右に表示するボタンで切替。
   const [chartMaxRows, setChartMaxRows] = useState<number | null>(null);
   const [historyPanelOpen, setHistoryPanelOpen] = useState(false);
