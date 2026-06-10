@@ -294,6 +294,9 @@ export default function ScopesHubPage() {
     setCurrentScopeId(scopeId);
     if (view === "edit") {
       setEditingScopeId(scopeId);
+    } else if (view === "review") {
+      // Plan A: review は canonical scope.id 直行
+      navigate({ to: "/review/$scope_id" as string, params: { scope_id: scopeId } });
     } else {
       navigate({ to: `/${view}` as string, search: { scope_id: scopeId } });
     }
