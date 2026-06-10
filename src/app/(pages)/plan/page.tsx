@@ -476,19 +476,25 @@ export default function PlanPage() {
     });
   }, []);
 
+  // select-only セマンティクスを「明るい=表示中」表現に変換: set が empty なら
+  // 全 pill 明るい (= 全表示)、set に要素ある時はその要素だけ明るい (= include-only)。
+  const isShownKind = (k: "First" | "Planned") => allocKindFilter.size === 0 || allocKindFilter.has(k);
+  const isShownStatus = (name: string) => filterLastStatuses.size === 0 || filterLastStatuses.has(name);
+  const isShownFlag = (k: "overflow" | "overBudget") => allocFlagFilter.size === 0 || allocFlagFilter.has(k);
+
   const legendEntries: LegendEntry[] = useMemo(() => [
     {
       kind: "fill",
       label: "First",
       color: COLOR_FIRST_ATTEMPT,
-      active: allocKindFilter.has("First"),
+      active: isShownKind("First"),
       onClick: () => toggleAllocKind("First"),
     },
     {
       kind: "fill",
       label: "Planned",
       color: COLOR_PLANNED,
-      active: allocKindFilter.has("Planned"),
+      active: isShownKind("Planned"),
       onClick: () => toggleAllocKind("Planned"),
     },
     ...statuses
@@ -497,7 +503,7 @@ export default function PlanPage() {
         kind: "fill",
         label: s.name,
         color: s.color ?? "#888",
-        active: filterLastStatuses.has(s.name),
+        active: isShownStatus(s.name),
         onClick: () =>
           setFilterLastStatuses((prev) => {
             const next = new Set(prev);
@@ -510,16 +516,17 @@ export default function PlanPage() {
       kind: "ring",
       label: "Over budget",
       color: "#f59e0b",
-      active: allocFlagFilter.has("overBudget"),
+      active: isShownFlag("overBudget"),
       onClick: () => toggleAllocFlag("overBudget"),
     },
     {
       kind: "ring",
       label: "Overflow",
       color: "#ef4444",
-      active: allocFlagFilter.has("overflow"),
+      active: isShownFlag("overflow"),
       onClick: () => toggleAllocFlag("overflow"),
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   ], [allocKindFilter, allocFlagFilter, filterLastStatuses, availableStatuses, statuses, toggleAllocKind, toggleAllocFlag]);
 
   // milestone anchor (= target 番目の problem id) を可視化用に算出
