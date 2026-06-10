@@ -746,7 +746,7 @@ function ChartHeightPicker({ value, onChange }: { value: number | null; onChange
           onFocus={(e) => e.currentTarget.select()}
           onBlur={() => {
             const n = parseInt(draft, 10);
-            if (Number.isFinite(n) && n > 0) onChange(n);
+            if (Number.isFinite(n) && n >= 10) onChange(n);
             else setDraft(value != null ? String(value) : "10");
           }}
           onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
