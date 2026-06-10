@@ -1,12 +1,21 @@
 /**
  * PDF Export — proxy to the external PDF service for read-only combined
- * PDF generation (no scan / no write-back). Scan & apply workflows are
- * intentionally not exposed here; run those as an external pipeline that
- * writes to data-drills via the standard problems/problem_files API.
+ * PDF generation (no scan / no write-back).
+ *
+ * Architecture (2026-06-10〜): cf-worker が DB から problem + file + subject + level
+ * を join select して payload に同梱する。services/pdf は DB アクセスを持たず、
+ * 受け取った gdrive_file_id / pages を Drive から DL → merge → 返すだけの
+ * pure "PDF assembly" worker になる。schema drift が物理的に起きない。
  */
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
+import { db } from "@/lib/db";
+import { problem, problemFile, subject, level } from "@/lib/db/schema";
+import { inArray } from "drizzle-orm";
+import type { AuthResult } from "@/lib/auth";
+
+type Env = { Variables: { authResult: AuthResult } };
 
 export const pdfExportInputSchema = z.object({
   // 100 件上限。Worker メモリ + Render free plan の処理時間を考慮。
@@ -26,7 +35,7 @@ function readEnv(c: { env?: unknown }, key: string): string | undefined {
   return fromProcess && fromProcess.length > 0 ? fromProcess : undefined;
 }
 
-const app = new Hono()
+const app = new Hono<Env>()
   /**
    * GET /health — proxy to the PDF service's /health endpoint.
    *
@@ -55,14 +64,69 @@ const app = new Hono()
     if (!pdfServiceKey) {
       return c.json({ error: "PDF_SERVICE_KEY is not configured" }, 500);
     }
-    const body = c.req.valid("json");
+    const { problem_ids } = c.req.valid("json");
+
+    // 問題情報を 1 度の往復で join select。services/pdf 側に DB アクセスを
+    // 一切残さないために、label 生成に必要な subject / level 名もここで解決する。
+    const problems = await db
+      .select({
+        id: problem.id,
+        code: problem.code,
+        subjectId: problem.subjectId,
+        levelId: problem.levelId,
+      })
+      .from(problem)
+      .where(inArray(problem.id, problem_ids));
+    const files = await db
+      .select({
+        problemId: problemFile.problemId,
+        gdriveFileId: problemFile.gdriveFileId,
+        problemPages: problemFile.problemPages,
+      })
+      .from(problemFile)
+      .where(inArray(problemFile.problemId, problem_ids));
+
+    const subjectIds = [...new Set(problems.map((p) => p.subjectId).filter((x): x is string => !!x))];
+    const levelIds = [...new Set(problems.map((p) => p.levelId).filter((x): x is string => !!x))];
+    const subjectMap = subjectIds.length === 0
+      ? new Map<string, string>()
+      : new Map((await db.select({ id: subject.id, name: subject.name }).from(subject).where(inArray(subject.id, subjectIds))).map((s) => [s.id, s.name]));
+    const levelMap = levelIds.length === 0
+      ? new Map<string, string>()
+      : new Map((await db.select({ id: level.id, name: level.name }).from(level).where(inArray(level.id, levelIds))).map((l) => [l.id, l.name]));
+
+    // code 昇順で順序を確定 (services/pdf 側でソートしなくていいように)
+    problems.sort((a, b) => a.code.localeCompare(b.code));
+
+    // 各問題の最初の file (= 主紙) を採用、無いものはスキップ。
+    // pages が空の問題もスキップ (外部 import pipeline 側で page list を埋める前提)。
+    const items = problems.flatMap((p) => {
+      const pf = files.find((f) => f.problemId === p.id);
+      if (!pf) return [];
+      const pages = (pf.problemPages as number[] | null) ?? [];
+      if (pages.length === 0) return [];
+      const subName = (p.subjectId && subjectMap.get(p.subjectId)) || "";
+      const lvlName = (p.levelId && levelMap.get(p.levelId)) || "";
+      return [{
+        label: `${subName}_${lvlName}_${p.code}`,
+        gdrive_file_id: pf.gdriveFileId,
+        pages,
+      }];
+    });
+
+    if (items.length === 0) {
+      return c.json({ error: "No problem pages found" }, 404);
+    }
+
+    const filenameStem = `exported-${new Date().toISOString().slice(0, 10)}`;
+
     const res = await fetch(`${pdfApiUrl}/api/v1/pdf-sync/export`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "x-pdf-service-key": pdfServiceKey,
       },
-      body: JSON.stringify(body),
+      body: JSON.stringify({ items, filename_stem: filenameStem }),
     });
 
     // On error, forward the upstream error body as JSON
@@ -83,7 +147,7 @@ const app = new Hono()
       res.headers.get("content-type") ?? "application/pdf";
     const contentDisposition =
       res.headers.get("content-disposition") ??
-      'attachment; filename="exported.pdf"';
+      `attachment; filename="${filenameStem}.pdf"`;
 
     return new Response(buffer, {
       status: 200,

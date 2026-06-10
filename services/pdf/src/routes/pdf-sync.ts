@@ -1,12 +1,46 @@
+/**
+ * /export — pure PDF assembly endpoint.
+ *
+ * Architecture (2026-06-10〜): cf-worker that calls this endpoint pre-resolves
+ * problem + file + subject/level into a flat `items` payload. This service
+ * does not touch the data-drills schema (no problem/subject/level tables) —
+ * only oauth_token is read for Google Drive credentials. As a result schema
+ * drift on the data-drills side cannot break this service.
+ */
 import { Hono } from "hono";
 import { db } from "../lib/db/index.js";
-import { problem, problemFile, oauthToken, subject, level } from "../lib/db/schema.js";
-import { eq, inArray } from "drizzle-orm";
+import { oauthToken } from "../lib/db/schema.js";
+import { eq } from "drizzle-orm";
 import { getDriveClient } from "../lib/google-oauth.js";
 import { downloadDriveFile } from "../lib/drive-helpers.js";
 import { extractAndLabel, mergePdfs } from "../lib/pdf-processing.js";
 
 const app = new Hono();
+
+type ExportItem = { label: string; gdrive_file_id: string; pages: number[] };
+type ExportInput = { items: ExportItem[]; filename_stem?: string };
+
+function parseInput(raw: unknown): ExportInput | { error: string } {
+  if (!raw || typeof raw !== "object") return { error: "body must be an object" };
+  const o = raw as Record<string, unknown>;
+  if (!Array.isArray(o.items) || o.items.length === 0) return { error: "items required" };
+  if (o.items.length > 100) return { error: "too many items (max 100)" };
+  const items: ExportItem[] = [];
+  for (const it of o.items) {
+    if (!it || typeof it !== "object") return { error: "invalid item" };
+    const r = it as Record<string, unknown>;
+    if (typeof r.label !== "string" || typeof r.gdrive_file_id !== "string") {
+      return { error: "item.label / gdrive_file_id required" };
+    }
+    if (!Array.isArray(r.pages) || r.pages.length === 0
+      || !r.pages.every((p) => typeof p === "number" && p > 0)) {
+      return { error: "item.pages must be positive ints" };
+    }
+    items.push({ label: r.label, gdrive_file_id: r.gdrive_file_id, pages: r.pages as number[] });
+  }
+  const stem = typeof o.filename_stem === "string" ? o.filename_stem : undefined;
+  return { items, filename_stem: stem };
+}
 
 /** Run async tasks with concurrency limit */
 async function pMap<T, R>(
@@ -42,76 +76,30 @@ async function getDrive() {
   });
 }
 
-// ── POST /export — merge problem pages into a single PDF ──
+// ── POST /export — merge pre-resolved file pages into a single PDF ──
 
 app.post("/export", async (c) => {
-  const body = await c.req.json();
-  const { problem_ids } = body as { problem_ids: string[] };
-
-  if (!problem_ids?.length) {
-    return c.json({ error: "problem_ids is required" }, 400);
-  }
+  const raw = await c.req.json().catch(() => null);
+  const parsed = parseInput(raw);
+  if ("error" in parsed) return c.json({ error: parsed.error }, 400);
+  const { items, filename_stem } = parsed;
 
   const { drive } = await getDrive();
 
-  // Load problems + their files + subject/level for labels
-  const problems = await db
-    .select()
-    .from(problem)
-    .where(inArray(problem.id, problem_ids));
-  const files = await db
-    .select()
-    .from(problemFile)
-    .where(inArray(problemFile.problemId, problem_ids));
-
-  // Build subject/level name maps
-  const subjectIds = [...new Set(problems.map((p) => p.subjectId).filter(Boolean))] as string[];
-  const levelIds = [...new Set(problems.map((p) => p.levelId).filter(Boolean))] as string[];
-  const subjectMap = new Map(
-    subjectIds.length
-      ? (await db.select().from(subject).where(inArray(subject.id, subjectIds))).map((s) => [s.id, s.name])
-      : [],
-  );
-  const levelMap = new Map(
-    levelIds.length
-      ? (await db.select().from(level).where(inArray(level.id, levelIds))).map((l) => [l.id, l.name])
-      : [],
-  );
-
-  // Sort problems by code for consistent ordering
-  problems.sort((a, b) => a.code.localeCompare(b.code));
-
-  // Build work items (problem + file + label). Skip problems whose file has
-  // no explicit page list — the external pipeline is responsible for
-  // populating problem_pages on every problem_file.
-  const work = problems.flatMap((p) => {
-    const pf = files.find((f) => f.problemId === p.id);
-    if (!pf) return [];
-    const pages = (pf.problemPages as number[]) ?? [];
-    if (pages.length === 0) return [];
-    const subName = (p.subjectId && subjectMap.get(p.subjectId)) || "";
-    const lvlName = (p.levelId && levelMap.get(p.levelId)) || "";
-    return [{ pf, label: `${subName}_${lvlName}_${p.code}`, pages }];
-  });
-
   // Download + extract with concurrency limit (avoid Drive API rate limits)
-  const parts = await pMap(work, async (w) => {
-    const raw = await downloadDriveFile(drive, w.pf.gdriveFileId);
+  const parts = await pMap(items, async (w) => {
+    const raw = await downloadDriveFile(drive, w.gdrive_file_id);
     const buf = new Uint8Array(raw);
     return extractAndLabel(buf, w.pages, w.label);
   }, 5);
 
-  if (parts.length === 0) {
-    return c.json({ error: "No problem pages found" }, 404);
-  }
-
   const merged = await mergePdfs(parts.map((p) => p.buffer as ArrayBuffer));
-  const today = new Date().toISOString().slice(0, 10);
+  const stem = filename_stem ?? `exported-${new Date().toISOString().slice(0, 10)}`;
 
   return new Response(Buffer.from(merged), {
     headers: {
       "Content-Type": "application/pdf",
-      "Content-Disposition": `attachment; filename="exported-${today}.pdf"`,
+      "Content-Disposition": `attachment; filename="${stem}.pdf"`,
     },
   });
 });
