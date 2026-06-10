@@ -88,6 +88,7 @@ function projectSmoothFuture(args: {
       date: projected,
       color: info.color ?? "#a3a3a3",
       statusName: nextStatusName,
+      stabilityDays: info.stabilityDays,
     });
     date = projected;
     chainIdx = nextIdx;
@@ -289,6 +290,7 @@ export default function PlanPage() {
     for (const r of reviewQuery.data ?? []) {
       if (r.answerCount === 0) continue;
       const stColor = r.statusColor ?? "#a3a3a3";
+      const lastStab = statusByName.get(r.lastStatus)?.stabilityDays;
       out.push({
         problemId: r.problemId,
         code: r.code,
@@ -296,6 +298,7 @@ export default function PlanPage() {
         date: r.nextReview,
         color: stColor,
         statusName: r.lastStatus,
+        stabilityDays: lastStab,
       });
       out.push(
         ...projectSmoothFuture({

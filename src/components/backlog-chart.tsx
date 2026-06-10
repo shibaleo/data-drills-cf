@@ -53,6 +53,8 @@ export type OverlayBlock = {
   statusName?: string | null;
   /** 個別 opacity (省略時 0.85)。過去実績ブロックは PAST_OPACITY = 0.5 を渡す。 */
   opacity?: number;
+  /** 未解消 (= future column) で stability 昇順に積み上げるためのキー。省略可。 */
+  stabilityDays?: number;
 };
 
 type BacklogChartProps = {
@@ -200,18 +202,20 @@ export const BacklogChart = forwardRef<BacklogChartHandle, BacklogChartProps>(fu
     | { kind: "alloc"; alloc: AllocatedProblem }
     | { kind: "overlay"; ov: OverlayBlock };
   // 積み上げ順 (下 → 上):
-  //   実績 (past column の alloc past + past throughput overlay): rank 0、挿入順
-  //   予定 (future column の alloc + smooth-future overlay): rank 100 + stability 順
-  //     (= Miss/Rough/Fair/Fluent/Done 安定度 ASC → Done が上端)
-  //   First は stability 0 扱い (= 予定の下端)
-  const plannedStabilityRank = (name: string | null | undefined): number => {
+  //   実績 (past column): status 進行順 First → Miss → Rough → Fair → Fluent → Done
+  //     - alloc past は statusName=null/First 扱い → 下端
+  //     - past throughput overlay は prevStatusName で順位付け
+  //   未解消 (future column): stabilityDays ASC で積む (短い review interval が下)
+  //     - alloc future (= 未着手 First) は stability 0 = 下端
+  //     - smooth-future overlay は OverlayBlock.stabilityDays を caller が渡す
+  const actualStatusOrder = (name: string | null | undefined): number => {
     switch (name) {
       case "Miss": return 1;
       case "Rough": return 2;
       case "Fair": return 3;
       case "Fluent": return 4;
       case "Done": return 5;
-      default: return 0;  // First / unknown → 予定の下端
+      default: return 0;  // First / null / unknown
     }
   };
   const grouped = useMemo(() => {
@@ -227,9 +231,13 @@ export const BacklogChart = forwardRef<BacklogChartHandle, BacklogChartProps>(fu
       map.set(ov.date, list);
     }
     const rank = (it: StackItem, isPast: boolean): number => {
-      if (isPast) return 0;                                              // 実績: 一律 (挿入順)
-      const statusName = it.kind === "alloc" ? null : it.ov.statusName;
-      return 100 + plannedStabilityRank(statusName);                     // 予定: stability 順
+      if (isPast) {
+        const name = it.kind === "alloc" ? null : it.ov.statusName;
+        return actualStatusOrder(name);                                 // 0..5
+      }
+      // 未解消: stability 昇順
+      if (it.kind === "alloc") return 100;                              // 未着手 (First) = 下端
+      return 100 + (it.ov.stabilityDays ?? 9999);
     };
     for (const [date, list] of map) {
       const isPast = date < today;
