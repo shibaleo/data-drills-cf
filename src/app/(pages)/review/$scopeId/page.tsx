@@ -483,7 +483,7 @@ export default function SchedulePage() {
       answerHistory: r.answerHistory,
     }));
     return applyMemberFilter(
-      rows.map((r) => ({ subjectId: r.subjectId, levelId: r.levelId, _r: r })),
+      rows.map((r) => ({ fieldId: r.fieldId, subjectId: r.subjectId, levelId: r.levelId, _r: r })),
       localFilter,
     ).map(({ _r }) => _r);
   }, [scheduleQuery.data, localFilter, asOf, allProblems, statuses]);
@@ -772,11 +772,11 @@ export default function SchedulePage() {
     navigate({ to: "/review" as string });
   }
 
-  if (!scopeFieldId) {
+  if (!scope) {
     return (
       <div className="p-4 md:p-6">
         <div className="text-center py-12 text-muted-foreground">
-          Please select a project
+          {scopeQuery.isLoading ? "Loading..." : "Scope not found"}
         </div>
       </div>
     );
