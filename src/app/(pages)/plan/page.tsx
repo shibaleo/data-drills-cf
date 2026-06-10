@@ -734,31 +734,41 @@ export default function PlanPage() {
 }
 
 function ChartHeightPicker({ value, onChange }: { value: number | null; onChange: (v: number | null) => void }) {
+  const PRESETS = [10, 20] as const;
+  const isPreset = value != null && (PRESETS as readonly number[]).includes(value);
+  const [draft, setDraft] = useState<string>(value != null && !isPreset ? String(value) : "");
+  useEffect(() => {
+    setDraft(value != null && !(PRESETS as readonly number[]).includes(value) ? String(value) : "");
+  }, [value]);
   return (
-    <Popover>
-      <PopoverTrigger asChild>
+    <div className="flex items-center gap-2 shrink-0">
+      <span className="text-[10px] text-muted-foreground">Max rows</span>
+      <div className="inline-flex rounded-md border text-[10px] overflow-hidden">
+        {PRESETS.map((v) => (
+          <button key={v} type="button"
+            className={`px-2 py-0.5 transition-colors ${value === v ? "bg-accent text-accent-foreground" : "text-muted-foreground hover:bg-muted"}`}
+            onClick={() => onChange(v)}>
+            {v}
+          </button>
+        ))}
         <button type="button"
-          title="Max rows"
-          className="inline-flex items-center justify-center size-[26px] rounded-md border text-muted-foreground hover:bg-muted transition-colors">
-          <SlidersHorizontal className="size-3"/>
+          className={`px-2 py-0.5 transition-colors ${value == null ? "bg-accent text-accent-foreground" : "text-muted-foreground hover:bg-muted"}`}
+          onClick={() => onChange(null)}>
+          Auto
         </button>
-      </PopoverTrigger>
-      <PopoverContent className="w-auto p-2" align="end">
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] text-muted-foreground">Max rows</span>
-          <div className="inline-flex rounded-md border text-[10px] overflow-hidden">
-            {([10, 20, null] as const).map((v) => (
-              <button key={String(v)}
-                type="button"
-                className={`px-2 py-0.5 transition-colors ${value === v ? "bg-accent text-accent-foreground" : "text-muted-foreground hover:bg-muted"}`}
-                onClick={() => onChange(v)}>
-                {v ?? "Auto"}
-              </button>
-            ))}
-          </div>
-        </div>
-      </PopoverContent>
-    </Popover>
+      </div>
+      <input type="number" min={1} max={200} step={1} value={draft} placeholder="—"
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={() => {
+          const n = parseInt(draft, 10);
+          if (Number.isFinite(n) && n > 0) onChange(n);
+          else if (draft === "") setDraft(value != null && !isPreset ? String(value) : "");
+        }}
+        onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+        className={`h-5 w-12 text-[10px] px-1.5 rounded-sm border bg-background tabular-nums text-center ${
+          value != null && !isPreset ? "border-primary/50 text-primary" : ""
+        }`}/>
+    </div>
   );
 }
 
