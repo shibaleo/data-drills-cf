@@ -78,6 +78,42 @@ function hexPoints(cx: number, cy: number, side: number): string {
     .join(" ");
 }
 
+/**
+ * Hexagon with rounded corners, drawn as SVG path.
+ * radius は各頂点で丸める半径。side*0.45 を上限に capped。
+ */
+function hexPath(cx: number, cy: number, side: number, radius: number): string {
+  const verts: [number, number][] = [
+    [cx, cy - side],
+    [cx + (SQRT3 * side) / 2, cy - side / 2],
+    [cx + (SQRT3 * side) / 2, cy + side / 2],
+    [cx, cy + side],
+    [cx - (SQRT3 * side) / 2, cy + side / 2],
+    [cx - (SQRT3 * side) / 2, cy - side / 2],
+  ];
+  const r = Math.min(radius, side * 0.45);
+  const parts: string[] = [];
+  for (let i = 0; i < 6; i++) {
+    const prev = verts[(i + 5) % 6];
+    const cur = verts[i];
+    const next = verts[(i + 1) % 6];
+    const dx1 = prev[0] - cur[0], dy1 = prev[1] - cur[1];
+    const len1 = Math.hypot(dx1, dy1);
+    const inX = cur[0] + (dx1 / len1) * r;
+    const inY = cur[1] + (dy1 / len1) * r;
+    const dx2 = next[0] - cur[0], dy2 = next[1] - cur[1];
+    const len2 = Math.hypot(dx2, dy2);
+    const outX = cur[0] + (dx2 / len2) * r;
+    const outY = cur[1] + (dy2 / len2) * r;
+    parts.push(`${i === 0 ? "M" : "L"} ${inX} ${inY}`);
+    // sweep=0: hex vertices are listed CW in screen coords (y-down), so convex
+    // fillets at each corner must arc in CCW direction relative to that walk.
+    parts.push(`A ${r} ${r} 0 0 0 ${outX} ${outY}`);
+  }
+  parts.push("Z");
+  return parts.join(" ");
+}
+
 function bigCenterAt(idx: number, cols: number, anchorColT: number): { cx: number; cy: number } {
   const col = idx % cols;
   const row = Math.floor(idx / cols);
@@ -98,22 +134,49 @@ function annularSector(
   outerR: number,
   startDeg: number,
   endDeg: number,
+  cornerRadius = 0,
 ): string {
   const a1 = (startDeg * Math.PI) / 180;
   const a2 = (endDeg * Math.PI) / 180;
-  const x1o = cx + outerR * Math.cos(a1);
-  const y1o = cy + outerR * Math.sin(a1);
-  const x2o = cx + outerR * Math.cos(a2);
-  const y2o = cy + outerR * Math.sin(a2);
-  const x1i = cx + innerR * Math.cos(a1);
-  const y1i = cy + innerR * Math.sin(a1);
-  const x2i = cx + innerR * Math.cos(a2);
-  const y2i = cy + innerR * Math.sin(a2);
+  if (cornerRadius <= 0) {
+    const x1o = cx + outerR * Math.cos(a1);
+    const y1o = cy + outerR * Math.sin(a1);
+    const x2o = cx + outerR * Math.cos(a2);
+    const y2o = cy + outerR * Math.sin(a2);
+    const x1i = cx + innerR * Math.cos(a1);
+    const y1i = cy + innerR * Math.sin(a1);
+    const x2i = cx + innerR * Math.cos(a2);
+    const y2i = cy + innerR * Math.sin(a2);
+    return [
+      `M ${x1o} ${y1o}`,
+      `A ${outerR} ${outerR} 0 0 1 ${x2o} ${y2o}`,
+      `L ${x2i} ${y2i}`,
+      `A ${innerR} ${innerR} 0 0 0 ${x1i} ${y1i}`,
+      "Z",
+    ].join(" ");
+  }
+  const r = Math.min(cornerRadius, (outerR - innerR) / 2 - 0.5);
+  const dAo = r / outerR;
+  const dAi = r / innerR;
+  const oa1 = a1 + dAo, oa2 = a2 - dAo;
+  const ia1 = a1 + dAi, ia2 = a2 - dAi;
+  const x1oArc = cx + outerR * Math.cos(oa1), y1oArc = cy + outerR * Math.sin(oa1);
+  const x2oArc = cx + outerR * Math.cos(oa2), y2oArc = cy + outerR * Math.sin(oa2);
+  const x1oLine = cx + (outerR - r) * Math.cos(a1), y1oLine = cy + (outerR - r) * Math.sin(a1);
+  const x2oLine = cx + (outerR - r) * Math.cos(a2), y2oLine = cy + (outerR - r) * Math.sin(a2);
+  const x1iArc = cx + innerR * Math.cos(ia1), y1iArc = cy + innerR * Math.sin(ia1);
+  const x2iArc = cx + innerR * Math.cos(ia2), y2iArc = cy + innerR * Math.sin(ia2);
+  const x1iLine = cx + (innerR + r) * Math.cos(a1), y1iLine = cy + (innerR + r) * Math.sin(a1);
+  const x2iLine = cx + (innerR + r) * Math.cos(a2), y2iLine = cy + (innerR + r) * Math.sin(a2);
   return [
-    `M ${x1o} ${y1o}`,
-    `A ${outerR} ${outerR} 0 0 1 ${x2o} ${y2o}`,
-    `L ${x2i} ${y2i}`,
-    `A ${innerR} ${innerR} 0 0 0 ${x1i} ${y1i}`,
+    `M ${x1oLine} ${y1oLine}`,
+    `A ${r} ${r} 0 0 1 ${x1oArc} ${y1oArc}`,
+    `A ${outerR} ${outerR} 0 0 1 ${x2oArc} ${y2oArc}`,
+    `A ${r} ${r} 0 0 1 ${x2oLine} ${y2oLine}`,
+    `L ${x2iLine} ${y2iLine}`,
+    `A ${r} ${r} 0 0 1 ${x2iArc} ${y2iArc}`,
+    `A ${innerR} ${innerR} 0 0 0 ${x1iArc} ${y1iArc}`,
+    `A ${r} ${r} 0 0 1 ${x1iLine} ${y1iLine}`,
     "Z",
   ].join(" ");
 }
@@ -376,9 +439,9 @@ export default function ScopesHubPage() {
               [CELL_W, 2 * CELL_H],
               [CELL_W / 2, CELL_H],
             ].map(([px, py], i) => (
-              <polygon
+              <path
                 key={i}
-                points={hexPoints(px, py, SMALL_SIDE - 1.6)}
+                d={hexPath(px, py, SMALL_SIDE - 1.6, 2.5)}
                 fill="none"
                 stroke="currentColor"
                 strokeOpacity={0.32}
@@ -395,7 +458,7 @@ export default function ScopesHubPage() {
           </radialGradient>
           <radialGradient id="hexFillHover" cx="50%" cy="30%" r="80%">
             <stop offset="0%" stopColor="hsl(var(--card))" stopOpacity="1" />
-            <stop offset="100%" stopColor="hsl(0 0% 4%)" stopOpacity="1" />
+            <stop offset="100%" stopColor="hsl(240 6% 11%)" stopOpacity="1" />
           </radialGradient>
           <radialGradient id="hexFillWarm" cx="50%" cy="30%" r="85%">
             <stop offset="0%" stopColor="hsl(var(--primary) / 0.35)" stopOpacity="1" />
@@ -488,8 +551,8 @@ export default function ScopesHubPage() {
                     背景の "track" は描かず、伸びている部分だけ常時表示。
                     hover 中は menu や glow と被るので非表示 */}
                 {!hovered && stats.active > 0 && stats.goodPct > 0 && (
-                  <polygon
-                    points={hexPoints(cx, cy, RING_SIDE)}
+                  <path
+                    d={hexPath(cx, cy, RING_SIDE, 12)}
                     fill="none"
                     stroke={heat.ring}
                     strokeWidth={3}
@@ -499,8 +562,8 @@ export default function ScopesHubPage() {
                     strokeDashoffset={RING_PERIMETER * (1 - stats.goodPct / 100)}
                   />
                 )}
-                <polygon
-                  points={hexPoints(cx, cy, SIDE)}
+                <path
+                  d={hexPath(cx, cy, SIDE, 11)}
                   fill={hovered ? "url(#hexFillHover)" : "url(#hexFillIdle)"}
                   stroke={
                     hovered || stats.pending > 0
@@ -614,6 +677,7 @@ export default function ScopesHubPage() {
                       outerR,
                       adjStart,
                       adjEnd,
+                      8,
                     );
                     // textPath 用の arc 半径と方向。
                     // 下半円 (Plan SE / Throughput SW) は outer arc に baseline を載せる
@@ -709,8 +773,8 @@ export default function ScopesHubPage() {
           }}
           onClick={() => navigate({ to: "/scopes/new" as string })}
         >
-          <polygon
-            points={hexPoints(newCenter.cx, newCenter.cy, SIDE)}
+          <path
+            d={hexPath(newCenter.cx, newCenter.cy, SIDE, 11)}
             className="fill-card stroke-muted-foreground/60 hover:fill-accent hover:stroke-primary transition-colors new-pulse"
             strokeWidth={1.5}
             strokeDasharray="4 3"
