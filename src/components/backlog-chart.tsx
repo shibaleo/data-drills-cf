@@ -457,15 +457,21 @@ export const BacklogChart = forwardRef<BacklogChartHandle, BacklogChartProps>(fu
                   const by = chartHeight - BOTTOM_AXIS_H - (stackIdx + 1) * STEP;
                   if (stackItem.kind === "overlay") {
                     const o = stackItem.ov;
+                    const isSelectedOv = o.problemId === selectedId;
                     return (
-                      <rect key={`ov-${o.problemId}-${stackIdx}`}
-                        x={x} y={by} width={CELL} height={CELL} rx={2}
-                        fill={o.color} opacity={o.opacity ?? 0.85}
-                        className="cursor-pointer"
-                        onClick={() => onSelect?.(o.problemId)}
-                        onDoubleClick={() => onOpen?.(o.problemId)}>
-                        <title>{o.code} {o.name ?? ""}{o.statusName ? ` (${o.statusName})` : ""}</title>
-                      </rect>
+                      <g key={`ov-${o.problemId}-${stackIdx}`}>
+                        {isSelectedOv && (
+                          <rect x={x - 2} y={by - 2} width={CELL + 4} height={CELL + 4} rx={3}
+                            fill="none" stroke={o.color} strokeWidth={2} opacity={0.9} className="animate-pulse"/>
+                        )}
+                        <rect x={x} y={by} width={CELL} height={CELL} rx={2}
+                          fill={o.color} opacity={isSelectedOv ? 1 : (o.opacity ?? 0.85)}
+                          className="cursor-pointer"
+                          onClick={() => onSelect?.(o.problemId)}
+                          onDoubleClick={() => onOpen?.(o.problemId)}>
+                          <title>{o.code} {o.name ?? ""}{o.statusName ? ` (${o.statusName})` : ""}</title>
+                        </rect>
+                      </g>
                     );
                   }
                   const item = stackItem.alloc;
