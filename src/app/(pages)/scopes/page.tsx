@@ -24,16 +24,18 @@ import type { MemberFilterInput } from "@/lib/schemas/member-filter";
 const SQRT3 = Math.sqrt(3);
 // 小六角: hex width = SQRT3*15 ≈ 25.98
 const SMALL_SIDE = 15;
-// SIDE = SMALL_SIDE * 6 (= 90): 全 6 頂点が小六角の top vertex に snap する整合値。
-const SIDE = 90;
+// SIDE = SMALL_SIDE * 5 (= 75): 全 6 頂点が小六角の vertex に近い snap 値。
+// 一回り小さくして sector を主役にする方向。
+const SIDE = 75;
 const CELL_W = SQRT3 * SMALL_SIDE;
 const CELL_H = 1.5 * SMALL_SIDE;
 
 // 放射状メニュー。hex から十分離し、ボタン (sector) も背高に
-// hex 外周から sector までの間隔と sector の半径方向厚み。
-// chunky 感を出すために hex 寄りにして ring 自体も太く。
-const MENU_INNER_R = SIDE + 16;
-const MENU_OUTER_R = MENU_INNER_R + 54;
+// hex 外周から sector までの間隔と sector の半径方向厚み。SIDE を 75 に縮めた
+// ぶん、INNER の inset を +24、OUTER を +60 で hex は小さくなりつつ sector
+// ring は太いまま全体の外径感を維持。
+const MENU_INNER_R = SIDE + 24;
+const MENU_OUTER_R = MENU_INNER_R + 60;
 // sector 間の角度 gap (= 扇形を独立した petal に見せる)
 const SECTOR_GAP_DEG = 5;
 // 個別 sector hover 時に外側へ伸びる量 (= 「段差」)
