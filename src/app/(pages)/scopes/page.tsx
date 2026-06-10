@@ -130,15 +130,16 @@ type SectorDef = {
 // に揃える。意味は別途検討としていったん視覚一致のみ。
 // 配置: 長文字の Throughput は左下 (SW)、Stats は右 (E) に。
 const SECTORS: SectorDef[] = [
-  // テーマ primary (HSL 19 58% 56%) との距離 ΔH=-6 ΔS=-37 ΔL=+3 を全色に同一適用。
-  // Plan は theme primary そのものに収束、他色も同方向にトーンダウンして主色と
-  // 調和させる (= rainbow ではなく洗練されたパレット)。
-  { startDeg: -150, endDeg: -90, label: "Edit", view: "edit", color: "#ca77a9" },         // dusty rose (Planned)
-  { startDeg: -90, endDeg: -30, label: "Review", view: "review", color: "#9786da" },       // muted lavender (First)
-  { startDeg: -30, endDeg: 30, label: "Stats", view: "stats", color: "#cd747d" },          // dusty rose-red (Miss)
-  { startDeg: 30, endDeg: 90, label: "Plan", view: "plan", color: "#d0774e" },             // terracotta = theme primary (Rough)
-  { startDeg: 90, endDeg: 150, label: "Throughput", view: "throughput", color: "#51a467" },// muted forest (Fluent)
-  { startDeg: 150, endDeg: 210, label: "Digest", view: "digest", color: "#6e9fd4" },       // denim blue (Done)
+  // テーマ primary (HSL 19 58% 56%) 方向にシフト (ΔH=-6 ΔS=-20 ΔL=0)。
+  // 全 6 色を同距離でトーン調整: rainbow の元気は残しつつ vibrancy を半分ほど
+  // 抑えて theme と協和。やる気が出る (saturated) と落ち着き (controlled) の
+  // 中間。Plan は theme より少し saturated を残してアクセント化。
+  { startDeg: -150, endDeg: -90, label: "Edit", view: "edit", color: "#d75ba5" },          // rich rose (Planned)
+  { startDeg: -90, endDeg: -30, label: "Review", view: "review", color: "#846ce5" },        // rich lavender (First)
+  { startDeg: -30, endDeg: 30, label: "Stats", view: "stats", color: "#da5865" },           // vibrant coral (Miss)
+  { startDeg: 30, endDeg: 90, label: "Plan", view: "plan", color: "#e1662d" },              // vivid terracotta (Rough)
+  { startDeg: 90, endDeg: 150, label: "Throughput", view: "throughput", color: "#38ad58" }, // forest green (Fluent)
+  { startDeg: 150, endDeg: 210, label: "Digest", view: "digest", color: "#5197e1" },        // denim blue (Done)
 ];
 
 function truncate(s: string, n: number): string {
