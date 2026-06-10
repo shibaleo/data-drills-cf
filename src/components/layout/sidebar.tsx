@@ -4,19 +4,18 @@ import { useState, useEffect } from "react";
 import { Link, usePathname } from "@/lib/router";
 import { SITE_NAME } from "@/lib/site";
 import {
-  BarChart2,
-  CalendarDays,
+  Activity,
+  BarChart3,
   CalendarRange,
-  History,
   Info,
-  Inbox,
   LayoutGrid,
   Layers,
+  Newspaper,
   PanelLeftClose,
   PanelLeftOpen,
   PenLine,
-  Repeat,
-  Tag,
+  RotateCw,
+  Target,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useReviewList } from "@/hooks/queries/use-review";
@@ -59,12 +58,13 @@ function OverdueBadge() {
 }
 
 const navItems: NavItem[] = [
-  { href: "/review", label: "Review", icon: Repeat, Badge: OverdueBadge },
-  { href: "/scopes", label: "Scopes", icon: Inbox },
-  { href: "/throughput", label: "Throughput", icon: History },
+  // Scope = 「何を演習対象とするか」の入口。一番上。
+  { href: "/scopes", label: "Scopes", icon: Target },
+  { href: "/review", label: "Review", icon: RotateCw, Badge: OverdueBadge },
   { href: "/plan", label: "Plan", icon: CalendarRange },
-  { href: "/stats", label: "Stats", icon: BarChart2 },
-  { href: "/digest", label: "Digest", icon: CalendarDays, dividerAfter: true },
+  { href: "/throughput", label: "Throughput", icon: Activity },
+  { href: "/stats", label: "Stats", icon: BarChart3 },
+  { href: "/digest", label: "Digest", icon: Newspaper, dividerAfter: true },
   { href: "/flashcards", label: "Flashcards", icon: Layers },
   { href: "/masters", label: "Masters", icon: LayoutGrid },
   { href: "/about", label: "About", icon: Info },
