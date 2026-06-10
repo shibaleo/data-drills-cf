@@ -78,9 +78,21 @@ function hexPoints(cx: number, cy: number, side: number): string {
     .join(" ");
 }
 
+/** vertex から prev/next vertex 方向に r 進んだ点を返す (= inset 端点)。 */
+function insetAlong(
+  vertex: [number, number],
+  toward: [number, number],
+  r: number,
+): [number, number] {
+  const dx = toward[0] - vertex[0];
+  const dy = toward[1] - vertex[1];
+  const len = Math.hypot(dx, dy);
+  return [vertex[0] + (dx / len) * r, vertex[1] + (dy / len) * r];
+}
+
 /**
- * Hexagon with rounded corners, drawn as SVG path.
- * radius は各頂点で丸める半径。side*0.45 を上限に capped。
+ * Hexagon with rounded corners. annularSector と同じ qCorner pattern
+ * (Q-Bezier control を元頂点に) で構築するので、両者ロジックは同型。
  */
 function hexPath(cx: number, cy: number, side: number, radius: number): string {
   const verts: [number, number][] = [
@@ -94,21 +106,11 @@ function hexPath(cx: number, cy: number, side: number, radius: number): string {
   const r = Math.min(radius, side * 0.45);
   const parts: string[] = [];
   for (let i = 0; i < 6; i++) {
-    const prev = verts[(i + 5) % 6];
     const cur = verts[i];
-    const next = verts[(i + 1) % 6];
-    const dx1 = prev[0] - cur[0], dy1 = prev[1] - cur[1];
-    const len1 = Math.hypot(dx1, dy1);
-    const inX = cur[0] + (dx1 / len1) * r;
-    const inY = cur[1] + (dy1 / len1) * r;
-    const dx2 = next[0] - cur[0], dy2 = next[1] - cur[1];
-    const len2 = Math.hypot(dx2, dy2);
-    const outX = cur[0] + (dx2 / len2) * r;
-    const outY = cur[1] + (dy2 / len2) * r;
-    parts.push(`${i === 0 ? "M" : "L"} ${inX} ${inY}`);
-    // sweep=0: hex vertices are listed CW in screen coords (y-down), so convex
-    // fillets at each corner must arc in CCW direction relative to that walk.
-    parts.push(`A ${r} ${r} 0 0 0 ${outX} ${outY}`);
+    const inPt = insetAlong(cur, verts[(i + 5) % 6], r);
+    const outPt = insetAlong(cur, verts[(i + 1) % 6], r);
+    parts.push(`${i === 0 ? "M" : "L"} ${inPt[0]} ${inPt[1]}`);
+    parts.push(qCorner(cur, outPt));
   }
   parts.push("Z");
   return parts.join(" ");
@@ -127,6 +129,20 @@ function bigCenterAt(idx: number, cols: number, anchorColT: number): { cx: numbe
   return { cx: tx, cy: ty + SIDE };
 }
 
+/**
+ * 角丸 corner の SVG segment。pattern は両 path 共通:
+ *   incoming inset 点までは L or A → このコーナーで Q (control = 元の sharp
+ *   vertex) → outgoing inset 点へ → 次の edge に続く。
+ * Q-Bezier の control を元頂点に置く方式なので、edge が line でも arc でも
+ * 必ず convex に外向きの丸みになる (concave 不可能)。
+ */
+function qCorner(
+  vertex: [number, number],
+  outPt: [number, number],
+): string {
+  return `Q ${vertex[0]} ${vertex[1]} ${outPt[0]} ${outPt[1]}`;
+}
+
 function annularSector(
   cx: number,
   cy: number,
@@ -138,15 +154,15 @@ function annularSector(
 ): string {
   const a1 = (startDeg * Math.PI) / 180;
   const a2 = (endDeg * Math.PI) / 180;
+  const ptOn = (R: number, ang: number): [number, number] => [
+    cx + R * Math.cos(ang),
+    cy + R * Math.sin(ang),
+  ];
   if (cornerRadius <= 0) {
-    const x1o = cx + outerR * Math.cos(a1);
-    const y1o = cy + outerR * Math.sin(a1);
-    const x2o = cx + outerR * Math.cos(a2);
-    const y2o = cy + outerR * Math.sin(a2);
-    const x1i = cx + innerR * Math.cos(a1);
-    const y1i = cy + innerR * Math.sin(a1);
-    const x2i = cx + innerR * Math.cos(a2);
-    const y2i = cy + innerR * Math.sin(a2);
+    const [x1o, y1o] = ptOn(outerR, a1);
+    const [x2o, y2o] = ptOn(outerR, a2);
+    const [x1i, y1i] = ptOn(innerR, a1);
+    const [x2i, y2i] = ptOn(innerR, a2);
     return [
       `M ${x1o} ${y1o}`,
       `A ${outerR} ${outerR} 0 0 1 ${x2o} ${y2o}`,
@@ -156,27 +172,30 @@ function annularSector(
     ].join(" ");
   }
   const r = Math.min(cornerRadius, (outerR - innerR) / 2 - 0.5);
-  const dAo = r / outerR;
-  const dAi = r / innerR;
-  const oa1 = a1 + dAo, oa2 = a2 - dAo;
-  const ia1 = a1 + dAi, ia2 = a2 - dAi;
-  const x1oArc = cx + outerR * Math.cos(oa1), y1oArc = cy + outerR * Math.sin(oa1);
-  const x2oArc = cx + outerR * Math.cos(oa2), y2oArc = cy + outerR * Math.sin(oa2);
-  const x1oLine = cx + (outerR - r) * Math.cos(a1), y1oLine = cy + (outerR - r) * Math.sin(a1);
-  const x2oLine = cx + (outerR - r) * Math.cos(a2), y2oLine = cy + (outerR - r) * Math.sin(a2);
-  const x1iArc = cx + innerR * Math.cos(ia1), y1iArc = cy + innerR * Math.sin(ia1);
-  const x2iArc = cx + innerR * Math.cos(ia2), y2iArc = cy + innerR * Math.sin(ia2);
-  const x1iLine = cx + (innerR + r) * Math.cos(a1), y1iLine = cy + (innerR + r) * Math.sin(a1);
-  const x2iLine = cx + (innerR + r) * Math.cos(a2), y2iLine = cy + (innerR + r) * Math.sin(a2);
+  // 各 corner の (元の sharp 頂点, 直前 edge 上の inset, 直後 edge 上の inset)。
+  // 直線 edge 上の inset は radial 方向に r、arc edge 上の inset は arc-length
+  // r 相当の角 (= r/R)。
+  const v1 = ptOn(outerR, a1); // outer-start
+  const v2 = ptOn(outerR, a2); // outer-end
+  const v3 = ptOn(innerR, a2); // inner-end
+  const v4 = ptOn(innerR, a1); // inner-start
+  const v1in = ptOn(outerR - r, a1);                  // from radial (inner→outer 方向の手前)
+  const v1out = ptOn(outerR, a1 + r / outerR);        // outer arc 前進
+  const v2in = ptOn(outerR, a2 - r / outerR);
+  const v2out = ptOn(outerR - r, a2);
+  const v3in = ptOn(innerR + r, a2);
+  const v3out = ptOn(innerR, a2 - r / innerR);        // inner arc は逆周りなので角を引く
+  const v4in = ptOn(innerR, a1 + r / innerR);
+  const v4out = ptOn(innerR + r, a1);
   return [
-    `M ${x1oLine} ${y1oLine}`,
-    `A ${r} ${r} 0 0 1 ${x1oArc} ${y1oArc}`,
-    `A ${outerR} ${outerR} 0 0 1 ${x2oArc} ${y2oArc}`,
-    `A ${r} ${r} 0 0 1 ${x2oLine} ${y2oLine}`,
-    `L ${x2iLine} ${y2iLine}`,
-    `A ${r} ${r} 0 0 1 ${x2iArc} ${y2iArc}`,
-    `A ${innerR} ${innerR} 0 0 0 ${x1iArc} ${y1iArc}`,
-    `A ${r} ${r} 0 0 1 ${x1iLine} ${y1iLine}`,
+    `M ${v1in[0]} ${v1in[1]}`,
+    qCorner(v1, v1out),
+    `A ${outerR} ${outerR} 0 0 1 ${v2in[0]} ${v2in[1]}`,
+    qCorner(v2, v2out),
+    `L ${v3in[0]} ${v3in[1]}`,
+    qCorner(v3, v3out),
+    `A ${innerR} ${innerR} 0 0 0 ${v4in[0]} ${v4in[1]}`,
+    qCorner(v4, v4out),
     "Z",
   ].join(" ");
 }
