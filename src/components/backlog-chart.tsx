@@ -51,6 +51,8 @@ export type OverlayBlock = {
   color: string;
   /** tooltip 用ラベル (e.g. status 名)。 */
   statusName?: string | null;
+  /** 個別 opacity (省略時 0.85)。過去実績ブロックは PAST_OPACITY = 0.5 を渡す。 */
+  opacity?: number;
 };
 
 type BacklogChartProps = {
@@ -415,7 +417,7 @@ export const BacklogChart = forwardRef<BacklogChartHandle, BacklogChartProps>(fu
                     return (
                       <rect key={`ov-${o.problemId}-${stackIdx}`}
                         x={x} y={by} width={CELL} height={CELL} rx={2}
-                        fill={o.color} opacity={0.85}
+                        fill={o.color} opacity={o.opacity ?? 0.85}
                         className="cursor-pointer"
                         onClick={() => onSelect?.(o.problemId)}
                         onDoubleClick={() => onOpen?.(o.problemId)}>

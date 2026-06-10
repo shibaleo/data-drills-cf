@@ -31,6 +31,7 @@ import { ScopePlanRightPanel } from "@/components/scope-plan-right-panel";
 import { ScopeFSRSOverridePanel } from "@/components/scope-fsrs-override-panel";
 import { BlockLegend, type LegendEntry } from "@/components/block-legend";
 import { COLOR_PLANNED, COLOR_FIRST_ATTEMPT } from "@/lib/block-color";
+import { useThroughputList } from "@/hooks/queries/use-throughput";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -123,6 +124,9 @@ export default function PlanPage() {
   const updateScope = useUpdateScope();
   const allProblems = useProblemsList(fieldId ?? undefined).data ?? [];
   const reviewQuery = useReviewList(fieldId ?? undefined, null, scopeId ?? undefined);
+  // Past throughput (= 過去 answer 履歴)。1 answer = 1 ブロックを overlay として今日より前に積む。
+  // asOf 再生時は asOf 以前のみ表示するため、client 側 filter で対応。
+  const throughputQuery = useThroughputList(undefined, null, scopeId ?? undefined);
 
   // AsOf 時点の scope/layers/milestones を timeline から再構築。members/subjects/levels
   // は live (detail) 由来 (problem は bitemporal でないので意味のある再構築不可)。
@@ -305,8 +309,24 @@ export default function PlanPage() {
         }),
       );
     }
+    // 過去実績 (throughput) を opacity 0.5 で overlay。allocated past (= first attempt) と
+    // 重複しないよう、prevStatus 非 null の re-answer のみ採用。
+    // asOf 再生時はチャート上 today より右の点が今日扱いになるので today 比較で十分。
+    for (const r of throughputQuery.data ?? []) {
+      if (r.date >= today) continue;            // 未来 / 当日は overlay しない
+      if (!r.prevStatusColor) continue;          // 初回回答は allocated past 側で表示済
+      out.push({
+        problemId: r.problemId,
+        code: r.code,
+        name: r.name,
+        date: r.date,
+        color: r.prevStatusColor,
+        statusName: r.prevStatusName,
+        opacity: 0.5,
+      });
+    }
     return out;
-  }, [detail, edit.allocated, reviewQuery.data, statusByName, horizonDate]);
+  }, [detail, edit.allocated, reviewQuery.data, statusByName, horizonDate, throughputQuery.data, today]);
 
   const filteredOverlay = useMemo(() => {
     return overlayItems.filter((o) => {
