@@ -3,7 +3,7 @@ import { rpc, unwrap } from "@/lib/rpc-client";
 
 export const filterPrefsKeys = {
   all: ["filter-prefs"] as const,
-  byField: (fieldId: string) => [...filterPrefsKeys.all, fieldId] as const,
+  byScope: (scopeId: string) => [...filterPrefsKeys.all, scopeId] as const,
 };
 
 export type ReviewPrefs = {
@@ -55,25 +55,25 @@ export type FilterPrefsBag = {
   plan?: PlanPrefs;
 };
 
-export function useFilterPrefs(fieldId: string | undefined) {
+export function useFilterPrefs(scopeId: string | undefined) {
   return useQuery({
-    queryKey: fieldId ? filterPrefsKeys.byField(fieldId) : filterPrefsKeys.all,
+    queryKey: scopeId ? filterPrefsKeys.byScope(scopeId) : filterPrefsKeys.all,
     queryFn: async () => {
-      const json = await unwrap(rpc.api.v1["filter-prefs"].$get({ query: { field_id: fieldId! } }));
+      const json = await unwrap(rpc.api.v1["filter-prefs"].$get({ query: { scope_id: scopeId! } }));
       return (json.data?.filters ?? {}) as FilterPrefsBag;
     },
-    enabled: !!fieldId,
+    enabled: !!scopeId,
   });
 }
 
-export function useSaveFilterPrefs(fieldId: string | undefined) {
+export function useSaveFilterPrefs(scopeId: string | undefined) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (filters: FilterPrefsBag) =>
-      unwrap(rpc.api.v1["filter-prefs"].$put({ json: { field_id: fieldId!, filters } })),
+      unwrap(rpc.api.v1["filter-prefs"].$put({ json: { scope_id: scopeId!, filters } })),
     onSuccess: (_data, filters) => {
       // server を round-trip せず cache を直接更新 (= 無駄な GET を抑える)
-      if (fieldId) qc.setQueryData(filterPrefsKeys.byField(fieldId), filters);
+      if (scopeId) qc.setQueryData(filterPrefsKeys.byScope(scopeId), filters);
     },
   });
 }

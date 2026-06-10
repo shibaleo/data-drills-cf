@@ -259,15 +259,17 @@ export const oauthToken = pgTable("oauth_token", {
 // 23. FilterPref
 // =============================================================================
 
-// Phase 6: column 名も field_id に rename 済
+// Phase 7: scope_id 単位に変更 (旧 field_id)。同 field 内の複数 scope を
+// 別々の UI prefs で扱える。scope は bitemporal append-only なので FK 制約は
+// 付けない (goal_layer / goal_milestone と同じ方針)。
 export const filterPref = pgTable("filter_pref", {
   id: id(),
   userId: uuid("user_id").notNull(),
-  fieldId: uuid("field_id").notNull().references(() => field.id, { onDelete: "cascade" }),
+  scopeId: uuid("scope_id").notNull(),
   filters: jsonb("filters").notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
-  uniqueIndex("filter_pref_user_field_key").on(t.userId, t.fieldId),
+  uniqueIndex("filter_pref_user_scope_key").on(t.userId, t.scopeId),
 ]);
 
 // =============================================================================

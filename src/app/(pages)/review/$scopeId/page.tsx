@@ -458,25 +458,25 @@ export default function SchedulePage() {
   const [filterSubjects, setFilterSubjects] = useState<Set<string>>(new Set());
   const [filterLevels, setFilterLevels] = useState<Set<string>>(new Set());
   const [filterLastStatuses, setFilterLastStatuses] = useState<Set<string>>(new Set());
-  // DB 永続化
-  const filterPrefsQuery = useFilterPrefs(scopeFieldId ?? undefined);
-  const saveFilterPrefs = useSaveFilterPrefs(scopeFieldId ?? undefined);
+  // DB 永続化 (Phase 7: scope_id 単位)
+  const filterPrefsQuery = useFilterPrefs(scopeId);
+  const saveFilterPrefs = useSaveFilterPrefs(scopeId);
   const prefsLoadedRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!scopeFieldId || prefsLoadedRef.current === scopeFieldId!) return;
+    if (!scopeId || prefsLoadedRef.current === scopeId) return;
     const data = filterPrefsQuery.data?.review;
     if (data) {
       setFilterSubjects(new Set(data.subjectIds ?? []));
       setFilterLevels(new Set(data.levelIds ?? []));
       setFilterLastStatuses(new Set(data.lastStatuses ?? []));
     }
-    prefsLoadedRef.current = scopeFieldId!;
-  }, [filterPrefsQuery.data, scopeFieldId]);
+    prefsLoadedRef.current = scopeId;
+  }, [filterPrefsQuery.data, scopeId]);
   // 変更時に save (debounce 不要、変化が低頻度)。
   // 直前の snapshot と一致するなら server と同期済み → 冗長な PUT を防ぐ。
   const lastSavedPrefsRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!scopeFieldId || prefsLoadedRef.current !== scopeFieldId!) return;
+    if (!scopeId || prefsLoadedRef.current !== scopeId) return;
     const snapshot = JSON.stringify({
       s: [...filterSubjects].sort(),
       l: [...filterLevels].sort(),

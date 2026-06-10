@@ -199,12 +199,12 @@ export default function PlanPage() {
   const [hideReview, setHideReview] = useState(false);
   const [hideForecast, setHideForecast] = useState(false);
 
-  // filter prefs 永続化 (review/scopes と同じ filter_prefs テーブル、key=plan)
-  const filterPrefsQuery = useFilterPrefs(fieldId ?? undefined);
-  const saveFilterPrefs = useSaveFilterPrefs(fieldId ?? undefined);
+  // filter prefs 永続化 (Phase 7 で scope_id 単位、scope ごとに独立)
+  const filterPrefsQuery = useFilterPrefs(scopeId ?? undefined);
+  const saveFilterPrefs = useSaveFilterPrefs(scopeId ?? undefined);
   const prefsLoadedRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!fieldId || prefsLoadedRef.current === fieldId) return;
+    if (!scopeId || prefsLoadedRef.current === scopeId) return;
     if (filterPrefsQuery.data === undefined) return;
     const p = filterPrefsQuery.data?.plan;
     if (p) {
@@ -223,11 +223,11 @@ export default function PlanPage() {
       setHideReview(!!p.hideReview);
       setHideForecast(!!p.hideForecast);
     }
-    prefsLoadedRef.current = fieldId;
-  }, [fieldId, filterPrefsQuery.data]);
+    prefsLoadedRef.current = scopeId;
+  }, [scopeId, filterPrefsQuery.data]);
   const lastSavedPrefsRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!fieldId || prefsLoadedRef.current !== fieldId) return;
+    if (!scopeId || prefsLoadedRef.current !== scopeId) return;
     const snapshot = JSON.stringify({
       s: [...filterSubjects].sort(),
       l: [...filterLevels].sort(),
@@ -370,15 +370,32 @@ export default function PlanPage() {
     return out;
   }, [detail, edit.allocated, reviewQuery.data, statusByName, horizonDate, throughputQuery.data, today]);
 
+  // problemId → {subjectId, levelId} の lookup (filter 用)
+  const problemMeta = useMemo(() => {
+    const m = new Map<string, { subjectId: string | null; levelId: string | null }>();
+    if (detail) for (const p of detail.members) m.set(p.id, { subjectId: p.subject_id, levelId: p.level_id });
+    return m;
+  }, [detail]);
+
+  const passesSubjectLevel = useCallback((problemId: string): boolean => {
+    if (filterSubjects.size === 0 && filterLevels.size === 0) return true;
+    const meta = problemMeta.get(problemId);
+    if (!meta) return false;
+    if (filterSubjects.size > 0 && (!meta.subjectId || !filterSubjects.has(meta.subjectId))) return false;
+    if (filterLevels.size > 0 && (!meta.levelId || !filterLevels.has(meta.levelId))) return false;
+    return true;
+  }, [problemMeta, filterSubjects, filterLevels]);
+
   const filteredOverlay = useMemo(() => {
     return overlayItems.filter((o) => {
       if (hideThroughput && o.kind === "past-throughput") return false;
       if (hideReview && o.kind === "review-next") return false;
       if (hideForecast && o.kind === "smooth-future") return false;
       if (filterLastStatuses.size > 0 && (!o.statusName || !filterLastStatuses.has(o.statusName))) return false;
+      if (!passesSubjectLevel(o.problemId)) return false;
       return true;
     });
-  }, [overlayItems, filterLastStatuses, hideThroughput, hideReview, hideForecast]);
+  }, [overlayItems, filterLastStatuses, hideThroughput, hideReview, hideForecast, passesSubjectLevel]);
 
   const filteredAllocated = useMemo(() => {
     return edit.allocated.filter((a) => {
@@ -393,9 +410,10 @@ export default function PlanPage() {
         const matchOverBudget = allocFlagFilter.has("overBudget") && a.overBudget;
         if (!matchOverflow && !matchOverBudget) return false;
       }
+      if (!passesSubjectLevel(a.problemId)) return false;
       return true;
     });
-  }, [edit.allocated, allocKindFilter, allocFlagFilter, hideThroughput, hideForecast]);
+  }, [edit.allocated, allocKindFilter, allocFlagFilter, hideThroughput, hideForecast, passesSubjectLevel]);
 
   const memberCount = edit.effectiveMembers.length;
   const doneCount = edit.effectiveMembers.filter((m) => m.first_answer_date).length;

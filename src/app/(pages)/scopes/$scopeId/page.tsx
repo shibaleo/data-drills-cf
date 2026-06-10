@@ -112,11 +112,11 @@ export default function ScopeDetailPage() {
   const { data: topics = [] } = useTopicsList(scopeFieldId ?? undefined);
 
   // Filter prefs persistence
-  const filterPrefsQuery = useFilterPrefs(scopeFieldId ?? undefined);
-  const saveFilterPrefs = useSaveFilterPrefs(scopeFieldId ?? undefined);
+  const filterPrefsQuery = useFilterPrefs(scopeId);
+  const saveFilterPrefs = useSaveFilterPrefs(scopeId);
   const prefsLoadedRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!scopeFieldId || prefsLoadedRef.current === scopeFieldId!) return;
+    if (!scopeId || prefsLoadedRef.current === scopeId) return;
     if (filterPrefsQuery.data === undefined) return;
     const p = filterPrefsQuery.data?.backlog;
     if (p) {
@@ -128,11 +128,11 @@ export default function ScopeDetailPage() {
       setOverflowOnly(!!p.overflowOnly);
       setHiddenLayerIds(new Set(p.hiddenLayerIds ?? []));
     }
-    prefsLoadedRef.current = scopeFieldId!;
-  }, [scopeFieldId, filterPrefsQuery.data]);
+    prefsLoadedRef.current = scopeId;
+  }, [scopeId, filterPrefsQuery.data]);
   const lastSavedPrefsRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!scopeFieldId || prefsLoadedRef.current !== scopeFieldId!) return;
+    if (!scopeId || prefsLoadedRef.current !== scopeId) return;
     const snapshot = JSON.stringify({
       s: [...filterSubjects].sort(),
       l: [...filterLevels].sort(),
