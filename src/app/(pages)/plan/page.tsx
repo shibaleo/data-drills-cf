@@ -10,6 +10,8 @@ import {
   History,
   Download,
   Filter,
+  Activity,
+  Sparkles,
 } from "lucide-react";
 import {
   useReactTable,
@@ -95,6 +97,7 @@ function projectSmoothFuture(args: {
       color: info.color ?? "#a3a3a3",
       statusName: nextStatusName,
       stabilityDays: intervalDays,
+      kind: "smooth-future",
     });
     date = projected;
     chainIdx = nextIdx;
@@ -324,6 +327,7 @@ export default function PlanPage() {
         color: stColor,
         statusName: r.lastStatus,
         stabilityDays: reviewIntervalDays,
+        kind: "review-next",
       });
       out.push(
         ...projectSmoothFuture({
@@ -353,6 +357,7 @@ export default function PlanPage() {
         color: r.prevStatusColor,
         statusName: r.prevStatusName,
         opacity: 0.5,
+        kind: "past-throughput",
       });
     }
     return out;
@@ -360,10 +365,10 @@ export default function PlanPage() {
 
   const filteredOverlay = useMemo(() => {
     return overlayItems.filter((o) => {
-      // 過去 throughput overlay は stabilityDays 無し (= 実績)、未来 overlay は有り
-      const isActual = o.stabilityDays === undefined;
-      if (hideThroughput && isActual) return false;
-      if (hidePlanned && !isActual) return false;
+      if (hideThroughput && o.kind === "past-throughput") return false;
+      // hidePlanned: smooth-future (= cascade 予測) と alloc.future を隠す。
+      // review-next (各 problem の最後 status から計算した 1 段目) は残す。
+      if (hidePlanned && o.kind === "smooth-future") return false;
       if (filterLastStatuses.size > 0 && (!o.statusName || !filterLastStatuses.has(o.statusName))) return false;
       return true;
     });
@@ -563,26 +568,38 @@ export default function PlanPage() {
               )}
             </PopoverContent>
           </Popover>
-          {/* Throughput / Planned 表示 toggle。active なら 該当データを隠す。 */}
+          {/* Throughput / Planned 表示 toggle。active (赤線) なら該当データを隠す。 */}
           <button type="button"
             onClick={() => setHideThroughput((v) => !v)}
-            title={hideThroughput ? "実績を表示" : "実績を非表示"}
-            className={`h-6 px-2 text-[10px] rounded-md border transition-colors shrink-0 ${
+            title={hideThroughput ? "Show throughput (past actuals)" : "Hide throughput (past actuals)"}
+            aria-pressed={hideThroughput}
+            className={`inline-flex items-center justify-center size-6 rounded-md border transition-colors shrink-0 relative ${
               hideThroughput
                 ? "bg-accent text-accent-foreground border-accent-foreground/30"
                 : "text-muted-foreground hover:bg-muted"
             }`}>
-            {hideThroughput ? "実績 OFF" : "実績"}
+            <Activity className="size-3"/>
+            {hideThroughput && (
+              <span className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <span className="block w-[18px] h-[1.5px] bg-current rotate-45"/>
+              </span>
+            )}
           </button>
           <button type="button"
             onClick={() => setHidePlanned((v) => !v)}
-            title={hidePlanned ? "予定を表示" : "予定を非表示"}
-            className={`h-6 px-2 text-[10px] rounded-md border transition-colors shrink-0 ${
+            title={hidePlanned ? "Show planned projections (smooth-future)" : "Hide planned projections (keep next review)"}
+            aria-pressed={hidePlanned}
+            className={`inline-flex items-center justify-center size-6 rounded-md border transition-colors shrink-0 relative ${
               hidePlanned
                 ? "bg-accent text-accent-foreground border-accent-foreground/30"
                 : "text-muted-foreground hover:bg-muted"
             }`}>
-            {hidePlanned ? "予定 OFF" : "予定"}
+            <Sparkles className="size-3"/>
+            {hidePlanned && (
+              <span className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <span className="block w-[18px] h-[1.5px] bg-current rotate-45"/>
+              </span>
+            )}
           </button>
           {(historyPanelOpen || asOf != null) && (
             <div className="flex-1 min-w-0 h-[26px] rounded-md border px-2 flex items-center text-xs">

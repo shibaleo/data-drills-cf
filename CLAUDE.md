@@ -119,6 +119,7 @@ user
 ## Conventions
 
 - Language: TypeScript
+- **UI 文言は英語で統一** (ボタンラベル / tooltip / toast 等は英語。コメントとログは日本語可)
 - Package manager: pnpm
 - Monorepo: `services/pdf/` に PDF 処理サービスを同居
 - CF Worker entry: `src/cf-worker-entry.ts`
