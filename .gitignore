@@ -19,3 +19,4 @@ dist/
 *.tsbuildinfo
 *.pem
 *.log
+.claude/
