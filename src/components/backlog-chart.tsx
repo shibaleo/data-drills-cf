@@ -200,17 +200,18 @@ export const BacklogChart = forwardRef<BacklogChartHandle, BacklogChartProps>(fu
     | { kind: "alloc"; alloc: AllocatedProblem }
     | { kind: "overlay"; ov: OverlayBlock };
   // 積み上げ順 (下 → 上):
-  //   過去カラム: First → Miss → Rough → Fair → Fluent → Done (= 実績)
-  //   未来カラム: 未来 allocated → smooth-future overlay (= 未解消)
-  // 過去/未来は column の date < today で分岐。overflow は同 rank で扱う。
-  const pastStatusRank = (name: string | null | undefined): number => {
+  //   実績 (past column の alloc past + past throughput overlay): rank 0、挿入順
+  //   予定 (future column の alloc + smooth-future overlay): rank 100 + stability 順
+  //     (= Miss/Rough/Fair/Fluent/Done 安定度 ASC → Done が上端)
+  //   First は stability 0 扱い (= 予定の下端)
+  const plannedStabilityRank = (name: string | null | undefined): number => {
     switch (name) {
       case "Miss": return 1;
       case "Rough": return 2;
       case "Fair": return 3;
       case "Fluent": return 4;
       case "Done": return 5;
-      default: return 6;
+      default: return 0;  // First / unknown → 予定の下端
     }
   };
   const grouped = useMemo(() => {
@@ -226,12 +227,9 @@ export const BacklogChart = forwardRef<BacklogChartHandle, BacklogChartProps>(fu
       map.set(ov.date, list);
     }
     const rank = (it: StackItem, isPast: boolean): number => {
-      if (it.kind === "alloc") {
-        if (it.alloc.side === "past") return 0;       // First (下端)
-        return 50;                                     // 未解消 (alloc future)
-      }
-      if (isPast) return pastStatusRank(it.ov.statusName);  // 1..6 (past 実績)
-      return 50;                                       // 未解消 (smooth-future) — alloc と同 rank
+      if (isPast) return 0;                                              // 実績: 一律 (挿入順)
+      const statusName = it.kind === "alloc" ? null : it.ov.statusName;
+      return 100 + plannedStabilityRank(statusName);                     // 予定: stability 順
     };
     for (const [date, list] of map) {
       const isPast = date < today;
