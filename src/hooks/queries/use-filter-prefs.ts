@@ -30,10 +30,21 @@ export type ThroughputPrefs = {
   prevStatuses?: string[];  // 凡例ショートカット用 ("First" + 各 status name)
   maxRowsCap?: number | null;
 };
+export type PlanPrefs = {
+  subjectIds?: string[];
+  levelIds?: string[];
+  lastStatuses?: string[];
+  /** 凡例の First / Planned 選択 (select-only: 空=全表示) */
+  allocKinds?: ("First" | "Planned")[];
+  /** 凡例の overflow / overBudget リング選択 (select-only) */
+  allocFlags?: ("overflow" | "overBudget")[];
+  hiddenLayerIds?: string[];
+};
 export type FilterPrefsBag = {
   review?: ReviewPrefs;
   backlog?: BacklogPrefs;
   throughput?: ThroughputPrefs;
+  plan?: PlanPrefs;
 };
 
 export function useFilterPrefs(fieldId: string | undefined) {

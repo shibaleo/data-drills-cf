@@ -38,8 +38,25 @@ export type MilestoneView = {
   date: string;
 };
 
+/**
+ * BacklogChart のスタック上に「allocated 由来ではない overlay ブロック」を追加する用。
+ * /plan の FSRS-projected smooth-future の描画に使う。色は呼び出し側で指定 (status color など)。
+ * 過去/未来分類や overflow/over-budget の計算はしない。
+ */
+export type OverlayBlock = {
+  problemId: string;
+  code: string;
+  name: string | null;
+  date: string;
+  color: string;
+  /** tooltip 用ラベル (e.g. status 名)。 */
+  statusName?: string | null;
+};
+
 type BacklogChartProps = {
   items: AllocatedProblem[];
+  /** allocated と同じ tetris カラムに積む overlay ブロック (smooth-future projection 等)。 */
+  overlayItems?: OverlayBlock[];
   layers: LayerView[];
   milestones: MilestoneView[];
   today: string;
@@ -107,6 +124,7 @@ function addDays(dateStr: string, days: number): string {
 
 export const BacklogChart = forwardRef<BacklogChartHandle, BacklogChartProps>(function BacklogChartImpl({
   items,
+  overlayItems,
   layers,
   milestones,
   today,
@@ -173,25 +191,43 @@ export const BacklogChart = forwardRef<BacklogChartHandle, BacklogChartProps>(fu
     (a) => !a.layer_id || !hiddenLayers.has(a.layer_id),
   );
 
+  type StackItem =
+    | { kind: "alloc"; alloc: AllocatedProblem }
+    | { kind: "overlay"; ov: OverlayBlock };
   const grouped = useMemo(() => {
-    const map = new Map<string, AllocatedProblem[]>();
+    const map = new Map<string, StackItem[]>();
     for (const item of items) {
       const list = map.get(item.date) ?? [];
-      list.push(item);
+      list.push({ kind: "alloc", alloc: item });
       map.set(item.date, list);
     }
     const sideOrder = { past: 0, future: 1 } as const;
     for (const list of map.values()) {
       list.sort((a, b) => {
-        if (a.overflow !== b.overflow) return a.overflow ? 1 : -1;
-        return sideOrder[a.side] - sideOrder[b.side];
+        // overlay は alloc の後 (= 上) に積む
+        if (a.kind !== b.kind) return a.kind === "alloc" ? -1 : 1;
+        if (a.kind === "alloc" && b.kind === "alloc") {
+          if (a.alloc.overflow !== b.alloc.overflow) return a.alloc.overflow ? 1 : -1;
+          return sideOrder[a.alloc.side] - sideOrder[b.alloc.side];
+        }
+        return 0;
       });
     }
+    for (const ov of overlayItems ?? []) {
+      const list = map.get(ov.date) ?? [];
+      list.push({ kind: "overlay", ov });
+      map.set(ov.date, list);
+    }
     return map;
-  }, [items]);
+  }, [items, overlayItems]);
 
   const { dates, todayIdx } = useMemo(() => {
-    const allDates = [today, ...items.map((i) => i.date), ...milestones.map((m) => m.date)];
+    const allDates = [
+      today,
+      ...items.map((i) => i.date),
+      ...milestones.map((m) => m.date),
+      ...(overlayItems ?? []).map((o) => o.date),
+    ];
     const minDate = allDates.reduce((a, b) => (a < b ? a : b), today);
     const maxDate = allDates.reduce((a, b) => (a > b ? a : b), today);
     const rangeStart = addDays(minDate < today ? minDate : today, -7);
@@ -200,7 +236,7 @@ export const BacklogChart = forwardRef<BacklogChartHandle, BacklogChartProps>(fu
     let d = rangeStart;
     while (d <= rangeEnd) { ds.push(d); d = addDays(d, 1); }
     return { dates: ds, todayIdx: ds.indexOf(today) };
-  }, [items, milestones, today]);
+  }, [items, milestones, overlayItems, today]);
   const axisIdx = dates.indexOf(axisToday);
 
   const didInitScroll = useRef(false);
@@ -372,7 +408,22 @@ export const BacklogChart = forwardRef<BacklogChartHandle, BacklogChartProps>(fu
                     width={CELL} height={CELL} rx={2}
                     fill="none" stroke="hsl(var(--border))" strokeWidth={0.5}/>
                 ))}
-                {dayItems.map((item, stackIdx) => {
+                {dayItems.map((stackItem, stackIdx) => {
+                  const by = chartHeight - BOTTOM_AXIS_H - (stackIdx + 1) * STEP;
+                  if (stackItem.kind === "overlay") {
+                    const o = stackItem.ov;
+                    return (
+                      <rect key={`ov-${o.problemId}-${stackIdx}`}
+                        x={x} y={by} width={CELL} height={CELL} rx={2}
+                        fill={o.color} opacity={0.85}
+                        className="cursor-pointer"
+                        onClick={() => onSelect?.(o.problemId)}
+                        onDoubleClick={() => onOpen?.(o.problemId)}>
+                        <title>{o.code} {o.name ?? ""}{o.statusName ? ` (${o.statusName})` : ""}</title>
+                      </rect>
+                    );
+                  }
+                  const item = stackItem.alloc;
                   const kind = item.side === "past"
                     ? { side: "past" as const, prevStatusColor: null }
                     : { side: "future" as const, overflow: item.overflow, overBudget: item.overBudget };
@@ -384,7 +435,6 @@ export const BacklogChart = forwardRef<BacklogChartHandle, BacklogChartProps>(fu
                   const anchorIsPast = anchor && date < today;
                   const anchorColor = anchorIsPast ? mixGray(anchorLayer?.color || MS_COLOR) : (anchorLayer?.color || MS_COLOR);
                   const anchorOpacity = anchorIsPast ? PAST_OPACITY : (anchorLayer ? (anchorLayer.opacity_pct ?? 40) / 100 : 1);
-                  const by = chartHeight - BOTTOM_AXIS_H - (stackIdx + 1) * STEP;
                   // anchor (milestone tie) > warn border > selection highlight, all stroked on the same rect.
                   const stroke = anchor ? anchorColor : warn?.stroke ?? "none";
                   const strokeWidth = anchor ? 2 : warn?.width ?? 0;
@@ -411,15 +461,16 @@ export const BacklogChart = forwardRef<BacklogChartHandle, BacklogChartProps>(fu
                     </g>
                   );
                 })}
-                {/* anchor ラベル */}
+                {/* anchor ラベル — overlay は無視し alloc のみで判定 */}
                 {(() => {
-                  const anchorsHere = dayItems
-                    .map((it) => ({ it }))
-                    .filter(({ it }) => visibleAnchors.some((a) => a.problemId === it.problemId));
+                  const allocItems = dayItems.filter((it) => it.kind === "alloc").map((it) => it.alloc);
+                  const anchorsHere = allocItems.filter((it) =>
+                    visibleAnchors.some((a) => a.problemId === it.problemId),
+                  );
                   if (anchorsHere.length === 0) return null;
                   const topY = chartHeight - BOTTOM_AXIS_H - dayItems.length * STEP - 4;
                   const aPast = date < today;
-                  return anchorsHere.map(({ it }) => {
+                  return anchorsHere.map((it) => {
                     const a = visibleAnchors.find((x) => x.problemId === it.problemId)!;
                     const aLayer = a.layer_id ? layers.find((l) => l.id === a.layer_id) : null;
                     const rawCol = aLayer?.color || MS_COLOR;

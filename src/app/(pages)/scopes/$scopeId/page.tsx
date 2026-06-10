@@ -8,7 +8,7 @@ type ScopeMember = ScopeDetail["members"][number];
 import type { MemberFilterInput } from "@/lib/schemas/member-filter";
 import { applyMemberFilter } from "@/lib/member-filter";
 import { MemberFilterPicker } from "@/components/member-filter-picker";
-import { StabilitySlider } from "@/components/stability-slider";
+import { ScopeFSRSOverridePanel } from "@/components/scope-fsrs-override-panel";
 import { useField } from "@/hooks/use-field";
 import { useSubjects, useLevels } from "@/hooks/queries/use-field-data";
 import { useProblemsList } from "@/hooks/queries/use-problems";
@@ -715,7 +715,7 @@ export default function ScopeDetailPage() {
         </div>
         {milestonePinsVisible && scopeAtAsOf && (
           <div className="px-3 pb-2 -mt-1">
-            <FSRSStabilitiesSliderEditor
+            <ScopeFSRSOverridePanel
               key={`${scopeAtAsOf.revision}-${asOf ?? "live"}`}
               statuses={statuses}
               current={scopeAtAsOf.status_stabilities ?? {}}
@@ -1031,73 +1031,3 @@ function WeekdayWeightsInput({ value, onChange, dailyMinutes }: {
   );
 }
 
-/* ── FSRS override 編集 (visual slider 版) ──────────────────────────
- * scope.status_stabilities (= status name → days の override マップ) を編集。
- * slider の thumb を drag すると local preview 更新、明示的 save ボタンで反映。
- * thumb 位置は override > global stabilityDays > 0 のフォールバック。
- */
-function FSRSStabilitiesSliderEditor({
-  statuses, current, disabled, onSave,
-}: {
-  statuses: { id: string; name: string; color: string | null; stabilityDays: number }[];
-  current: Record<string, number>;
-  disabled?: boolean;
-  onSave: (next: Record<string, number>) => Promise<unknown>;
-}) {
-  const [local, setLocal] = useState<Record<string, number>>(current);
-  const [saving, setSaving] = useState(false);
-  useEffect(() => { setLocal(current); }, [current]);
-  const dirty = JSON.stringify(local) !== JSON.stringify(current);
-
-  const overrides = useMemo(() => {
-    const m = new Map<string, number>();
-    for (const [k, v] of Object.entries(local)) m.set(k, v);
-    return m;
-  }, [local]);
-
-  const sliderStatuses = useMemo(
-    () => statuses.map((s) => ({ name: s.name, color: s.color, stabilityDays: s.stabilityDays })),
-    [statuses],
-  );
-  const sliderMax = useMemo(() => {
-    const peak = Math.max(30, ...statuses.map((s) => s.stabilityDays), ...Object.values(local));
-    return Math.ceil((peak * 2) / 10) * 10;
-  }, [statuses, local]);
-
-  return (
-    <div className="border-t pt-2 space-y-2">
-      <div className="flex items-center justify-between">
-        <Label className="text-[9px] uppercase tracking-wide text-muted-foreground">FSRS override (days)</Label>
-        <div className="flex items-center gap-2">
-          {dirty && (
-            <>
-              <button type="button"
-                disabled={saving || disabled}
-                className="text-[10px] text-muted-foreground hover:text-foreground disabled:opacity-40"
-                onClick={() => setLocal(current)}>reset</button>
-              <button type="button"
-                disabled={saving || disabled}
-                className="text-[10px] text-primary hover:underline disabled:opacity-40"
-                onClick={async () => {
-                  setSaving(true);
-                  try { await onSave(local); toast.success("FSRS パラメタを保存"); }
-                  catch (e) { toast.error(e instanceof Error ? e.message : "保存失敗"); }
-                  finally { setSaving(false); }
-                }}>save</button>
-            </>
-          )}
-        </div>
-      </div>
-      {sliderStatuses.length > 0 && (
-        <div className="px-2">
-          <StabilitySlider
-            statuses={sliderStatuses}
-            overrides={overrides}
-            max={sliderMax}
-            onChange={(name, v) => setLocal((prev) => ({ ...prev, [name]: Math.max(0, v) }))}
-          />
-        </div>
-      )}
-    </div>
-  );
-}

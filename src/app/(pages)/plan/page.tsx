@@ -1,28 +1,57 @@
 "use client";
-import { useMemo, useState, useEffect } from "react";
-import { useQueries } from "@tanstack/react-query";
-import { useSearch, useNavigate } from "@tanstack/react-router";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearch } from "@tanstack/react-router";
+import { toast } from "sonner";
+import {
+  SlidersHorizontal,
+  Save,
+  RotateCcw,
+  Loader2,
+  History,
+  Download,
+  Filter,
+} from "lucide-react";
+import {
+  useReactTable,
+  getCoreRowModel,
+  getSortedRowModel,
+  flexRender,
+  type SortingState,
+} from "@tanstack/react-table";
 import { useField } from "@/hooks/use-field";
 import { useReviewList } from "@/hooks/queries/use-review";
+import { useProblemsList } from "@/hooks/queries/use-problems";
+import { useScopes, useScope, useScopeDetail, useUpdateScope } from "@/hooks/queries/use-scopes";
+import { useProblemDialogs } from "@/hooks/use-problem-dialogs";
 import { usePageTitle } from "@/lib/page-context";
-import { rpc, unwrap } from "@/lib/rpc-client";
-import { allocate, type MemberInput, type Milestone } from "@/lib/backlog-allocate";
-import { blockColor, blockBorder, COLOR_PLANNED, COLOR_FIRST_ATTEMPT } from "@/lib/block-color";
 import { todayJST } from "@/lib/date-utils";
 import { computeNextReview } from "@/lib/review-scoring";
-import { useScopes, scopesKeys } from "@/hooks/queries/use-scopes";
-import { formatRelDay } from "@/lib/relative-day";
-import { ChartShell, DEFAULT_TOP_AXIS_H, DEFAULT_BOTTOM_AXIS_H } from "@/components/chart-shell";
-import { CELL, STEP, MIN_ROWS } from "@/lib/chart-constants";
+import { BacklogChart, type BacklogChartHandle, type OverlayBlock } from "@/components/backlog-chart";
+import { ScopePlanRightPanel } from "@/components/scope-plan-right-panel";
+import { ScopeFSRSOverridePanel } from "@/components/scope-fsrs-override-panel";
 import { BlockLegend, type LegendEntry } from "@/components/block-legend";
-
-const PAD_BEFORE = 7;
-const PAD_AFTER = 14;
+import { COLOR_PLANNED, COLOR_FIRST_ATTEMPT } from "@/lib/block-color";
+import { Button } from "@/components/ui/button";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { ResizableTableShell } from "@/components/resizable-table-shell";
+import { AsOfControls } from "@/components/as-of-controls";
+import { FilterSection } from "@/components/filter-section";
+import { reviewTableColumns, toScheduleRow } from "@/components/review-table-columns";
+import { useScopeEditState } from "@/hooks/use-scope-edit-state";
+import { usePdfExport } from "@/hooks/use-pdf-export";
+import { useFilterPrefs, useSaveFilterPrefs } from "@/hooks/queries/use-filter-prefs";
 
 /** 順調な status 進行順 (= 各 review を smooth に通した場合の遷移) */
 const SMOOTH_CHAIN = ["Rough", "Fair", "Fluent", "Done"] as const;
 /** Done の繰り返しはこの期間まで */
 const PROJECTION_HORIZON_DAYS = 365 * 2;
+
+function addDays(s: string, n: number): string {
+  const d = new Date(`${s}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
 
 /** 順調進行を仮定して将来 review 日を生成する。
  *  - currentStatus が SMOOTH_CHAIN に無ければ (First / Miss など) → chain 先頭から開始
@@ -38,11 +67,10 @@ function projectSmoothFuture(args: {
   lastDurationSec: number | null;
   statusByName: Map<string, { stabilityDays: number; color: string | null }>;
   horizonDate: string;
-}): Block[] {
-  const out: Block[] = [];
+}): OverlayBlock[] {
+  const out: OverlayBlock[] = [];
   let date = args.startDate;
   let chainIdx = SMOOTH_CHAIN.indexOf(args.startStatus as (typeof SMOOTH_CHAIN)[number]);
-  // chain に無い (First / Miss) → 次は Rough
   let safety = 200;
   while (safety-- > 0) {
     const nextIdx = Math.min(chainIdx + 1, SMOOTH_CHAIN.length - 1);
@@ -50,7 +78,7 @@ function projectSmoothFuture(args: {
     const info = args.statusByName.get(nextStatusName);
     if (!info || info.stabilityDays <= 0) break;
     const projected = computeNextReview(date, info.stabilityDays, args.standardTimeSec, args.lastDurationSec);
-    if (projected <= date) break; // 進まないなら無限ループ防止
+    if (projected <= date) break;
     if (projected > args.horizonDate) break;
     out.push({
       problemId: args.problemId,
@@ -58,181 +86,180 @@ function projectSmoothFuture(args: {
       name: args.name,
       date: projected,
       color: info.color ?? "#a3a3a3",
-      border: null,
-      source: "review",
-      isFuture: false,
-      overflow: false,
-      overBudget: false,
       statusName: nextStatusName,
     });
     date = projected;
-    chainIdx = nextIdx; // Done に達したら chainIdx は max のまま固定 → 同じインターバルで繰り返す
+    chainIdx = nextIdx;
   }
   return out;
-}
-
-type Block = {
-  problemId: string;
-  code: string;
-  name: string | null;
-  date: string;
-  color: string;
-  border: { stroke: string; dashed: boolean; width: number } | null;
-  source: "backlog" | "review";
-  /** backlog future のみ true 可。"First" pink past / Review は false */
-  isFuture: boolean;
-  overflow: boolean;
-  overBudget: boolean;
-  /** review block の status 名 (フィルター用)。backlog は null */
-  statusName: string | null;
-};
-
-function addDays(s: string, n: number): string {
-  const d = new Date(`${s}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + n);
-  return d.toISOString().slice(0, 10);
 }
 
 export default function PlanPage() {
   usePageTitle("Plan");
   const { statuses, currentScopeId, setCurrentScopeId } = useField();
-  const today = todayJST();
-  const [hideFirst, setHideFirst] = useState(false);
-  const [hideFuture, setHideFuture] = useState(false);
-  const [hiddenStatuses, setHiddenStatuses] = useState<Set<string>>(new Set());
-  const [overflowOnly, setOverflowOnly] = useState(false);
-  const [overBudgetOnly, setOverBudgetOnly] = useState(false);
-  // scope は GlobalScopePicker (top-bar) または ?scope_id= から取得する。
-  // 後者は外部リンクからの shareable 用。両者を currentScopeId に同期する。
+  const realToday = todayJST();
+  const [asOf, setAsOf] = useState<string | null>(null);
+  const readOnly = asOf != null;
+  const today = asOf ?? realToday;
+
+  // scope は GlobalScopePicker または ?scope_id= から取得。
   const search = useSearch({ strict: false }) as { scope_id?: string };
-  const navigate = useNavigate();
   const { data: scopes = [] } = useScopes();
   useEffect(() => {
     if (search.scope_id && search.scope_id !== currentScopeId) {
       setCurrentScopeId(search.scope_id);
     }
   }, [search.scope_id, currentScopeId, setCurrentScopeId]);
-  const selectedScopeId = currentScopeId;
+  const scopeId = currentScopeId;
   const selectedScope = useMemo(
-    () => scopes.find((s) => s.id === selectedScopeId) ?? null,
-    [scopes, selectedScopeId],
+    () => scopes.find((s) => s.id === scopeId) ?? null,
+    [scopes, scopeId],
   );
-  // scope.filter.fieldIds[0] が plan の対象 field。
-  // 未指定 (cross-field) なら fieldId=undefined で全 user 集計。
-  const fieldId = (selectedScope?.filter as { fieldIds?: string[] } | undefined)?.fieldIds?.[0];
+  const fieldId = (selectedScope?.filter as { fieldIds?: string[] } | undefined)?.fieldIds?.[0] ?? null;
 
-  const reviewQuery = useReviewList(fieldId, null, selectedScopeId);
+  const { data: detail = null } = useScopeDetail(scopeId ?? "");
+  const scopeQuery = useScope(scopeId ?? "");
+  const updateScope = useUpdateScope();
+  const allProblems = useProblemsList(fieldId ?? undefined).data ?? [];
+  const reviewQuery = useReviewList(fieldId ?? undefined, null, scopeId ?? undefined);
 
-  // selectedScopeId 指定中はその scope だけ fetch (= per-scope view)。
-  // 未指定は全 scope を fan-out (legacy 俯瞰モード)。
-  const detailScopes = selectedScopeId
-    ? scopes.filter((s) => s.id === selectedScopeId)
-    : scopes;
-  const detailQueries = useQueries({
-    queries: detailScopes.map((s) => ({
-      queryKey: scopesKeys.fullDetail(s.id),
-      queryFn: async () => {
-        const json = await unwrap(
-          rpc.api.v1.scopes[":id"].detail.$get({ param: { id: s.id } }),
-        );
-        return json.data;
+  const edit = useScopeEditState({
+    scopeId: scopeId ?? "",
+    data: detail,
+    today,
+    realToday,
+    asOf,
+    allProblems,
+  });
+
+  // 表示フィルタ (凡例ピルのトグル)。すべて select-only semantics:
+  // 空集合 = 全表示、要素あり = それだけ表示 (ピルは active 強調)。
+  const [allocKindFilter, setAllocKindFilter] = useState<Set<"First" | "Planned">>(new Set());
+  const [allocFlagFilter, setAllocFlagFilter] = useState<Set<"overflow" | "overBudget">>(new Set());
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [showMilestonePins, setShowMilestonePins] = useState(true);
+  const [historyPanelOpen, setHistoryPanelOpen] = useState(false);
+  const [hiddenLayerIds, setHiddenLayerIds] = useState<Set<string>>(new Set());
+  const [sorting, setSorting] = useState<SortingState>([{ id: "daysUntil", desc: false }]);
+  const [filterSubjects, setFilterSubjects] = useState<Set<string>>(new Set());
+  const [filterLevels, setFilterLevels] = useState<Set<string>>(new Set());
+  const [filterLastStatuses, setFilterLastStatuses] = useState<Set<string>>(new Set());
+
+  // filter prefs 永続化 (review/scopes と同じ filter_prefs テーブル、key=plan)
+  const filterPrefsQuery = useFilterPrefs(fieldId ?? undefined);
+  const saveFilterPrefs = useSaveFilterPrefs(fieldId ?? undefined);
+  const prefsLoadedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!fieldId || prefsLoadedRef.current === fieldId) return;
+    if (filterPrefsQuery.data === undefined) return;
+    const p = filterPrefsQuery.data?.plan;
+    if (p) {
+      setFilterSubjects(new Set(p.subjectIds ?? []));
+      setFilterLevels(new Set(p.levelIds ?? []));
+      setFilterLastStatuses(new Set(p.lastStatuses ?? []));
+      const kinds = new Set<"First" | "Planned">();
+      if (p.allocKinds) for (const k of p.allocKinds) kinds.add(k);
+      setAllocKindFilter(kinds);
+      const flags = new Set<"overflow" | "overBudget">();
+      if (p.allocFlags) for (const k of p.allocFlags) flags.add(k);
+      setAllocFlagFilter(flags);
+      setHiddenLayerIds(new Set(p.hiddenLayerIds ?? []));
+    }
+    prefsLoadedRef.current = fieldId;
+  }, [fieldId, filterPrefsQuery.data]);
+  const lastSavedPrefsRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!fieldId || prefsLoadedRef.current !== fieldId) return;
+    const snapshot = JSON.stringify({
+      s: [...filterSubjects].sort(),
+      l: [...filterLevels].sort(),
+      st: [...filterLastStatuses].sort(),
+      k: [...allocKindFilter].sort(),
+      f: [...allocFlagFilter].sort(),
+      h: [...hiddenLayerIds].sort(),
+    });
+    if (lastSavedPrefsRef.current === null) {
+      lastSavedPrefsRef.current = snapshot;
+      return;
+    }
+    if (lastSavedPrefsRef.current === snapshot) return;
+    lastSavedPrefsRef.current = snapshot;
+    saveFilterPrefs.mutate({
+      ...(filterPrefsQuery.data ?? {}),
+      plan: {
+        subjectIds: [...filterSubjects],
+        levelIds: [...filterLevels],
+        lastStatuses: [...filterLastStatuses],
+        allocKinds: [...allocKindFilter],
+        allocFlags: [...allocFlagFilter],
+        hiddenLayerIds: [...hiddenLayerIds],
       },
-      enabled: !!fieldId,
-    })),
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filterSubjects, filterLevels, filterLastStatuses, allocKindFilter, allocFlagFilter, hiddenLayerIds]);
+  const chartRef = useRef<BacklogChartHandle>(null);
+  const tableRef = useRef<HTMLDivElement>(null);
+
+  const handleSelect = useCallback((id: string) => {
+    setSelectedId((prev) => (prev === id ? null : id));
+    requestAnimationFrame(() => {
+      const row = tableRef.current?.querySelector(`[data-problem-id="${id}"]`);
+      row?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+  }, []);
+
+  const handleDataChanged = useCallback(() => { /* invalidations handled inside mutation hooks */ }, []);
+  const { openDetail, renderDialogs } = useProblemDialogs({
+    fieldId,
+    allProblems,
+    onDataChanged: handleDataChanged,
   });
 
   const statusByName = useMemo(() => {
     const m = new Map<string, { stabilityDays: number; color: string | null }>();
-    const override = selectedScope?.status_stabilities ?? {};
+    const override = scopeQuery.data?.status_stabilities ?? {};
     for (const s of statuses) {
-      // scope の override > global stability_days
       const days = override[s.name] !== undefined ? override[s.name] : s.stabilityDays;
       m.set(s.name, { stabilityDays: days, color: s.color ?? null });
     }
     return m;
-  }, [statuses, selectedScope]);
+  }, [statuses, scopeQuery.data]);
 
   const horizonDate = useMemo(() => addDays(today, PROJECTION_HORIZON_DAYS), [today]);
 
-  const blocks = useMemo<Block[]>(() => {
-    const out: Block[] = [];
-    // Backlog blocks (past first-attempt + future allocator)
-    for (const q of detailQueries) {
-      const d = q.data;
-      if (!d) continue;
-      const members: MemberInput[] = d.members.map((m) => ({
-        id: m.id,
-        code: m.code,
-        name: m.name,
-        standardTimeSec: m.standard_time,
-        firstAnswerDate: m.first_answer_date,
-      }));
-      const milestones: Milestone[] = d.milestones.map((m) => ({
-        target: m.target,
-        date: m.date,
-        id: m.id,
-        layer_id: m.layer_id,
-      }));
-      const memberStd = new Map<string, number | null>();
-      for (const m of d.members) memberStd.set(m.id, m.standard_time);
-      const alloc = allocate(
-        members,
-        milestones,
-        d.scope.daily_minutes,
-        today,
-        d.scope.time_multiplier_pct,
-        d.scope.weekday_weights,
-      );
-      for (const a of alloc) {
-        const kind = a.side === "future"
-          ? { side: "future" as const, overflow: a.overflow, overBudget: a.overBudget }
-          : { side: "past" as const, prevStatusColor: null };
-        out.push({
+  // FSRS-projected smooth-future overlay (allocated 上に積む)
+  const overlayItems = useMemo<OverlayBlock[]>(() => {
+    if (!detail) return [];
+    const out: OverlayBlock[] = [];
+    // backlog 未来 (= 初回予定日) からは smooth-future を投影
+    const memberStd = new Map<string, number | null>();
+    for (const m of detail.members) memberStd.set(m.id, m.standard_time);
+    for (const a of edit.allocated) {
+      if (a.side !== "future") continue;
+      out.push(
+        ...projectSmoothFuture({
           problemId: a.problemId,
           code: a.code,
           name: a.name,
-          date: a.date,
-          color: blockColor(kind),
-          border: blockBorder(kind),
-          source: "backlog",
-          isFuture: a.side === "future",
-          overflow: a.overflow,
-          overBudget: a.overBudget,
-          statusName: null,
-        });
-        // backlog 未来 (= 初回予定日) からは smooth-future を投影
-        // (duration がまだ無いので status の素 stabilityDays を使う)
-        if (a.side === "future") {
-          out.push(
-            ...projectSmoothFuture({
-              problemId: a.problemId,
-              code: a.code,
-              name: a.name,
-              startDate: a.date,
-              startStatus: "First", // chain に無いので Rough から始まる
-              standardTimeSec: memberStd.get(a.problemId) ?? null,
-              lastDurationSec: null,
-              statusByName,
-              horizonDate,
-            }),
-          );
-        }
-      }
+          startDate: a.date,
+          startStatus: "First",
+          standardTimeSec: memberStd.get(a.problemId) ?? null,
+          lastDurationSec: null,
+          statusByName,
+          horizonDate,
+        }),
+      );
     }
-    // Review blocks + smooth-future projection
+    // 既に答えたことがある問題 (review 持ち) の next review + smooth-future
     for (const r of reviewQuery.data ?? []) {
       if (r.answerCount === 0) continue;
+      const stColor = r.statusColor ?? "#a3a3a3";
       out.push({
         problemId: r.problemId,
         code: r.code,
         name: r.name,
         date: r.nextReview,
-        color: r.statusColor ?? "#a3a3a3",
-        border: null,
-        source: "review",
-        isFuture: false,
-        overflow: false,
-        overBudget: false,
+        color: stColor,
         statusName: r.lastStatus,
       });
       out.push(
@@ -250,200 +277,403 @@ export default function PlanPage() {
       );
     }
     return out;
-  }, [detailQueries, reviewQuery.data, today, statusByName, horizonDate]);
+  }, [detail, edit.allocated, reviewQuery.data, statusByName, horizonDate]);
 
-  const visibleBlocks = useMemo(() => {
-    return blocks.filter((b) => {
-      if (b.source === "backlog") {
-        if (b.isFuture) {
-          if (hideFuture) return false;
-        } else {
-          if (hideFirst) return false;
-        }
-        if (overflowOnly && !b.overflow) return false;
-        if (overBudgetOnly && !b.overBudget) return false;
-      } else {
-        // review
-        if (overflowOnly || overBudgetOnly) return false;
-        if (b.statusName && hiddenStatuses.has(b.statusName)) return false;
+  const filteredOverlay = useMemo(() => {
+    return overlayItems.filter((o) => {
+      if (filterLastStatuses.size > 0 && (!o.statusName || !filterLastStatuses.has(o.statusName))) return false;
+      return true;
+    });
+  }, [overlayItems, filterLastStatuses]);
+
+  const filteredAllocated = useMemo(() => {
+    return edit.allocated.filter((a) => {
+      if (allocKindFilter.size > 0) {
+        const kind = a.side === "past" ? "First" : "Planned";
+        if (!allocKindFilter.has(kind)) return false;
+      }
+      if (allocFlagFilter.size > 0) {
+        const matchOverflow = allocFlagFilter.has("overflow") && a.overflow;
+        const matchOverBudget = allocFlagFilter.has("overBudget") && a.overBudget;
+        if (!matchOverflow && !matchOverBudget) return false;
       }
       return true;
     });
-  }, [blocks, hideFirst, hideFuture, hiddenStatuses, overflowOnly, overBudgetOnly]);
+  }, [edit.allocated, allocKindFilter, allocFlagFilter]);
 
-  const grouped = useMemo(() => {
-    const map = new Map<string, Block[]>();
-    for (const b of visibleBlocks) {
-      const list = map.get(b.date) ?? [];
-      list.push(b);
-      map.set(b.date, list);
-    }
-    // backlog を下、review を上に積む
-    const order = { backlog: 0, review: 1 } as const;
-    for (const list of map.values()) {
-      list.sort((a, b) => order[a.source] - order[b.source]);
-    }
-    return map;
-  }, [visibleBlocks]);
+  const memberCount = edit.effectiveMembers.length;
+  const doneCount = edit.effectiveMembers.filter((m) => m.first_answer_date).length;
 
-  const dates = useMemo(() => {
-    const allDates = [today, ...visibleBlocks.map((b) => b.date)];
-    const minDate = allDates.reduce((a, b) => (a < b ? a : b));
-    const maxDate = allDates.reduce((a, b) => (a > b ? a : b));
-    const start = addDays(minDate < today ? minDate : today, -PAD_BEFORE);
-    const end = addDays(maxDate > today ? maxDate : today, PAD_AFTER);
-    const ds: string[] = [];
-    let d = start;
-    while (d <= end) {
-      ds.push(d);
-      d = addDays(d, 1);
-    }
-    return ds;
-  }, [visibleBlocks, today]);
+  // Table: review API の rows をそのまま review-page と同じ columns で表示。
+  // scope filter は review.ts 側で scope_id 適用済 → 追加処理なし。
+  const allScheduleRows = useMemo(() => (reviewQuery.data ?? []).map(toScheduleRow), [reviewQuery.data]);
+  const scheduleRows = useMemo(() => allScheduleRows.filter((r) => {
+    if (filterSubjects.size > 0 && (!r.subjectId || !filterSubjects.has(r.subjectId))) return false;
+    if (filterLevels.size > 0 && (!r.levelId || !filterLevels.has(r.levelId))) return false;
+    if (filterLastStatuses.size > 0 && !filterLastStatuses.has(r.lastStatus)) return false;
+    return true;
+  }), [allScheduleRows, filterSubjects, filterLevels, filterLastStatuses]);
+  const availableStatuses = useMemo(() => {
+    const set = new Set<string>();
+    for (const r of allScheduleRows) set.add(r.lastStatus);
+    const orderMap = new Map(statuses.map((s) => [s.name, s.sortOrder]));
+    return Array.from(set).sort((a, b) => (orderMap.get(a) ?? 0) - (orderMap.get(b) ?? 0));
+  }, [allScheduleRows, statuses]);
+  const activeFilterCount = filterSubjects.size + filterLevels.size + filterLastStatuses.size;
+  const table = useReactTable({
+    data: scheduleRows,
+    columns: reviewTableColumns,
+    state: { sorting },
+    onSortingChange: setSorting,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+  });
+  const pdfExport = usePdfExport("plan");
+  function centerDate(): string {
+    return chartRef.current?.getCenterDate() ?? today;
+  }
 
-  const maxCount = Math.max(0, ...dates.map((d) => (grouped.get(d) ?? []).length));
-  const maxStack = Math.max(MIN_ROWS, maxCount + 2);
-  const chartHeight = maxStack * STEP + DEFAULT_TOP_AXIS_H + DEFAULT_BOTTOM_AXIS_H;
-  const axisIdx = dates.indexOf(today);
+  const lastMs = [...edit.localMilestones].sort((a, b) => a.date.localeCompare(b.date)).pop();
+  const daysToDeadline = lastMs
+    ? Math.round((new Date(`${lastMs.date}T00:00:00Z`).getTime() - new Date(`${today}T00:00:00Z`).getTime()) / 86400000)
+    : null;
 
-  const yTicks = useMemo(() => {
-    const ticks: number[] = [];
-    for (let i = 5; i <= maxStack; i += 5) ticks.push(i);
-    return ticks;
-  }, [maxStack]);
+  const toggleAllocKind = useCallback((k: "First" | "Planned") => {
+    setAllocKindFilter((prev) => {
+      const next = new Set(prev);
+      if (next.has(k)) next.delete(k); else next.add(k);
+      return next;
+    });
+  }, []);
+  const toggleAllocFlag = useCallback((k: "overflow" | "overBudget") => {
+    setAllocFlagFilter((prev) => {
+      const next = new Set(prev);
+      if (next.has(k)) next.delete(k); else next.add(k);
+      return next;
+    });
+  }, []);
 
-  const isLoading = detailQueries.some((q) => q.isLoading) || reviewQuery.isLoading;
-
-  const legendEntries: LegendEntry[] = useMemo(() => {
-    const entries: LegendEntry[] = [
-      {
-        kind: "fill",
-        label: "First",
-        color: COLOR_FIRST_ATTEMPT,
-        active: !hideFirst,
-        onClick: () => setHideFirst((v) => !v),
-      },
-      {
-        kind: "fill",
-        label: "Planned",
-        color: COLOR_PLANNED,
-        active: !hideFuture,
-        onClick: () => setHideFuture((v) => !v),
-      },
-      ...statuses.map<LegendEntry>((s) => ({
+  const legendEntries: LegendEntry[] = useMemo(() => [
+    {
+      kind: "fill",
+      label: "First",
+      color: COLOR_FIRST_ATTEMPT,
+      active: allocKindFilter.has("First"),
+      onClick: () => toggleAllocKind("First"),
+    },
+    {
+      kind: "fill",
+      label: "Planned",
+      color: COLOR_PLANNED,
+      active: allocKindFilter.has("Planned"),
+      onClick: () => toggleAllocKind("Planned"),
+    },
+    ...statuses
+      .filter((s) => availableStatuses.includes(s.name))
+      .map<LegendEntry>((s) => ({
         kind: "fill",
         label: s.name,
         color: s.color ?? "#888",
-        active: !hiddenStatuses.has(s.name),
+        active: filterLastStatuses.has(s.name),
         onClick: () =>
-          setHiddenStatuses((prev) => {
+          setFilterLastStatuses((prev) => {
             const next = new Set(prev);
             if (next.has(s.name)) next.delete(s.name);
             else next.add(s.name);
             return next;
           }),
       })),
-      {
-        kind: "ring",
-        label: "Over budget",
-        color: "#f59e0b",
-        active: overBudgetOnly,
-        onClick: () => setOverBudgetOnly((v) => !v),
-      },
-      {
-        kind: "ring",
-        label: "Overflow",
-        color: "#ef4444",
-        active: overflowOnly,
-        onClick: () => setOverflowOnly((v) => !v),
-      },
-    ];
-    return entries;
-  }, [hideFirst, hideFuture, hiddenStatuses, overBudgetOnly, overflowOnly, statuses]);
+    {
+      kind: "ring",
+      label: "Over budget",
+      color: "#f59e0b",
+      active: allocFlagFilter.has("overBudget"),
+      onClick: () => toggleAllocFlag("overBudget"),
+    },
+    {
+      kind: "ring",
+      label: "Overflow",
+      color: "#ef4444",
+      active: allocFlagFilter.has("overflow"),
+      onClick: () => toggleAllocFlag("overflow"),
+    },
+  ], [allocKindFilter, allocFlagFilter, filterLastStatuses, availableStatuses, statuses, toggleAllocKind, toggleAllocFlag]);
 
-  if (!selectedScopeId) {
+  // milestone anchor (= target 番目の problem id) を可視化用に算出
+  const orderedMembers = useMemo(() => [...edit.effectiveMembers].sort((a, b) =>
+    a.code === b.code ? a.id.localeCompare(b.id) : a.code.localeCompare(b.code)
+  ), [edit.effectiveMembers]);
+  const milestoneAnchors = useMemo(() => edit.localMilestones.map((ms) => ({
+    target: ms.target,
+    layer_id: ms.layer_id,
+    problemId: orderedMembers[ms.target - 1]?.id ?? null,
+  })), [edit.localMilestones, orderedMembers]);
+
+  const handleSave = useCallback(async () => {
+    try {
+      await edit.save();
+      toast.success("Saved");
+    } catch (err) {
+      toast.error(`Save failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }, [edit]);
+
+  if (!scopeId) {
     return (
       <div className="p-4 md:p-6 text-center py-12 text-muted-foreground">
         Select a scope from the top bar
       </div>
     );
   }
+  if (!detail) {
+    return <div className="p-6">Loading…</div>;
+  }
 
   return (
-    <div className="p-3 md:p-4 flex flex-col gap-3">
+    <div className="p-3 md:p-4 flex flex-col gap-2">
       <div className="rounded-md border p-3 space-y-2">
         <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2 flex-wrap">
-            <BlockLegend entries={legendEntries} />
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button size="sm" variant="outline" className="h-6 px-2 relative" title="Filter">
+                <Filter className="size-3"/>
+                {activeFilterCount > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 size-4 rounded-full bg-primary text-primary-foreground text-[9px] flex items-center justify-center">
+                    {activeFilterCount}
+                  </span>
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-52 p-3 space-y-3" align="start">
+              {(detail.subjects?.length ?? 0) > 0 && (
+                <FilterSection
+                  label="Subject"
+                  items={detail.subjects.map((s) => ({ value: s.id, label: s.name }))}
+                  selected={filterSubjects}
+                  onChange={setFilterSubjects}
+                />
+              )}
+              {(detail.levels?.length ?? 0) > 0 && (
+                <FilterSection
+                  label="Level"
+                  items={detail.levels.map((l) => ({ value: l.id, label: l.name }))}
+                  selected={filterLevels}
+                  onChange={setFilterLevels}
+                />
+              )}
+              {availableStatuses.length > 1 && (
+                <FilterSection
+                  label="Status"
+                  items={availableStatuses.map((s) => ({ value: s, label: s }))}
+                  selected={filterLastStatuses}
+                  onChange={setFilterLastStatuses}
+                />
+              )}
+              {activeFilterCount > 0 && (
+                <button type="button"
+                  className="text-[10px] text-muted-foreground hover:text-foreground w-full text-center pt-1"
+                  onClick={() => { setFilterSubjects(new Set()); setFilterLevels(new Set()); setFilterLastStatuses(new Set()); }}>
+                  フィルター解除
+                </button>
+              )}
+            </PopoverContent>
+          </Popover>
+          <div className="flex items-center gap-2">
+            {pdfExport.selected.size > 0 && (
+              <Button
+                size="sm" variant="outline" className="h-6 text-[10px] px-2"
+                onClick={() => pdfExport.exportPdf(today)} disabled={pdfExport.exporting}>
+                {pdfExport.exporting
+                  ? <Loader2 className="size-3 mr-1 animate-spin"/>
+                  : <Download className="size-3 mr-1"/>}
+                {pdfExport.exporting
+                  ? pdfExport.phase === "waking" ? "Render 起床中..."
+                    : pdfExport.phase === "generating" ? "PDF 処理中..."
+                      : pdfExport.phase === "downloading" ? "ダウンロード中..."
+                        : "エクスポート中..."
+                  : `PDF (${pdfExport.selected.size})`}
+              </Button>
+            )}
+            {edit.dirty && !readOnly && (
+              <>
+                <button type="button"
+                  onClick={edit.reset}
+                  disabled={edit.isSaving}
+                  className="inline-flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground disabled:opacity-50"
+                  title="Discard changes">
+                  <RotateCcw className="size-3"/>Reset
+                </button>
+                <Button size="sm" onClick={handleSave} disabled={edit.isSaving}
+                  className="h-7 text-xs">
+                  {edit.isSaving ? <Loader2 className="size-3 mr-1 animate-spin"/> : <Save className="size-3 mr-1"/>}
+                  {edit.isSaving ? "Saving..." : "Save"}
+                </Button>
+              </>
+            )}
+            <button type="button"
+              title="As-of view / replay" aria-pressed={historyPanelOpen || asOf != null}
+              className={`inline-flex items-center justify-center size-[26px] rounded-md border transition-colors ${
+                asOf != null
+                  ? "border-primary/50 text-primary"
+                  : historyPanelOpen
+                    ? "bg-accent text-accent-foreground border-accent-foreground/20"
+                    : "text-muted-foreground hover:bg-muted"
+              }`}
+              onClick={() => setHistoryPanelOpen((p) => !p)}>
+              <History className="size-3"/>
+            </button>
+            <button type="button"
+              title="Toggle milestone pins / FSRS slider" aria-pressed={showMilestonePins}
+              className={`inline-flex items-center justify-center size-[26px] rounded-md border transition-colors ${showMilestonePins ? "bg-accent text-accent-foreground border-accent-foreground/20" : "text-muted-foreground hover:bg-muted"}`}
+              onClick={() => setShowMilestonePins((p) => !p)}>
+              <SlidersHorizontal className="size-3"/>
+            </button>
           </div>
-          {isLoading && <span className="text-xs text-muted-foreground">Loading…</span>}
         </div>
-        <ChartShell dates={dates} cursorDate={today} maxStack={maxStack} yAxisLabels={yTicks}>
-        {dates.map((date, colIdx) => {
-          const dayItems = grouped.get(date) ?? [];
-          const x = colIdx * STEP;
-          const isToday = date === today;
-          return (
-            <g key={date}>
-              {dayItems.map((item, stackIdx) => {
-                const by = chartHeight - DEFAULT_BOTTOM_AXIS_H - (stackIdx + 1) * STEP;
+        {(historyPanelOpen || asOf != null) && (
+          <div className="rounded-md border px-3 py-2 text-xs">
+            <AsOfControls
+              asOf={asOf}
+              setAsOf={setAsOf}
+              latest={realToday}
+              onClose={() => setHistoryPanelOpen(false)}
+            />
+          </div>
+        )}
+        {showMilestonePins && scopeQuery.data && (
+          <div className="-mt-1 -mb-1">
+            <ScopeFSRSOverridePanel
+              key={`${scopeQuery.data.revision}-${asOf ?? "live"}`}
+              statuses={statuses}
+              current={scopeQuery.data.status_stabilities ?? {}}
+              disabled={readOnly}
+              onSave={(next) =>
+                updateScope.mutateAsync({ id: scopeId, payload: { status_stabilities: next } })
+              }
+            />
+          </div>
+        )}
+        <BacklogChart
+          ref={chartRef}
+          realToday={realToday}
+          onTodayDrag={(d) => setAsOf(d === realToday ? null : d)}
+          items={filteredAllocated}
+          overlayItems={filteredOverlay}
+          layers={edit.localLayers.map((l) => {
+            const ms = edit.localMilestones.filter((m) => m.layer_id === l.id);
+            const maxTarget = ms.reduce((acc, m) => Math.max(acc, m.target), 0);
+            return { ...l, progress: maxTarget > 0 ? { done: Math.min(doneCount, maxTarget), total: maxTarget } : null };
+          })}
+          milestones={edit.localMilestones}
+          today={today}
+          selectedId={selectedId}
+          onSelect={(id) => setSelectedId((p) => (p === id ? null : id))}
+          showMilestonePins={showMilestonePins}
+          milestoneAnchors={milestoneAnchors}
+          hiddenLayerIds={hiddenLayerIds}
+          onHiddenLayersChange={setHiddenLayerIds}
+          rightPanelExtra={
+            <ScopePlanRightPanel
+              dailyMinutes={edit.dailyMinutes}
+              setDailyMinutes={edit.setDailyMinutes}
+              timeMultiplier={edit.timeMultiplier}
+              setTimeMultiplier={edit.setTimeMultiplier}
+              weekdayWeights={edit.weekdayWeights}
+              setWeekdayWeights={edit.setWeekdayWeights}
+              deadlineDate={lastMs?.date}
+              daysToDeadline={daysToDeadline}
+              readOnly={readOnly}
+            />
+          }
+          {...(readOnly ? {} : {
+            onMilestoneDateDraft: edit.handlers.onMilestoneDateDraft,
+            onMilestoneDateChange: edit.handlers.onMilestoneDateChange,
+            onMilestoneLayerDraft: edit.handlers.onMilestoneLayerDraft,
+            onMilestoneLayerChange: edit.handlers.onMilestoneLayerChange,
+            onMilestoneTargetChange: edit.handlers.onMilestoneTargetChange,
+            onMilestoneRemove: edit.handlers.onMilestoneRemove,
+            onMilestoneAddToLayer: (layerId: string, atDate?: string) =>
+              edit.handlers.onMilestoneAddToLayer(layerId, atDate, centerDate(), memberCount),
+            onLayerNameChange: edit.handlers.onLayerNameChange,
+            onLayerColorChange: edit.handlers.onLayerColorChange,
+            onLayerStyleChange: edit.handlers.onLayerStyleChange,
+            onLayerRemove: edit.handlers.onLayerRemove,
+            onAddLayer: edit.handlers.onAddLayer,
+            onReorderLayers: edit.handlers.onReorderLayers,
+          })}
+        />
+        <div className="flex items-center gap-2 flex-wrap pt-1">
+          <BlockLegend entries={legendEntries} />
+        </div>
+      </div>
+
+      {scheduleRows.length > 0 && (
+        <ResizableTableShell ref={tableRef}>
+          <Table className="table-fixed">
+            <TableHeader>
+              {table.getHeaderGroups().map((hg) => (
+                <TableRow key={hg.id}>
+                  <TableHead className="sticky top-0 z-10 bg-muted/80 backdrop-blur w-10 px-3">
+                    <div className="flex items-center justify-center">
+                      <input
+                        type="checkbox"
+                        className="size-3.5 accent-primary cursor-pointer"
+                        checked={pdfExport.selected.size > 0 && pdfExport.selected.size === scheduleRows.length}
+                        ref={(el) => { if (el) el.indeterminate = pdfExport.selected.size > 0 && pdfExport.selected.size < scheduleRows.length; }}
+                        onChange={() => {
+                          if (pdfExport.selected.size > 0) pdfExport.clear();
+                          else pdfExport.setAll(scheduleRows.map((r) => r.problemId));
+                        }}
+                      />
+                    </div>
+                  </TableHead>
+                  {hg.headers.map((header) => (
+                    <TableHead
+                      key={header.id}
+                      className="sticky top-0 z-10 bg-muted/80 backdrop-blur"
+                      style={{ width: header.getSize() !== 150 ? header.getSize() : undefined }}
+                    >
+                      {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
+                    </TableHead>
+                  ))}
+                </TableRow>
+              ))}
+            </TableHeader>
+            <TableBody>
+              {table.getRowModel().rows.map((row) => {
+                const pid = row.original.problemId;
                 return (
-                  <rect
-                    key={`${item.source}-${item.problemId}`}
-                    x={x}
-                    y={by}
-                    width={CELL}
-                    height={CELL}
-                    rx={2}
-                    fill={item.color}
-                    opacity={0.85}
-                    stroke={item.border?.stroke}
-                    strokeWidth={item.border?.width}
-                    strokeDasharray={item.border?.dashed ? "2 2" : undefined}
+                  <TableRow
+                    key={row.id}
+                    data-problem-id={pid}
+                    className={`cursor-pointer ${pid === selectedId ? "bg-accent" : ""}`}
+                    onClick={() => pid === selectedId ? openDetail(pid) : handleSelect(pid)}
+                    onDoubleClick={() => openDetail(pid)}
                   >
-                    <title>
-                      [{item.source}] {item.code} {item.name ?? ""}
-                    </title>
-                  </rect>
+                    <TableCell className="w-10 px-3 align-middle" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center justify-center">
+                        <input
+                          type="checkbox"
+                          className="size-3.5 accent-primary cursor-pointer"
+                          checked={pdfExport.selected.has(pid)}
+                          onChange={() => pdfExport.toggle(pid)}
+                        />
+                      </div>
+                    </TableCell>
+                    {row.getVisibleCells().map((cell) => (
+                      <TableCell key={cell.id} style={{ width: cell.column.getSize() !== 150 ? cell.column.getSize() : undefined }}>
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </TableCell>
+                    ))}
+                  </TableRow>
                 );
               })}
-              {(() => {
-                const diff = axisIdx >= 0 ? colIdx - axisIdx : 0;
-                if (diff % 7 !== 0) return null;
-                return (
-                  <text
-                    x={x + CELL / 2}
-                    y={10}
-                    textAnchor="middle"
-                    className="fill-muted-foreground"
-                    fontSize={9}
-                    fontWeight={isToday ? 700 : 400}
-                  >
-                    {`${new Date(date + "T12:00:00").getMonth() + 1}/${new Date(date + "T12:00:00").getDate()}`}
-                  </text>
-                );
-              })()}
-              {(() => {
-                const diff = axisIdx >= 0 ? colIdx - axisIdx : 0;
-                if (diff % 7 !== 0) return null;
-                return (
-                  <text
-                    x={x + CELL / 2}
-                    y={chartHeight - 4}
-                    textAnchor="middle"
-                    className="fill-muted-foreground"
-                    fontSize={9}
-                    fontWeight={isToday ? 700 : 400}
-                  >
-                    {formatRelDay(diff)}
-                  </text>
-                );
-              })()}
-            </g>
-          );
-        })}
-        </ChartShell>
-      </div>
+            </TableBody>
+          </Table>
+        </ResizableTableShell>
+      )}
+
+      {renderDialogs()}
     </div>
   );
 }

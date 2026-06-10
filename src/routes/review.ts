@@ -75,9 +75,9 @@ const app = new Hono<Env>()
         )
       : inArray(answer.problemId, problemIds);
 
-    const [answers, statuses, subjects, levels] =
+    const [answers, statuses, subjects, levels, fields] =
       problemIds.length === 0
-        ? [[], [], [], []] as const
+        ? [[], [], [], [], []] as const
         : await Promise.all([
             db.select().from(answer)
               .where(answerWhere)
@@ -91,12 +91,14 @@ const app = new Hono<Env>()
               ? db.select().from(level).where(eq(level.fieldId, fieldId))
               : db.select({ id: level.id, code: level.code, name: level.name, color: level.color, sortOrder: level.sortOrder, fieldId: level.fieldId, createdAt: level.createdAt, updatedAt: level.updatedAt })
                   .from(level).innerJoin(field, eq(level.fieldId, field.id)).where(eq(field.userId, userId)),
+            db.select().from(field).where(eq(field.userId, userId)),
           ]);
 
     const statusMap = new Map(statuses.map((s) => [s.id, s]));
     const defaultStatus = statuses[0];
     const subjectMap = new Map(subjects.map((s) => [s.id, s]));
     const levelMap = new Map(levels.map((l) => [l.id, l]));
+    const fieldMap = new Map(fields.map((f) => [f.id, f]));
 
     const latestAnswer = new Map<string, { date: string; duration: number | null; answerStatusId: string | null }>();
     const answerCounts = new Map<string, number>();
@@ -150,12 +152,15 @@ const app = new Hono<Env>()
 
       const subj = p.subjectId ? subjectMap.get(p.subjectId) : null;
       const lvl = p.levelId ? levelMap.get(p.levelId) : null;
+      const fld = p.fieldId ? fieldMap.get(p.fieldId) : null;
 
       return {
         problemId: p.id,
         code: p.code,
         name: p.name ?? "",
         fieldId: p.fieldId,
+        fieldName: fld?.name ?? "",
+        fieldColor: fld?.color ?? null,
         subjectId: p.subjectId,
         subjectName: subj?.name ?? "",
         subjectColor: subj?.color ?? null,

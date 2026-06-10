@@ -57,14 +57,7 @@ import {
 } from "@/components/ui/table";
 import type { ReviewRow as ReviewApiRow } from "@/hooks/queries/use-review";
 import { formatRelDay } from "@/lib/relative-day";
-
-/* ── Row types ── */
-
-/** Display row — adds reviewCount for the "next 4 weeks" forecast cell. */
-interface ScheduleRow extends Omit<ReviewApiRow, "answerCount"> {
-  reviewCount: number;
-  standardTime: number | null;
-}
+import { reviewTableColumns, type ScheduleRow } from "@/components/review-table-columns";
 
 /* ── Schedule Chart (SVG) ── */
 
@@ -250,93 +243,6 @@ function ReviewChart({
   );
 }
 
-/* ── Column defs ── */
-
-const columns: ColumnDef<ScheduleRow>[] = [
-  {
-    accessorKey: "lastStatus",
-    header: ({ column }) => <SortHeader column={column}>Status</SortHeader>,
-    cell: ({ row }) => {
-      return <StatusTag status={row.original.lastStatus} color={row.original.statusColor} opaque className="text-[10px]" />;
-    },
-    size: 70,
-  },
-  {
-    accessorKey: "subjectName",
-    header: ({ column }) => <SortHeader column={column}>Subject</SortHeader>,
-    cell: ({ row }) => row.original.subjectName ? (
-      <OpaqueTag name={row.original.subjectName} color={row.original.subjectColor} />
-    ) : null,
-    size: 70,
-  },
-  {
-    accessorKey: "levelName",
-    header: ({ column }) => <SortHeader column={column}>Level</SortHeader>,
-    cell: ({ row }) => row.original.levelName ? (
-      <OpaqueTag name={row.original.levelName} color={row.original.levelColor} />
-    ) : null,
-    size: 70,
-  },
-  {
-    accessorKey: "code",
-    header: ({ column }) => <SortHeader column={column}>Code</SortHeader>,
-    cell: ({ getValue }) => (
-      <span className="font-mono text-xs">{getValue<string>()}</span>
-    ),
-    size: 64,
-  },
-  {
-    accessorKey: "name",
-    header: ({ column }) => <SortHeader column={column}>Name</SortHeader>,
-    cell: ({ getValue }) => (
-      <span className="truncate block text-xs">
-        {getValue<string>()}
-      </span>
-    ),
-    size: 240,
-  },
-  {
-    accessorKey: "daysUntil",
-    header: ({ column }) => <SortHeader column={column}>Days</SortHeader>,
-    size: 64,
-    cell: ({ getValue }) => {
-      const d = getValue<number>();
-      return (
-        <span
-          className={`text-xs tabular-nums font-medium ${
-            d < 0
-              ? "text-red-500"
-              : d === 0
-                ? "text-foreground"
-                : "text-muted-foreground"
-          }`}
-        >
-          {formatRelDay(d)}
-        </span>
-      );
-    },
-  },
-  {
-    accessorKey: "nextReview",
-    header: ({ column }) => <SortHeader column={column}>Next</SortHeader>,
-    cell: ({ getValue }) => (
-      <span className="text-xs text-muted-foreground tabular-nums">
-        {getValue<string>()}
-      </span>
-    ),
-    size: 100,
-  },
-  {
-    accessorKey: "reviewCount",
-    header: ({ column }) => <SortHeader column={column}>Ans</SortHeader>,
-    cell: ({ getValue }) => (
-      <span className="text-xs text-muted-foreground tabular-nums">
-        {getValue<number>()}
-      </span>
-    ),
-    size: 64,
-  },
-];
 
 /* ── Page ── */
 
@@ -346,7 +252,7 @@ export default function SchedulePage() {
   const { scope_id: scopeId } = useParams({ strict: false }) as { scope_id: string };
   const navigate = useNavigate();
   usePageBack(useCallback(() => navigate({ to: "/review" as string }), [navigate]));
-  const { statuses, setCurrentScopeId } = useField();
+  const { statuses, fields, setCurrentScopeId } = useField();
 
   const [asOf, setAsOf] = useState<string | null>(null);
   const readOnly = asOf != null;
@@ -406,6 +312,7 @@ export default function SchedulePage() {
     if (asOf && allProblems.length > 0) {
       const defaultStatus = statuses[0];
       const statusByName = new Map(statuses.map((s) => [s.name, s]));
+      const fieldsById = new Map(fields.map((f) => [f.id, f]));
       const filtered = allProblems
         .filter((p) => {
           // scope の member filter で絞り込み
@@ -435,11 +342,14 @@ export default function SchedulePage() {
               status: st?.name ?? defaultStatus?.name ?? "",
             };
           });
+          const fld = p.field_id ? fieldsById.get(p.field_id) : null;
           return {
             problemId: p.id,
             code: p.code,
             name: p.name,
             fieldId: p.field_id,
+            fieldName: fld?.name ?? "",
+            fieldColor: fld?.color ?? null,
             subjectId: p.subject_id || null,
             subjectName: p.subjectName ?? "",
             subjectColor: p.subjectColor ?? null,
@@ -466,6 +376,8 @@ export default function SchedulePage() {
       code: r.code,
       name: r.name,
       fieldId: r.fieldId,
+      fieldName: r.fieldName,
+      fieldColor: r.fieldColor,
       subjectId: r.subjectId,
       subjectName: r.subjectName,
       subjectColor: r.subjectColor,
@@ -729,7 +641,7 @@ export default function SchedulePage() {
 
   const table = useReactTable({
     data: displayRows,
-    columns,
+    columns: reviewTableColumns,
     state: { sorting },
     onSortingChange: setSorting,
     getCoreRowModel: getCoreRowModel(),
