@@ -33,11 +33,12 @@ export type ThroughputPrefs = {
 export type PlanPrefs = {
   subjectIds?: string[];
   levelIds?: string[];
-  lastStatuses?: string[];
-  /** 凡例の First / Planned 選択 (select-only: 空=全表示) */
-  allocKinds?: ("First" | "Planned")[];
-  /** 凡例の overflow / overBudget リング選択 (select-only) */
-  allocFlags?: ("overflow" | "overBudget")[];
+  /** 凡例 status pills の hide-set (set に入っているものは非表示)。 */
+  hiddenLastStatuses?: string[];
+  /** 凡例 First / Planned の hide-set */
+  hiddenAllocKinds?: ("First" | "Planned")[];
+  /** 凡例 overflow / overBudget ring の hide-set */
+  hiddenAllocFlags?: ("overflow" | "overBudget")[];
   hiddenLayerIds?: string[];
   /** Tetris 最大段数 (null = full/auto)。 */
   chartMaxRows?: number | null;

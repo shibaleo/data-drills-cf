@@ -176,10 +176,11 @@ export default function PlanPage() {
       : null,
   });
 
-  // 表示フィルタ (凡例ピルのトグル)。すべて select-only semantics:
-  // 空集合 = 全表示、要素あり = それだけ表示 (ピルは active 強調)。
-  const [allocKindFilter, setAllocKindFilter] = useState<Set<"First" | "Planned">>(new Set());
-  const [allocFlagFilter, setAllocFlagFilter] = useState<Set<"overflow" | "overBudget">>(new Set());
+  // 表示フィルタ (凡例ピルのトグル)。hide-set semantics:
+  // 各 pill は独立にトグル可。set に入っているカテゴリだけが「非表示」扱い、
+  // それ以外は表示。empty set = 全表示 (=デフォルト)。
+  const [hiddenAllocKinds, setHiddenAllocKinds] = useState<Set<"First" | "Planned">>(new Set());
+  const [hiddenAllocFlags, setHiddenAllocFlags] = useState<Set<"overflow" | "overBudget">>(new Set());
   const [selectedId, setSelectedId] = useState<string | null>(null);
   // デフォルトは表示モード (milestone pins / FSRS slider を出さない)。
   // 編集したいときだけユーザーが toggle で開く。
@@ -191,7 +192,8 @@ export default function PlanPage() {
   const [sorting, setSorting] = useState<SortingState>([{ id: "daysUntil", desc: false }]);
   const [filterSubjects, setFilterSubjects] = useState<Set<string>>(new Set());
   const [filterLevels, setFilterLevels] = useState<Set<string>>(new Set());
-  const [filterLastStatuses, setFilterLastStatuses] = useState<Set<string>>(new Set());
+  // 凡例 status pills は hide-set (空 = 全表示、入っているのが非表示)
+  const [hiddenLastStatuses, setHiddenLastStatuses] = useState<Set<string>>(new Set());
   // 過去実績 (throughput + past First) を隠す / 未解消エントリ (planned future) を隠す
   // 表示カテゴリ独立 toggle。default は Throughput OFF + Review/Forecast ON
   // (= 未来寄せの「現行 /review + projection」表示)。filter_prefs.plan で永続化。
@@ -210,13 +212,9 @@ export default function PlanPage() {
     if (p) {
       setFilterSubjects(new Set(p.subjectIds ?? []));
       setFilterLevels(new Set(p.levelIds ?? []));
-      setFilterLastStatuses(new Set(p.lastStatuses ?? []));
-      const kinds = new Set<"First" | "Planned">();
-      if (p.allocKinds) for (const k of p.allocKinds) kinds.add(k);
-      setAllocKindFilter(kinds);
-      const flags = new Set<"overflow" | "overBudget">();
-      if (p.allocFlags) for (const k of p.allocFlags) flags.add(k);
-      setAllocFlagFilter(flags);
+      setHiddenLastStatuses(new Set(p.hiddenLastStatuses ?? []));
+      setHiddenAllocKinds(new Set(p.hiddenAllocKinds ?? []));
+      setHiddenAllocFlags(new Set(p.hiddenAllocFlags ?? []));
       setHiddenLayerIds(new Set(p.hiddenLayerIds ?? []));
       if (p.chartMaxRows !== undefined) setChartMaxRows(p.chartMaxRows);
       setHideThroughput(!!p.hideThroughput);
@@ -231,9 +229,9 @@ export default function PlanPage() {
     const snapshot = JSON.stringify({
       s: [...filterSubjects].sort(),
       l: [...filterLevels].sort(),
-      st: [...filterLastStatuses].sort(),
-      k: [...allocKindFilter].sort(),
-      f: [...allocFlagFilter].sort(),
+      st: [...hiddenLastStatuses].sort(),
+      k: [...hiddenAllocKinds].sort(),
+      f: [...hiddenAllocFlags].sort(),
       h: [...hiddenLayerIds].sort(),
       r: chartMaxRows,
       ht: hideThroughput,
@@ -251,9 +249,9 @@ export default function PlanPage() {
       plan: {
         subjectIds: [...filterSubjects],
         levelIds: [...filterLevels],
-        lastStatuses: [...filterLastStatuses],
-        allocKinds: [...allocKindFilter],
-        allocFlags: [...allocFlagFilter],
+        hiddenLastStatuses: [...hiddenLastStatuses],
+        hiddenAllocKinds: [...hiddenAllocKinds],
+        hiddenAllocFlags: [...hiddenAllocFlags],
         hiddenLayerIds: [...hiddenLayerIds],
         chartMaxRows,
         hideThroughput,
@@ -262,7 +260,7 @@ export default function PlanPage() {
       },
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filterSubjects, filterLevels, filterLastStatuses, allocKindFilter, allocFlagFilter, hiddenLayerIds, chartMaxRows, hideThroughput, hideReview, hideForecast]);
+  }, [filterSubjects, filterLevels, hiddenLastStatuses, hiddenAllocKinds, hiddenAllocFlags, hiddenLayerIds, chartMaxRows, hideThroughput, hideReview, hideForecast]);
   const chartRef = useRef<BacklogChartHandle>(null);
   const tableRef = useRef<HTMLDivElement>(null);
 
@@ -391,29 +389,27 @@ export default function PlanPage() {
       if (hideThroughput && o.kind === "past-throughput") return false;
       if (hideReview && o.kind === "review-next") return false;
       if (hideForecast && o.kind === "smooth-future") return false;
-      if (filterLastStatuses.size > 0 && (!o.statusName || !filterLastStatuses.has(o.statusName))) return false;
+      // hide-set: set にあるカテゴリだけ非表示
+      if (o.statusName && hiddenLastStatuses.has(o.statusName)) return false;
       if (!passesSubjectLevel(o.problemId)) return false;
       return true;
     });
-  }, [overlayItems, filterLastStatuses, hideThroughput, hideReview, hideForecast, passesSubjectLevel]);
+  }, [overlayItems, hiddenLastStatuses, hideThroughput, hideReview, hideForecast, passesSubjectLevel]);
 
   const filteredAllocated = useMemo(() => {
     return edit.allocated.filter((a) => {
       if (hideThroughput && a.side === "past") return false;
       if (hideForecast && a.side === "future") return false;
-      if (allocKindFilter.size > 0) {
-        const kind = a.side === "past" ? "First" : "Planned";
-        if (!allocKindFilter.has(kind)) return false;
-      }
-      if (allocFlagFilter.size > 0) {
-        const matchOverflow = allocFlagFilter.has("overflow") && a.overflow;
-        const matchOverBudget = allocFlagFilter.has("overBudget") && a.overBudget;
-        if (!matchOverflow && !matchOverBudget) return false;
-      }
+      const kind = a.side === "past" ? "First" : "Planned";
+      if (hiddenAllocKinds.has(kind)) return false;
+      // allocFlags は ring 表示 (= 警告) なので「該当カテゴリを隠す」semantic では
+      // overflow/overBudget 自体ではなく「これらの警告マークの問題を隠す」と解釈。
+      if (a.overflow && hiddenAllocFlags.has("overflow")) return false;
+      if (a.overBudget && hiddenAllocFlags.has("overBudget")) return false;
       if (!passesSubjectLevel(a.problemId)) return false;
       return true;
     });
-  }, [edit.allocated, allocKindFilter, allocFlagFilter, hideThroughput, hideForecast, passesSubjectLevel]);
+  }, [edit.allocated, hiddenAllocKinds, hiddenAllocFlags, hideThroughput, hideForecast, passesSubjectLevel]);
 
   const memberCount = edit.effectiveMembers.length;
   const doneCount = edit.effectiveMembers.filter((m) => m.first_answer_date).length;
@@ -432,17 +428,21 @@ export default function PlanPage() {
   const scheduleRows = useMemo(() => allScheduleRows.filter((r) => {
     if (filterSubjects.size > 0 && (!r.subjectId || !filterSubjects.has(r.subjectId))) return false;
     if (filterLevels.size > 0 && (!r.levelId || !filterLevels.has(r.levelId))) return false;
-    if (filterLastStatuses.size > 0 && !filterLastStatuses.has(r.lastStatus)) return false;
+    // hiddenLastStatuses は legend pill 用の chart 側 hide-set。table 側は
+    // visibleProblemIds (= chart に 1 block 以上残った problem) で表現済なので
+    // ここで status を再フィルタする必要はない (zero-answer Planned の lastStatus が
+    // デフォルト status と一致して誤 drop する問題があった)。
     if (!visibleProblemIds.has(r.problemId)) return false;
     return true;
-  }), [allScheduleRows, filterSubjects, filterLevels, filterLastStatuses, visibleProblemIds]);
+  }), [allScheduleRows, filterSubjects, filterLevels, visibleProblemIds]);
   const availableStatuses = useMemo(() => {
     const set = new Set<string>();
     for (const r of allScheduleRows) set.add(r.lastStatus);
     const orderMap = new Map(statuses.map((s) => [s.name, s.sortOrder]));
     return Array.from(set).sort((a, b) => (orderMap.get(a) ?? 0) - (orderMap.get(b) ?? 0));
   }, [allScheduleRows, statuses]);
-  const activeFilterCount = filterSubjects.size + filterLevels.size + filterLastStatuses.size;
+  // 漏斗バッジは funnel 内のフィルタ (subject/level) と凡例 hide-set の合計。
+  const activeFilterCount = filterSubjects.size + filterLevels.size + hiddenLastStatuses.size + hiddenAllocKinds.size + hiddenAllocFlags.size;
   const table = useReactTable({
     data: scheduleRows,
     columns: reviewTableColumns,
@@ -462,25 +462,25 @@ export default function PlanPage() {
     : null;
 
   const toggleAllocKind = useCallback((k: "First" | "Planned") => {
-    setAllocKindFilter((prev) => {
+    setHiddenAllocKinds((prev) => {
       const next = new Set(prev);
       if (next.has(k)) next.delete(k); else next.add(k);
       return next;
     });
   }, []);
   const toggleAllocFlag = useCallback((k: "overflow" | "overBudget") => {
-    setAllocFlagFilter((prev) => {
+    setHiddenAllocFlags((prev) => {
       const next = new Set(prev);
       if (next.has(k)) next.delete(k); else next.add(k);
       return next;
     });
   }, []);
 
-  // select-only セマンティクスを「明るい=表示中」表現に変換: set が empty なら
-  // 全 pill 明るい (= 全表示)、set に要素ある時はその要素だけ明るい (= include-only)。
-  const isShownKind = (k: "First" | "Planned") => allocKindFilter.size === 0 || allocKindFilter.has(k);
-  const isShownStatus = (name: string) => filterLastStatuses.size === 0 || filterLastStatuses.has(name);
-  const isShownFlag = (k: "overflow" | "overBudget") => allocFlagFilter.size === 0 || allocFlagFilter.has(k);
+  // hide-set: set に入っていなければ表示中 (明るい)、入っていれば非表示 (暗い)。
+  // 各 pill 独立にトグルできる。
+  const isShownKind = (k: "First" | "Planned") => !hiddenAllocKinds.has(k);
+  const isShownStatus = (name: string) => !hiddenLastStatuses.has(name);
+  const isShownFlag = (k: "overflow" | "overBudget") => !hiddenAllocFlags.has(k);
 
   const legendEntries: LegendEntry[] = useMemo(() => [
     {
@@ -505,7 +505,7 @@ export default function PlanPage() {
         color: s.color ?? "#888",
         active: isShownStatus(s.name),
         onClick: () =>
-          setFilterLastStatuses((prev) => {
+          setHiddenLastStatuses((prev) => {
             const next = new Set(prev);
             if (next.has(s.name)) next.delete(s.name);
             else next.add(s.name);
@@ -527,7 +527,7 @@ export default function PlanPage() {
       onClick: () => toggleAllocFlag("overflow"),
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  ], [allocKindFilter, allocFlagFilter, filterLastStatuses, availableStatuses, statuses, toggleAllocKind, toggleAllocFlag]);
+  ], [hiddenAllocKinds, hiddenAllocFlags, hiddenLastStatuses, availableStatuses, statuses, toggleAllocKind, toggleAllocFlag]);
 
   // milestone anchor (= target 番目の problem id) を可視化用に算出
   const orderedMembers = useMemo(() => [...edit.effectiveMembers].sort((a, b) =>
@@ -595,15 +595,18 @@ export default function PlanPage() {
                 <FilterSection
                   label="Status"
                   items={availableStatuses.map((s) => ({ value: s, label: s }))}
-                  selected={filterLastStatuses}
-                  onChange={setFilterLastStatuses}
+                  selected={hiddenLastStatuses}
+                  onChange={setHiddenLastStatuses}
                 />
               )}
               {activeFilterCount > 0 && (
                 <button type="button"
                   className="text-[10px] text-muted-foreground hover:text-foreground w-full text-center pt-1"
-                  onClick={() => { setFilterSubjects(new Set()); setFilterLevels(new Set()); setFilterLastStatuses(new Set()); }}>
-                  フィルター解除
+                  onClick={() => {
+                    setFilterSubjects(new Set()); setFilterLevels(new Set());
+                    setHiddenLastStatuses(new Set()); setHiddenAllocKinds(new Set()); setHiddenAllocFlags(new Set());
+                  }}>
+                  Clear filters
                 </button>
               )}
             </PopoverContent>
