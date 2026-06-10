@@ -698,19 +698,19 @@ export default function ScopesHubPage() {
                       adjEnd,
                       5,
                     );
-                    // textPath 用の arc 半径と方向。
-                    // 下半円 (Plan SE / Throughput SW) は outer arc に baseline を載せる
-                    // (text の上 ↑ 方向 = center 向き = 読みやすい)。他は inner arc。
-                    const useOuter = sec.label === "Plan" || sec.label === "Throughput";
-                    const textArcR = useOuter ? outerR - 8 : MENU_INNER_R + 8;
+                    // 全 sector で中心 arc に統一 (innerR と outerR の中点)。
+                    // 上半円 (Edit/Review/Stats/Digest) は時計回り baseline (sweep=1)、
+                    // 下半円 (Plan/Throughput) は反時計回り (sweep=0) でテキスト上向き。
+                    const textArcR = (MENU_INNER_R + outerR) / 2;
+                    const midDeg = (adjStart + adjEnd) / 2;
+                    const isBottomHalf = midDeg > 0 && midDeg < 180;
                     const aStart = (adjStart * Math.PI) / 180;
                     const aEnd = (adjEnd * Math.PI) / 180;
                     const p1x = cx + textArcR * Math.cos(aStart);
                     const p1y = cy + textArcR * Math.sin(aStart);
                     const p2x = cx + textArcR * Math.cos(aEnd);
                     const p2y = cy + textArcR * Math.sin(aEnd);
-                    // 下半円は反時計回りで draw (sweep=0)、上半円は時計回り (sweep=1)
-                    const textArcPath = useOuter
+                    const textArcPath = isBottomHalf
                       ? `M ${p2x} ${p2y} A ${textArcR} ${textArcR} 0 0 0 ${p1x} ${p1y}`
                       : `M ${p1x} ${p1y} A ${textArcR} ${textArcR} 0 0 1 ${p2x} ${p2y}`;
                     const arcId = `arc-${scope.id}-${sec.label}`;
