@@ -25,11 +25,11 @@ function Avatar({ name, className }: { name: string; className?: string }) {
  * /scopes と同じ edge nav 流儀。avatar をハブにして hover で上半円に 2 sector
  * (Settings, Logout) を扇状展開する。geometry は scopes の縮小版。
  */
-// 右上方向 60° の fan を 2 sector で割る (各 30°)。flat-fan 寄りで縦方向を抑え、
-// scaleY のような distortion を入れず自然な circular geometry を保つ。
+// 右上 1/4 (90°) を 2 sector で割る (各 45° = 1/8 円)。distortion なしの
+// natural circular geometry。
 const SECTORS = [
-  { startDeg: -60, endDeg: -30, label: "Settings", icon: Settings, color: "#846ce5", action: "settings" as const },
-  { startDeg: -30, endDeg: 0,   label: "Logout",   icon: LogOut,   color: "#da5865", action: "logout"   as const },
+  { startDeg: -90, endDeg: -45, label: "Settings", icon: Settings, color: "#846ce5", action: "settings" as const },
+  { startDeg: -45, endDeg: 0,   label: "Logout",   icon: LogOut,   color: "#da5865", action: "logout"   as const },
 ];
 
 const INNER_R = 80;
@@ -99,13 +99,11 @@ export function UserMenu({ collapsed = false }: { collapsed?: boolean }) {
     else handleLogout();
   }
 
-  // SVG canvas: avatar を bottom-left、右上方向の fan に sector を展開。
-  // 縦方向の最大到達点は OUTER_R * sin(60°) ≈ 0.87 * OUTER_R。
+  // SVG canvas: avatar を bottom-left、右上 1/4 (NE quadrant) に sector を展開。
+  // angle が -90° (= 真上) まで届くので縦の bbox は OUTER_R + PAD。
   const PAD = 8;
   const W = OUTER_R + PAD;
-  // angle が -60° までなので縦の bbox は 0.87 * OUTER_R で済む。tighter canvas で
-  // 描画。proper aspect ratio を維持して distortion を回避。
-  const H = Math.ceil(OUTER_R * Math.sin((60 * Math.PI) / 180)) + PAD;
+  const H = OUTER_R + PAD;
   const cx = 0;
   const cy = H;
 
