@@ -87,14 +87,15 @@ export default function ThroughputPage() {
   }, [scopeQuery.data]);
 
   // 常に全データを fetch、asOf によるフィルタはクライアントで適用 (= アニメーション再生に必要)。
-  const { data: rawRows = [], isLoading } = useThroughputList(scopeFieldId ?? undefined);
+  // scope_id 指定で server-side member filter を適用 (cross-field 対応)
+  const { data: rawRows = [], isLoading } = useThroughputList(undefined, null, scopeId);
   const rows = useMemo(() => {
     let base = rawRows;
     if (asOf) base = base.filter((r) => r.date <= asOf);
     // scope member filter (subject/level) を適用
-    if (localFilter.subjectIds?.length || localFilter.levelIds?.length) {
+    if (localFilter.fieldIds?.length || localFilter.subjectIds?.length || localFilter.levelIds?.length) {
       base = applyMemberFilter(
-        base.map((r) => ({ subjectId: r.subjectId, levelId: r.levelId, _r: r })),
+        base.map((r) => ({ fieldId: r.fieldId, subjectId: r.subjectId, levelId: r.levelId, _r: r })),
         localFilter,
       ).map(({ _r }) => _r);
     }
@@ -268,12 +269,11 @@ export default function ThroughputPage() {
     return entries;
   }, [statuses, filterPrevStatuses, togglePrevStatus]);
 
-  if (!scopeFieldId) return <div className="p-6 text-muted-foreground">Please select a project</div>;
-
   const activeFilterCount = filterSubjects.size + filterLevels.size + filterPrevStatuses.size;
 
   // Scope dirty state
   const scope = scopeQuery.data?.scope;
+  if (!scope) return <div className="p-6 text-muted-foreground">{scopeQuery.isLoading ? "Loading..." : "Scope not found"}</div>;
   const synced = !!scope && lastSyncRevRef.current === scope.revision;
   const filterDirty = synced && JSON.stringify(localFilter) !== JSON.stringify(scope!.filter ?? {});
   const nameDirty = synced && localName !== scope!.name;
@@ -304,7 +304,6 @@ export default function ThroughputPage() {
     <div className="p-3 md:p-4 flex flex-col gap-2">
       {renderHeaderSlot(
       <>
-        <span className="text-xs font-medium truncate max-w-xs text-foreground/80">{localName}</span>
         {dirty && (
           <div className="ml-auto flex items-center gap-2">
             <button type="button"

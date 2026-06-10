@@ -16,9 +16,7 @@ import { AuthenticateWithRedirectCallback } from "@clerk/react";
 const ReviewPage = lazy(() => import("./app/(pages)/review/page"));
 const StatsPage = lazy(() => import("./app/(pages)/stats/page"));
 const DigestPage = lazy(() => import("./app/(pages)/digest/page"));
-const DigestNewPage = lazy(() => import("./app/(pages)/digest/new/page"));
 const DigestDetailPage = lazy(() => import("./app/(pages)/digest/$scopeId/page"));
-const StatsNewPage = lazy(() => import("./app/(pages)/stats/new/page"));
 const StatsDetailPage = lazy(() => import("./app/(pages)/stats/$scopeId/page"));
 const ThroughputPage = lazy(() => import("./app/(pages)/throughput/page"));
 const FlashcardsPage = lazy(() => import("./app/(pages)/flashcards/page"));
@@ -35,7 +33,6 @@ const ScopesNewPage = lazy(() => import("./app/(pages)/scopes/new/page"));
 const ScopesDetailPage = lazy(() => import("./app/(pages)/scopes/$scopeId/page"));
 const PlanPage = lazy(() => import("./app/(pages)/plan/page"));
 const ReviewDetailPage = lazy(() => import("./app/(pages)/review/$scopeId/page"));
-const ThroughputNewPage = lazy(() => import("./app/(pages)/throughput/new/page"));
 const ThroughputDetailPage = lazy(() => import("./app/(pages)/throughput/$scopeId/page"));
 
 /* ── Route tree ── */
@@ -93,7 +90,6 @@ const reviewDetailRoute = createRoute({
     </Suspense>
   ),
 });
-const throughputNewRoute = lazyRoute("/throughput/new", ThroughputNewPage);
 const throughputDetailRoute = createRoute({
   getParentRoute: () => authLayout,
   path: "/throughput/$scope_id",
@@ -120,7 +116,6 @@ function scopeSearchRoute(path: string, Component: React.LazyExoticComponent<Rea
 const throughputRoute = scopeSearchRoute("/throughput", ThroughputPage);
 const statsRoute = scopeSearchRoute("/stats", StatsPage);
 const digestRoute = scopeSearchRoute("/digest", DigestPage);
-const digestNewRoute = lazyRoute("/digest/new", DigestNewPage);
 const digestDetailRoute = createRoute({
   getParentRoute: () => authLayout,
   path: "/digest/$scope_id",
@@ -130,7 +125,6 @@ const digestDetailRoute = createRoute({
     </Suspense>
   ),
 });
-const statsNewRoute = lazyRoute("/stats/new", StatsNewPage);
 const statsDetailRoute = createRoute({
   getParentRoute: () => authLayout,
   path: "/stats/$scope_id",
@@ -205,13 +199,10 @@ const routeTree = rootRoute.addChildren([
     scopesDetailRoute,
     planRoute,
     throughputRoute,
-    throughputNewRoute,
     throughputDetailRoute,
     statsRoute,
-    statsNewRoute,
     statsDetailRoute,
     digestRoute,
-    digestNewRoute,
     digestDetailRoute,
   ]),
   indexRoute,

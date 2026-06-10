@@ -101,6 +101,7 @@ const app = new Hono<Env>()
         p.code,
         p.name,
         p.standard_time,
+        p.field_id,
         p.subject_id,
         p.level_id
       FROM data_drills.answer a
@@ -126,6 +127,7 @@ const app = new Hono<Env>()
         code: r.code,
         name: r.name,
         standardTime: r.standard_time,
+        fieldId: (r as unknown as { field_id: string }).field_id,
         subjectId: r.subject_id,
         levelId: r.level_id,
         topicId: null as string | null,

@@ -1,74 +1,82 @@
+/**
+ * Plan A 移行後の薄い wrapper (canonical /api/v1/scopes/:id/... 経由)。
+ */
+
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { rpc, unwrap, type RpcData } from "@/lib/rpc-client";
-import type {
-  DigestScopeCreateInput,
-  DigestScopeUpdateInput,
-} from "@/lib/schemas/digest-scope";
+import type { ScopeUpdateInput } from "@/lib/schemas/scope";
+import { scopesKeys } from "@/hooks/queries/use-scopes";
 
-export type DigestScopeRow = RpcData<typeof rpc.api.v1["digest-scopes"]["$get"]>["data"][number];
-export type DigestScopeDetail = RpcData<typeof rpc.api.v1["digest-scopes"][":id"]["$get"]>["data"];
+type CanonicalDetail = RpcData<typeof rpc.api.v1.scopes[":id"]["detail"]["$get"]>["data"];
 
-export const digestScopeKeys = {
-  all: ["digest-scopes"] as const,
-  list: (fieldId: string | null) => [...digestScopeKeys.all, "list", fieldId] as const,
-  detail: (id: string) => [...digestScopeKeys.all, "detail", id] as const,
-};
+export type DigestScopeDetail = ReturnType<typeof adaptDetail>;
 
-export function useDigestScopesList(fieldId?: string | undefined) {
-  return useQuery({
-    queryKey: digestScopeKeys.list(fieldId ?? null),
-    queryFn: async () => {
-      const json = await unwrap(rpc.api.v1["digest-scopes"].$get({ query: fieldId ? { field_id: fieldId } : {} }));
-      return json.data;
+function adaptDetail(d: CanonicalDetail) {
+  const fieldIds = d.scope.filter?.fieldIds;
+  const derivedFieldId = fieldIds && fieldIds.length > 0 ? fieldIds[0] : null;
+  return {
+    scope: {
+      ...d.scope,
+      field_id: derivedFieldId,
+      scope_id: d.scope.id,
     },
-  });
+    members: d.members,
+    subjects: d.subjects,
+    levels: d.levels,
+  };
 }
 
 export function useDigestScope(id: string | undefined) {
   return useQuery({
-    queryKey: id ? digestScopeKeys.detail(id) : digestScopeKeys.all,
+    queryKey: id ? scopesKeys.fullDetail(id) : scopesKeys.all,
     queryFn: async () => {
-      const json = await unwrap(rpc.api.v1["digest-scopes"][":id"].$get({
-        param: { id: id! },
-        query: {},
-      }));
+      const json = await unwrap(rpc.api.v1.scopes[":id"].detail.$get({ param: { id: id! } }));
+      return adaptDetail(json.data);
+    },
+    enabled: !!id,
+  });
+}
+
+export type DigestScopeRevisionEntry = RpcData<typeof rpc.api.v1.scopes[":id"]["history"]["$get"]>["data"][number];
+
+export function useDigestScopeRevisions(id: string | undefined) {
+  return useQuery({
+    queryKey: id ? scopesKeys.history(id) : scopesKeys.all,
+    queryFn: async () => {
+      const json = await unwrap(rpc.api.v1.scopes[":id"].history.$get({ param: { id: id! } }));
       return json.data;
     },
     enabled: !!id,
   });
 }
 
-export function useCreateDigestScope(fieldId: string | undefined) {
+type LegacyUpdateInput = ScopeUpdateInput & { scope_id?: string | null };
+
+export function useUpdateDigestScope(id: string, _fieldId: string | undefined) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (payload: DigestScopeCreateInput) =>
-      unwrap(rpc.api.v1["digest-scopes"].$post({ json: payload })),
+    mutationFn: (payload: LegacyUpdateInput) => {
+      const { scope_id: _ignored, ...rest } = payload;
+      return unwrap(rpc.api.v1.scopes[":id"].$put({ param: { id }, json: rest }));
+    },
     onSuccess: () => {
-      if (fieldId) qc.invalidateQueries({ queryKey: digestScopeKeys.list(fieldId) });
+      qc.invalidateQueries({ queryKey: scopesKeys.fullDetail(id) });
+      qc.invalidateQueries({ queryKey: scopesKeys.detail(id) });
+      qc.invalidateQueries({ queryKey: scopesKeys.list() });
+      qc.invalidateQueries({ queryKey: scopesKeys.revisions(id) });
     },
   });
 }
 
-export function useUpdateDigestScope(id: string, fieldId: string | undefined) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (payload: DigestScopeUpdateInput) =>
-      unwrap(rpc.api.v1["digest-scopes"][":id"].$put({ param: { id }, json: payload })),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: digestScopeKeys.detail(id) });
-      if (fieldId) qc.invalidateQueries({ queryKey: digestScopeKeys.list(fieldId) });
-    },
-  });
-}
-
-export function useArchiveDigestScope(fieldId: string | undefined) {
+export function useArchiveDigestScope(_fieldId: string | undefined) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) =>
-      unwrap(rpc.api.v1["digest-scopes"][":id"].$delete({ param: { id } })),
-    onSuccess: (_data, id) => {
-      qc.invalidateQueries({ queryKey: digestScopeKeys.detail(id) });
-      if (fieldId) qc.invalidateQueries({ queryKey: digestScopeKeys.list(fieldId) });
+      unwrap(rpc.api.v1.scopes[":id"].$delete({ param: { id } })),
+    onSuccess: (_d, id) => {
+      qc.invalidateQueries({ queryKey: scopesKeys.fullDetail(id) });
+      qc.invalidateQueries({ queryKey: scopesKeys.detail(id) });
+      qc.invalidateQueries({ queryKey: scopesKeys.list() });
     },
   });
 }

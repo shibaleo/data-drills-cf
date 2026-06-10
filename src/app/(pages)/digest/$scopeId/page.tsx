@@ -58,16 +58,19 @@ export default function DigestPage() {
   const [date, setDate] = useState<string>(todayJST());
   useEffect(() => { setCurrentScopeId(scopeId); }, [scopeId, setCurrentScopeId]);
 
-  const { data: rowsAll = [] } = useThroughputList(scopeFieldId ?? undefined);
+  // scope_id 指定で server-side filter (cross-field 対応)
+  const { data: rowsAll = [] } = useThroughputList(undefined, null, scopeId);
   const { data: allProblemsAll = [] } = useProblemsList(scopeFieldId ?? undefined);
 
-  // scope.filter で scope 配下の problem set を確定 → throughput rows と allProblems を絞り込む
+  // scope.filter で scope 配下の problem set を確定 → allProblems を絞り込む
+  // (rowsAll は server 側で絞り込み済なので追加 filter 不要)
   const scopedProblemIds = useMemo(() => {
     if (!scope || !scope.filter) return null;
-    const f = scope.filter as { subjectIds?: string[]; levelIds?: string[] };
-    if (!f.subjectIds?.length && !f.levelIds?.length) return null;  // 無フィルタ = 全部
+    const f = scope.filter as { fieldIds?: string[]; subjectIds?: string[]; levelIds?: string[] };
+    if (!f.fieldIds?.length && !f.subjectIds?.length && !f.levelIds?.length) return null;
     const filtered = applyMemberFilter(
       allProblemsAll.map((p) => ({
+        fieldId: p.field_id ?? null,
         subjectId: p.subject_id || null,
         levelId: p.level_id || null,
         _id: p.id,

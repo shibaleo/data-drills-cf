@@ -1,87 +1,82 @@
+/**
+ * Plan A 移行後の薄い wrapper (canonical /api/v1/scopes/:id/... 経由)。
+ */
+
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { rpc, unwrap, type RpcData } from "@/lib/rpc-client";
-import type {
-  StatsScopeCreateInput,
-  StatsScopeUpdateInput,
-} from "@/lib/schemas/stats-scope";
+import type { ScopeUpdateInput } from "@/lib/schemas/scope";
+import { scopesKeys } from "@/hooks/queries/use-scopes";
 
-export type StatsScopeRow = RpcData<typeof rpc.api.v1["stats-scopes"]["$get"]>["data"][number];
-export type StatsScopeDetail = RpcData<typeof rpc.api.v1["stats-scopes"][":id"]["$get"]>["data"];
+type CanonicalDetail = RpcData<typeof rpc.api.v1.scopes[":id"]["detail"]["$get"]>["data"];
 
-export const statsScopeKeys = {
-  all: ["stats-scopes"] as const,
-  list: (fieldId: string | null) => [...statsScopeKeys.all, "list", fieldId] as const,
-  detail: (id: string) => [...statsScopeKeys.all, "detail", id] as const,
-};
+export type StatsScopeDetail = ReturnType<typeof adaptDetail>;
 
-export function useStatsScopesList(fieldId?: string | undefined) {
-  return useQuery({
-    queryKey: statsScopeKeys.list(fieldId ?? null),
-    queryFn: async () => {
-      const json = await unwrap(rpc.api.v1["stats-scopes"].$get({ query: fieldId ? { field_id: fieldId } : {} }));
-      return json.data;
+function adaptDetail(d: CanonicalDetail) {
+  const fieldIds = d.scope.filter?.fieldIds;
+  const derivedFieldId = fieldIds && fieldIds.length > 0 ? fieldIds[0] : null;
+  return {
+    scope: {
+      ...d.scope,
+      field_id: derivedFieldId,
+      scope_id: d.scope.id,
     },
-  });
+    members: d.members,
+    subjects: d.subjects,
+    levels: d.levels,
+  };
 }
 
 export function useStatsScope(id: string | undefined) {
   return useQuery({
-    queryKey: id ? statsScopeKeys.detail(id) : statsScopeKeys.all,
+    queryKey: id ? scopesKeys.fullDetail(id) : scopesKeys.all,
     queryFn: async () => {
-      const json = await unwrap(rpc.api.v1["stats-scopes"][":id"].$get({
-        param: { id: id! },
-        query: {},
-      }));
-      return json.data;
+      const json = await unwrap(rpc.api.v1.scopes[":id"].detail.$get({ param: { id: id! } }));
+      return adaptDetail(json.data);
     },
     enabled: !!id,
   });
 }
 
-export type StatsScopeRevisionEntry = RpcData<typeof rpc.api.v1["stats-scopes"][":id"]["revisions"]["$get"]>["data"][number];
+export type StatsScopeRevisionEntry = RpcData<typeof rpc.api.v1.scopes[":id"]["history"]["$get"]>["data"][number];
 
 export function useStatsScopeRevisions(id: string | undefined) {
   return useQuery({
-    queryKey: id ? [...statsScopeKeys.detail(id), "revisions"] : statsScopeKeys.all,
+    queryKey: id ? scopesKeys.history(id) : scopesKeys.all,
     queryFn: async () => {
-      const json = await unwrap(rpc.api.v1["stats-scopes"][":id"].revisions.$get({ param: { id: id! } }));
+      const json = await unwrap(rpc.api.v1.scopes[":id"].history.$get({ param: { id: id! } }));
       return json.data;
     },
     enabled: !!id,
   });
 }
 
-export function useCreateStatsScope(fieldId: string | undefined) {
+type LegacyUpdateInput = ScopeUpdateInput & { scope_id?: string | null };
+
+export function useUpdateStatsScope(id: string, _fieldId: string | undefined) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (payload: StatsScopeCreateInput) =>
-      unwrap(rpc.api.v1["stats-scopes"].$post({ json: payload })),
+    mutationFn: (payload: LegacyUpdateInput) => {
+      const { scope_id: _ignored, ...rest } = payload;
+      return unwrap(rpc.api.v1.scopes[":id"].$put({ param: { id }, json: rest }));
+    },
     onSuccess: () => {
-      if (fieldId) qc.invalidateQueries({ queryKey: statsScopeKeys.list(fieldId) });
+      qc.invalidateQueries({ queryKey: scopesKeys.fullDetail(id) });
+      qc.invalidateQueries({ queryKey: scopesKeys.detail(id) });
+      qc.invalidateQueries({ queryKey: scopesKeys.list() });
+      qc.invalidateQueries({ queryKey: scopesKeys.revisions(id) });
     },
   });
 }
 
-export function useUpdateStatsScope(id: string, fieldId: string | undefined) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (payload: StatsScopeUpdateInput) =>
-      unwrap(rpc.api.v1["stats-scopes"][":id"].$put({ param: { id }, json: payload })),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: statsScopeKeys.detail(id) });
-      if (fieldId) qc.invalidateQueries({ queryKey: statsScopeKeys.list(fieldId) });
-    },
-  });
-}
-
-export function useArchiveStatsScope(fieldId: string | undefined) {
+export function useArchiveStatsScope(_fieldId: string | undefined) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) =>
-      unwrap(rpc.api.v1["stats-scopes"][":id"].$delete({ param: { id } })),
-    onSuccess: (_data, id) => {
-      qc.invalidateQueries({ queryKey: statsScopeKeys.detail(id) });
-      if (fieldId) qc.invalidateQueries({ queryKey: statsScopeKeys.list(fieldId) });
+      unwrap(rpc.api.v1.scopes[":id"].$delete({ param: { id } })),
+    onSuccess: (_d, id) => {
+      qc.invalidateQueries({ queryKey: scopesKeys.fullDetail(id) });
+      qc.invalidateQueries({ queryKey: scopesKeys.detail(id) });
+      qc.invalidateQueries({ queryKey: scopesKeys.list() });
     },
   });
 }

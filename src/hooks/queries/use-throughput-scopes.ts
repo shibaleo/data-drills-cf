@@ -1,87 +1,83 @@
+/**
+ * Plan A 移行後の薄い wrapper (canonical /api/v1/scopes/:id/... 経由)。
+ * 詳細は use-review-scopes.ts のヘッダコメント参照。
+ */
+
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { rpc, unwrap, type RpcData } from "@/lib/rpc-client";
-import type {
-  ThroughputScopeCreateInput,
-  ThroughputScopeUpdateInput,
-} from "@/lib/schemas/throughput-scope";
+import type { ScopeUpdateInput } from "@/lib/schemas/scope";
+import { scopesKeys } from "@/hooks/queries/use-scopes";
 
-export type ThroughputScopeRow = RpcData<typeof rpc.api.v1["throughput-scopes"]["$get"]>["data"][number];
-export type ThroughputScopeDetail = RpcData<typeof rpc.api.v1["throughput-scopes"][":id"]["$get"]>["data"];
+type CanonicalDetail = RpcData<typeof rpc.api.v1.scopes[":id"]["detail"]["$get"]>["data"];
 
-export const throughputScopeKeys = {
-  all: ["throughput-scopes"] as const,
-  list: (fieldId: string | null) => [...throughputScopeKeys.all, "list", fieldId] as const,
-  detail: (id: string) => [...throughputScopeKeys.all, "detail", id] as const,
-};
+export type ThroughputScopeDetail = ReturnType<typeof adaptDetail>;
 
-export function useThroughputScopesList(fieldId?: string | undefined) {
-  return useQuery({
-    queryKey: throughputScopeKeys.list(fieldId ?? null),
-    queryFn: async () => {
-      const json = await unwrap(rpc.api.v1["throughput-scopes"].$get({ query: fieldId ? { field_id: fieldId } : {} }));
-      return json.data;
+function adaptDetail(d: CanonicalDetail) {
+  const fieldIds = d.scope.filter?.fieldIds;
+  const derivedFieldId = fieldIds && fieldIds.length > 0 ? fieldIds[0] : null;
+  return {
+    scope: {
+      ...d.scope,
+      field_id: derivedFieldId,
+      scope_id: d.scope.id,
     },
-  });
+    members: d.members,
+    subjects: d.subjects,
+    levels: d.levels,
+  };
 }
 
 export function useThroughputScope(id: string | undefined) {
   return useQuery({
-    queryKey: id ? throughputScopeKeys.detail(id) : throughputScopeKeys.all,
+    queryKey: id ? scopesKeys.fullDetail(id) : scopesKeys.all,
     queryFn: async () => {
-      const json = await unwrap(rpc.api.v1["throughput-scopes"][":id"].$get({
-        param: { id: id! },
-        query: {},
-      }));
-      return json.data;
+      const json = await unwrap(rpc.api.v1.scopes[":id"].detail.$get({ param: { id: id! } }));
+      return adaptDetail(json.data);
     },
     enabled: !!id,
   });
 }
 
-export type ThroughputScopeRevisionEntry = RpcData<typeof rpc.api.v1["throughput-scopes"][":id"]["revisions"]["$get"]>["data"][number];
+export type ThroughputScopeRevisionEntry = RpcData<typeof rpc.api.v1.scopes[":id"]["history"]["$get"]>["data"][number];
 
 export function useThroughputScopeRevisions(id: string | undefined) {
   return useQuery({
-    queryKey: id ? [...throughputScopeKeys.detail(id), "revisions"] : throughputScopeKeys.all,
+    queryKey: id ? scopesKeys.history(id) : scopesKeys.all,
     queryFn: async () => {
-      const json = await unwrap(rpc.api.v1["throughput-scopes"][":id"].revisions.$get({ param: { id: id! } }));
+      const json = await unwrap(rpc.api.v1.scopes[":id"].history.$get({ param: { id: id! } }));
       return json.data;
     },
     enabled: !!id,
   });
 }
 
-export function useCreateThroughputScope(fieldId: string | undefined) {
+type LegacyUpdateInput = ScopeUpdateInput & { scope_id?: string | null };
+
+export function useUpdateThroughputScope(id: string, _fieldId: string | undefined) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (payload: ThroughputScopeCreateInput) =>
-      unwrap(rpc.api.v1["throughput-scopes"].$post({ json: payload })),
+    mutationFn: (payload: LegacyUpdateInput) => {
+      const { scope_id: _ignored, ...rest } = payload;
+      return unwrap(rpc.api.v1.scopes[":id"].$put({ param: { id }, json: rest }));
+    },
     onSuccess: () => {
-      if (fieldId) qc.invalidateQueries({ queryKey: throughputScopeKeys.list(fieldId) });
+      qc.invalidateQueries({ queryKey: scopesKeys.fullDetail(id) });
+      qc.invalidateQueries({ queryKey: scopesKeys.detail(id) });
+      qc.invalidateQueries({ queryKey: scopesKeys.list() });
+      qc.invalidateQueries({ queryKey: scopesKeys.revisions(id) });
     },
   });
 }
 
-export function useUpdateThroughputScope(id: string, fieldId: string | undefined) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (payload: ThroughputScopeUpdateInput) =>
-      unwrap(rpc.api.v1["throughput-scopes"][":id"].$put({ param: { id }, json: payload })),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: throughputScopeKeys.detail(id) });
-      if (fieldId) qc.invalidateQueries({ queryKey: throughputScopeKeys.list(fieldId) });
-    },
-  });
-}
-
-export function useArchiveThroughputScope(fieldId: string | undefined) {
+export function useArchiveThroughputScope(_fieldId: string | undefined) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) =>
-      unwrap(rpc.api.v1["throughput-scopes"][":id"].$delete({ param: { id } })),
-    onSuccess: (_data, id) => {
-      qc.invalidateQueries({ queryKey: throughputScopeKeys.detail(id) });
-      if (fieldId) qc.invalidateQueries({ queryKey: throughputScopeKeys.list(fieldId) });
+      unwrap(rpc.api.v1.scopes[":id"].$delete({ param: { id } })),
+    onSuccess: (_d, id) => {
+      qc.invalidateQueries({ queryKey: scopesKeys.fullDetail(id) });
+      qc.invalidateQueries({ queryKey: scopesKeys.detail(id) });
+      qc.invalidateQueries({ queryKey: scopesKeys.list() });
     },
   });
 }

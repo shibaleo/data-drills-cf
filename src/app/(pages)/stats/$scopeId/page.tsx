@@ -59,27 +59,29 @@ export default function StatsDetailPage() {
     }
   }, [scopeQuery.data]);
 
-  const { data: rawRows = [] } = useThroughputList(scopeFieldId ?? undefined);
+  // scope_id 指定で server-side member filter 適用 (cross-field)
+  const { data: rawRows = [] } = useThroughputList(undefined, null, scopeId);
   const { data: allProblems = [] } = useProblemsList(scopeFieldId ?? undefined);
-  // scope の member filter を throughput rows と problems の両方に適用
+  const hasLocalFilter = !!(localFilter.fieldIds?.length || localFilter.subjectIds?.length || localFilter.levelIds?.length);
   const rows = useMemo(() => {
-    if (!localFilter.subjectIds?.length && !localFilter.levelIds?.length) return rawRows;
+    if (!hasLocalFilter) return rawRows;
     return applyMemberFilter(
-      rawRows.map((r) => ({ subjectId: r.subjectId, levelId: r.levelId, _r: r })),
+      rawRows.map((r) => ({ fieldId: r.fieldId, subjectId: r.subjectId, levelId: r.levelId, _r: r })),
       localFilter,
     ).map(({ _r }) => _r);
-  }, [rawRows, localFilter]);
+  }, [rawRows, localFilter, hasLocalFilter]);
   const filteredProblems = useMemo(() => {
-    if (!localFilter.subjectIds?.length && !localFilter.levelIds?.length) return allProblems;
+    if (!hasLocalFilter) return allProblems;
     return applyMemberFilter(
       allProblems.map((p) => ({
+        fieldId: p.field_id ?? null,
         subjectId: p.subject_id || null,
         levelId: p.level_id || null,
         _p: p,
       })),
       localFilter,
     ).map(({ _p }) => _p);
-  }, [allProblems, localFilter]);
+  }, [allProblems, localFilter, hasLocalFilter]);
 
   const { openDetail, renderDialogs } = useProblemDialogs({ fieldId: scopeFieldId, allProblems, onDataChanged: () => {} });
 
@@ -108,13 +110,13 @@ export default function StatsDetailPage() {
     navigate({ to: "/stats" as string });
   }
 
-  if (!scopeFieldId) return <div className="p-6 text-muted-foreground">Loading...</div>;
+  if (!scope) return <div className="p-6 text-muted-foreground">{scopeQuery.isLoading ? "Loading..." : "Scope not found"}</div>;
 
   return (
     <div className="p-3 md:p-4 flex flex-col gap-2 max-w-4xl">
+      {/* canonical scope.name は scope picker combobox に表示される。重複避けて削除 */}
       {renderHeaderSlot(
       <>
-        <span className="text-xs font-medium truncate max-w-xs text-foreground/80">{localName}</span>
         {dirty && (
           <div className="ml-auto flex items-center gap-2">
             <button type="button"
@@ -170,7 +172,7 @@ export default function StatsDetailPage() {
             <X className="size-3.5"/>
           </button>
           <MemberFilterPicker
-            fieldId={scopeFieldId}
+            fieldId={scopeFieldId ?? undefined}
             value={localFilter}
             onChange={setLocalFilter}
             trailing={
