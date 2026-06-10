@@ -30,8 +30,10 @@ const CELL_W = SQRT3 * SMALL_SIDE;
 const CELL_H = 1.5 * SMALL_SIDE;
 
 // 放射状メニュー。hex から十分離し、ボタン (sector) も背高に
-const MENU_INNER_R = SIDE + 28;
-const MENU_OUTER_R = MENU_INNER_R + 44;
+// hex 外周から sector までの間隔と sector の半径方向厚み。
+// chunky 感を出すために hex 寄りにして ring 自体も太く。
+const MENU_INNER_R = SIDE + 16;
+const MENU_OUTER_R = MENU_INNER_R + 54;
 // sector 間の角度 gap (= 扇形を独立した petal に見せる)
 const SECTOR_GAP_DEG = 5;
 // 個別 sector hover 時に外側へ伸びる量 (= 「段差」)
@@ -510,16 +512,20 @@ export default function ScopesHubPage() {
           // 進捗リング: scope hex の外周「六角形の辺」に沿って描画
           const RING_SIDE = SIDE + 6;
           const RING_PERIMETER = 6 * RING_SIDE;
-          // 多行 name (= 9 字超は 2 行に折返し、合計 18 字超は ellipsis)
+          // 多行 name (= 9 字超は 2 行に折返し、合計 18 字超は ellipsis)。
+          // 「(」「(」の直前で折返しを優先 (= 括弧の中途切れを避ける)。
           const NAME_LINE = 9;
           const nameLines: string[] = (() => {
             const n = scope.name;
             if (n.length <= NAME_LINE) return [n];
-            if (n.length <= NAME_LINE * 2) {
-              const split = Math.ceil(n.length / 2);
-              return [n.slice(0, split), n.slice(split)];
-            }
-            return [n.slice(0, NAME_LINE), n.slice(NAME_LINE, NAME_LINE * 2 - 1) + "…"];
+            // 自然な break point を探す: 半角/全角 ( の直前 (中間付近にあれば優先)
+            const paren = Math.max(n.lastIndexOf("("), n.lastIndexOf("("));
+            const goodParen = paren > 1 && paren <= NAME_LINE * 2;
+            const split = goodParen ? paren : Math.ceil(n.length / 2);
+            const line1 = n.slice(0, split).trimEnd();
+            const rest = n.slice(split);
+            if (rest.length <= NAME_LINE) return [line1, rest];
+            return [line1, rest.slice(0, NAME_LINE - 1) + "…"];
           })();
           // subtitle 1: 全体件数 + 未消化バッジ風
           const countLine = stats.total > 0 ? `${stats.total}件` : "";
@@ -559,9 +565,10 @@ export default function ScopesHubPage() {
                   glow filter はここだけに当てる (sector menu には掛けない) */}
               <g
                 style={{
-                  // 多重 drop-shadow で強めの glow halo を作る (hover 時のみ)
+                  // 控えめな drop-shadow で halo を残す (sector を主役にするため
+                  // 旧 0.85 / 0.65 / 0.45 から大幅に落とす)
                   filter: hovered
-                    ? `drop-shadow(0 0 8px hsl(var(--primary) / 0.85)) drop-shadow(0 0 28px hsl(var(--primary) / 0.65)) drop-shadow(0 0 60px hsl(var(--primary) / 0.45))`
+                    ? `drop-shadow(0 0 6px hsl(var(--primary) / 0.45)) drop-shadow(0 0 20px hsl(var(--primary) / 0.22)) drop-shadow(0 0 40px hsl(var(--primary) / 0.12))`
                     : "none",
                   transition: "filter 220ms ease-out",
                 }}
