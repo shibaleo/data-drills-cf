@@ -461,10 +461,10 @@ export default function PlanPage() {
   return (
     <div className="p-3 md:p-4 flex flex-col gap-2">
       <div className="rounded-md border p-3 space-y-2">
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
           <Popover>
             <PopoverTrigger asChild>
-              <Button size="sm" variant="outline" className="h-6 px-2 relative" title="Filter">
+              <Button size="sm" variant="outline" className="h-6 px-2 relative shrink-0" title="Filter">
                 <Filter className="size-3"/>
                 {activeFilterCount > 0 && (
                   <span className="absolute -top-1.5 -right-1.5 size-4 rounded-full bg-primary text-primary-foreground text-[9px] flex items-center justify-center">
@@ -507,7 +507,17 @@ export default function PlanPage() {
               )}
             </PopoverContent>
           </Popover>
-          <div className="flex items-center gap-2">
+          {(historyPanelOpen || asOf != null) && (
+            <div className="flex-1 min-w-0 rounded-md border px-2 py-1 text-xs">
+              <AsOfControls
+                asOf={asOf}
+                setAsOf={setAsOf}
+                latest={realToday}
+                onClose={() => setHistoryPanelOpen(false)}
+              />
+            </div>
+          )}
+          <div className="flex items-center gap-2 shrink-0 ml-auto">
             {pdfExport.selected.size > 0 && (
               <Button
                 size="sm" variant="outline" className="h-6 text-[10px] px-2"
@@ -559,16 +569,6 @@ export default function PlanPage() {
             </button>
           </div>
         </div>
-        {(historyPanelOpen || asOf != null) && (
-          <div className="rounded-md border px-3 py-2 text-xs">
-            <AsOfControls
-              asOf={asOf}
-              setAsOf={setAsOf}
-              latest={realToday}
-              onClose={() => setHistoryPanelOpen(false)}
-            />
-          </div>
-        )}
         {showMilestonePins && scopeQuery.data && (
           <div className="-mt-1 -mb-1">
             <ScopeFSRSOverridePanel
