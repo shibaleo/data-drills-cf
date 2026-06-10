@@ -98,38 +98,39 @@ export function UserMenu({ collapsed = false }: { collapsed?: boolean }) {
     else handleLogout();
   }
 
-  // SVG canvas: avatar を bottom-left に置いて右上 1/4 (NE quadrant) に sector を展開。
+  // SVG canvas: avatar を bottom-left、右上 1/4 (NE quadrant) に sector を展開。
+  // 表示時は CSS scaleY(0.5) で半分の高さに圧縮 (扇形ではなく扁平な fan)。
   const PAD = 8;
   const W = OUTER_R + PAD;
   const H = OUTER_R + PAD;
-  const cx = 0;       // avatar の x = svg 左端
-  const cy = H;       // avatar の y = svg 下端
+  const cx = 0;
+  const cy = H;
+  const renderedH = H / 2; // scaleY 後の見かけ高さ
 
   return (
     <>
       <div
         className="relative border-t border-sidebar-border px-3 py-3"
-        onMouseEnter={() => setOpen(true)}
         onMouseLeave={() => { setOpen(false); setHoveredSec(null); }}
       >
-        {/* Floating wheel: avatar の bottom-left を起点に右上 1/4 へ展開 */}
+        {/* Floating wheel: avatar の bottom-left を起点に右上 1/4 へ展開 (高さ半分) */}
         <div
           aria-hidden={!open}
           className="pointer-events-none absolute transition-opacity duration-200"
           style={{
-            // avatar center が svg の bottom-left になるよう absolute 配置
-            // (avatar size-8 = 32px、px-3 py-3 を考慮した位置補正)
+            // avatar center が svg の bottom-left になるよう絶対配置
             left: `calc(0.75rem + 16px)`,
             bottom: `calc(0.75rem + 16px)`,
             opacity: open ? 1 : 0,
             width: W,
-            height: H,
+            height: renderedH,
           }}
         >
           <svg
             width={W}
-            height={H}
+            height={renderedH}
             viewBox={`0 0 ${W} ${H}`}
+            preserveAspectRatio="none"
             className="pointer-events-auto overflow-visible"
             style={{ display: open ? "block" : "none" }}
           >
@@ -190,12 +191,17 @@ export function UserMenu({ collapsed = false }: { collapsed?: boolean }) {
           </svg>
         </div>
 
-        {/* Avatar trigger (常時表示) */}
+        {/* Avatar trigger (常時表示) — hover 検知はアイコン円のみに限定 */}
         <button
           type="button"
           className="flex w-full items-center gap-2 rounded-md p-1 -m-1 transition-colors hover:bg-sidebar-accent"
         >
-          <Avatar name={me.name} />
+          <span
+            onMouseEnter={() => setOpen(true)}
+            className="inline-flex"
+          >
+            <Avatar name={me.name} />
+          </span>
           <span
             className={cn(
               "truncate text-sm text-sidebar-foreground whitespace-nowrap transition-opacity duration-200",
