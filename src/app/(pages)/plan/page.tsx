@@ -186,6 +186,9 @@ export default function PlanPage() {
   const [filterSubjects, setFilterSubjects] = useState<Set<string>>(new Set());
   const [filterLevels, setFilterLevels] = useState<Set<string>>(new Set());
   const [filterLastStatuses, setFilterLastStatuses] = useState<Set<string>>(new Set());
+  // 過去実績 (throughput + past First) を隠す / 未解消エントリ (planned future) を隠す
+  const [hideThroughput, setHideThroughput] = useState(false);
+  const [hidePlanned, setHidePlanned] = useState(false);
 
   // filter prefs 永続化 (review/scopes と同じ filter_prefs テーブル、key=plan)
   const filterPrefsQuery = useFilterPrefs(fieldId ?? undefined);
@@ -207,6 +210,8 @@ export default function PlanPage() {
       setAllocFlagFilter(flags);
       setHiddenLayerIds(new Set(p.hiddenLayerIds ?? []));
       if (p.chartMaxRows !== undefined) setChartMaxRows(p.chartMaxRows);
+      setHideThroughput(!!p.hideThroughput);
+      setHidePlanned(!!p.hidePlanned);
     }
     prefsLoadedRef.current = fieldId;
   }, [fieldId, filterPrefsQuery.data]);
@@ -221,6 +226,8 @@ export default function PlanPage() {
       f: [...allocFlagFilter].sort(),
       h: [...hiddenLayerIds].sort(),
       r: chartMaxRows,
+      ht: hideThroughput,
+      hp: hidePlanned,
     });
     if (lastSavedPrefsRef.current === null) {
       lastSavedPrefsRef.current = snapshot;
@@ -238,10 +245,12 @@ export default function PlanPage() {
         allocFlags: [...allocFlagFilter],
         hiddenLayerIds: [...hiddenLayerIds],
         chartMaxRows,
+        hideThroughput,
+        hidePlanned,
       },
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filterSubjects, filterLevels, filterLastStatuses, allocKindFilter, allocFlagFilter, hiddenLayerIds, chartMaxRows]);
+  }, [filterSubjects, filterLevels, filterLastStatuses, allocKindFilter, allocFlagFilter, hiddenLayerIds, chartMaxRows, hideThroughput, hidePlanned]);
   const chartRef = useRef<BacklogChartHandle>(null);
   const tableRef = useRef<HTMLDivElement>(null);
 
@@ -349,13 +358,19 @@ export default function PlanPage() {
 
   const filteredOverlay = useMemo(() => {
     return overlayItems.filter((o) => {
+      // 過去 throughput overlay は stabilityDays 無し (= 実績)、未来 overlay は有り
+      const isActual = o.stabilityDays === undefined;
+      if (hideThroughput && isActual) return false;
+      if (hidePlanned && !isActual) return false;
       if (filterLastStatuses.size > 0 && (!o.statusName || !filterLastStatuses.has(o.statusName))) return false;
       return true;
     });
-  }, [overlayItems, filterLastStatuses]);
+  }, [overlayItems, filterLastStatuses, hideThroughput, hidePlanned]);
 
   const filteredAllocated = useMemo(() => {
     return edit.allocated.filter((a) => {
+      if (hideThroughput && a.side === "past") return false;
+      if (hidePlanned && a.side === "future") return false;
       if (allocKindFilter.size > 0) {
         const kind = a.side === "past" ? "First" : "Planned";
         if (!allocKindFilter.has(kind)) return false;
@@ -367,7 +382,7 @@ export default function PlanPage() {
       }
       return true;
     });
-  }, [edit.allocated, allocKindFilter, allocFlagFilter]);
+  }, [edit.allocated, allocKindFilter, allocFlagFilter, hideThroughput, hidePlanned]);
 
   const memberCount = edit.effectiveMembers.length;
   const doneCount = edit.effectiveMembers.filter((m) => m.first_answer_date).length;
@@ -546,6 +561,27 @@ export default function PlanPage() {
               )}
             </PopoverContent>
           </Popover>
+          {/* Throughput / Planned 表示 toggle。active なら 該当データを隠す。 */}
+          <button type="button"
+            onClick={() => setHideThroughput((v) => !v)}
+            title={hideThroughput ? "実績を表示" : "実績を非表示"}
+            className={`h-6 px-2 text-[10px] rounded-md border transition-colors shrink-0 ${
+              hideThroughput
+                ? "bg-accent text-accent-foreground border-accent-foreground/30"
+                : "text-muted-foreground hover:bg-muted"
+            }`}>
+            {hideThroughput ? "実績 OFF" : "実績"}
+          </button>
+          <button type="button"
+            onClick={() => setHidePlanned((v) => !v)}
+            title={hidePlanned ? "予定を表示" : "予定を非表示"}
+            className={`h-6 px-2 text-[10px] rounded-md border transition-colors shrink-0 ${
+              hidePlanned
+                ? "bg-accent text-accent-foreground border-accent-foreground/30"
+                : "text-muted-foreground hover:bg-muted"
+            }`}>
+            {hidePlanned ? "予定 OFF" : "予定"}
+          </button>
           {(historyPanelOpen || asOf != null) && (
             <div className="flex-1 min-w-0 h-[26px] rounded-md border px-2 flex items-center text-xs">
               <AsOfControls

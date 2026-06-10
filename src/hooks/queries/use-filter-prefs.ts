@@ -41,6 +41,10 @@ export type PlanPrefs = {
   hiddenLayerIds?: string[];
   /** Tetris 最大段数 (null = full/auto)。 */
   chartMaxRows?: number | null;
+  /** 過去実績 (throughput + past First) 表示の隠し ON/OFF。 */
+  hideThroughput?: boolean;
+  /** 未解消 (planned future) 表示の隠し ON/OFF。 */
+  hidePlanned?: boolean;
 };
 export type FilterPrefsBag = {
   review?: ReviewPrefs;
