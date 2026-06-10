@@ -81,6 +81,12 @@ function projectSmoothFuture(args: {
     const projected = computeNextReview(date, info.stabilityDays, args.standardTimeSec, args.lastDurationSec);
     if (projected <= date) break;
     if (projected > args.horizonDate) break;
+    // 実効 interval (= projected - date) を stabilityDays として渡す。
+    // info.stabilityDays をそのまま使うと status 一様になるので、std/dur で
+    // 補正された個別の interval を反映する。
+    const intervalDays = Math.round(
+      (new Date(`${projected}T00:00:00Z`).getTime() - new Date(`${date}T00:00:00Z`).getTime()) / 86400000,
+    );
     out.push({
       problemId: args.problemId,
       code: args.code,
@@ -88,7 +94,7 @@ function projectSmoothFuture(args: {
       date: projected,
       color: info.color ?? "#a3a3a3",
       statusName: nextStatusName,
-      stabilityDays: info.stabilityDays,
+      stabilityDays: intervalDays,
     });
     date = projected;
     chainIdx = nextIdx;
@@ -290,7 +296,12 @@ export default function PlanPage() {
     for (const r of reviewQuery.data ?? []) {
       if (r.answerCount === 0) continue;
       const stColor = r.statusColor ?? "#a3a3a3";
-      const lastStab = statusByName.get(r.lastStatus)?.stabilityDays;
+      // r.nextReview は server で std/dur 補正済み next review 日。今日からの interval
+      // を stabilityDays として渡し、同 status の中でも問題ごとに stability が
+      // 違うようにする。
+      const reviewIntervalDays = Math.max(0, Math.round(
+        (new Date(`${r.nextReview}T00:00:00Z`).getTime() - new Date(`${today}T00:00:00Z`).getTime()) / 86400000,
+      ));
       out.push({
         problemId: r.problemId,
         code: r.code,
@@ -298,7 +309,7 @@ export default function PlanPage() {
         date: r.nextReview,
         color: stColor,
         statusName: r.lastStatus,
-        stabilityDays: lastStab,
+        stabilityDays: reviewIntervalDays,
       });
       out.push(
         ...projectSmoothFuture({
