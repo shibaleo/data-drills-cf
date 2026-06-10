@@ -697,7 +697,7 @@ export default function PlanPage() {
           milestones={edit.localMilestones}
           today={today}
           selectedId={selectedId}
-          onSelect={(id) => setSelectedId((p) => (p === id ? null : id))}
+          onSelect={handleSelect}
           onOpen={openDetail}
           showMilestonePins={showMilestonePins}
           milestoneAnchors={milestoneAnchors}
