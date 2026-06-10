@@ -89,17 +89,20 @@ export function ScopePlanRightPanel({
                 {editingIdx === i ? (
                   <input type="text" inputMode="decimal" autoFocus
                     defaultValue={w.toFixed(2)}
+                    onFocus={(e) => e.currentTarget.select()}
                     onBlur={(e) => {
                       const n = parseFloat(e.target.value);
                       if (Number.isFinite(n)) commit(i, n);
                       setEditingIdx(null);
                     }}
                     onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
-                    className="w-9 text-center text-[9px] tabular-nums px-0.5 py-0 rounded-sm border bg-background outline-none"/>
+                    style={{ width: "4ch" }}
+                    className="text-center text-[9px] tabular-nums p-0 rounded-sm bg-transparent outline-none border-0 ring-1 ring-primary/50 focus:ring-primary"/>
                 ) : (
                   <button type="button" disabled={readOnly}
                     onClick={() => setEditingIdx(i)}
-                    className="text-[9px] tabular-nums text-muted-foreground hover:text-foreground disabled:opacity-50">
+                    style={{ width: "4ch" }}
+                    className="text-center text-[9px] tabular-nums text-muted-foreground hover:text-foreground disabled:opacity-50">
                     {w.toFixed(2)}
                   </button>
                 )}
