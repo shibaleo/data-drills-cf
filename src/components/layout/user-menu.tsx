@@ -34,7 +34,10 @@ const SECTORS = [
 
 const INNER_R = 80;
 const OUTER_R = 180;
-const GAP_DEG = 3;
+// 旧 GAP_DEG (= 角度 gap で sector を分離) は廃止。境界を平行 strip (背景色) で
+// 上書きする方式に変更したので sector 間は角度的に隙間なくつなぐ。
+const GAP_DEG = 0;
+const GAP_PX = 6; // sector 間 corridor の幅 (-45° 方向に強引に渡す strip)
 
 function annularSector(
   cx: number,
@@ -187,6 +190,19 @@ export function UserMenu({ collapsed = false }: { collapsed?: boolean }) {
                 </g>
               );
             })}
+            {/* sector 間の境界 (-45°) を平行 strip (uniform width) で上書き。
+                角度 gap だと中心側が細く外側が太くなるが、line stroke 方式なら
+                完全な uniform width。stroke-linecap=round で先端も綺麗に。 */}
+            <line
+              x1={cx}
+              y1={cy}
+              x2={cx + (OUTER_R + 14) * Math.cos((-45 * Math.PI) / 180)}
+              y2={cy + (OUTER_R + 14) * Math.sin((-45 * Math.PI) / 180)}
+              stroke="var(--sidebar)"
+              strokeWidth={GAP_PX}
+              strokeLinecap="round"
+              className="pointer-events-none"
+            />
           </svg>
         </div>
 
