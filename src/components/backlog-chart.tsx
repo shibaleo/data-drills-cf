@@ -199,6 +199,20 @@ export const BacklogChart = forwardRef<BacklogChartHandle, BacklogChartProps>(fu
   type StackItem =
     | { kind: "alloc"; alloc: AllocatedProblem }
     | { kind: "overlay"; ov: OverlayBlock };
+  // 積み上げ順 (下 → 上):
+  //   過去カラム: First → Miss → Rough → Fair → Fluent → Done (= 実績)
+  //   未来カラム: 未来 allocated → smooth-future overlay (= 未解消)
+  // 過去/未来は column の date < today で分岐。overflow は同 rank で扱う。
+  const pastStatusRank = (name: string | null | undefined): number => {
+    switch (name) {
+      case "Miss": return 1;
+      case "Rough": return 2;
+      case "Fair": return 3;
+      case "Fluent": return 4;
+      case "Done": return 5;
+      default: return 6;
+    }
+  };
   const grouped = useMemo(() => {
     const map = new Map<string, StackItem[]>();
     for (const item of items) {
@@ -206,25 +220,25 @@ export const BacklogChart = forwardRef<BacklogChartHandle, BacklogChartProps>(fu
       list.push({ kind: "alloc", alloc: item });
       map.set(item.date, list);
     }
-    const sideOrder = { past: 0, future: 1 } as const;
-    for (const list of map.values()) {
-      list.sort((a, b) => {
-        // overlay は alloc の後 (= 上) に積む
-        if (a.kind !== b.kind) return a.kind === "alloc" ? -1 : 1;
-        if (a.kind === "alloc" && b.kind === "alloc") {
-          if (a.alloc.overflow !== b.alloc.overflow) return a.alloc.overflow ? 1 : -1;
-          return sideOrder[a.alloc.side] - sideOrder[b.alloc.side];
-        }
-        return 0;
-      });
-    }
     for (const ov of overlayItems ?? []) {
       const list = map.get(ov.date) ?? [];
       list.push({ kind: "overlay", ov });
       map.set(ov.date, list);
     }
+    const rank = (it: StackItem, isPast: boolean): number => {
+      if (it.kind === "alloc") {
+        if (it.alloc.side === "past") return 0;       // First (下端)
+        return 50;                                     // 未来 allocated
+      }
+      if (isPast) return pastStatusRank(it.ov.statusName);  // 1..6
+      return 51;                                       // 未来 smooth-future
+    };
+    for (const [date, list] of map) {
+      const isPast = date < today;
+      list.sort((a, b) => rank(a, isPast) - rank(b, isPast));
+    }
     return map;
-  }, [items, overlayItems]);
+  }, [items, overlayItems, today]);
 
   const { dates, todayIdx } = useMemo(() => {
     const allDates = [
