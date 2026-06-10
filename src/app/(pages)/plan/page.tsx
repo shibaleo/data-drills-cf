@@ -640,6 +640,7 @@ export default function PlanPage() {
           today={today}
           selectedId={selectedId}
           onSelect={(id) => setSelectedId((p) => (p === id ? null : id))}
+          onOpen={openDetail}
           showMilestonePins={showMilestonePins}
           milestoneAnchors={milestoneAnchors}
           hiddenLayerIds={hiddenLayerIds}
