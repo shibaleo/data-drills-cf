@@ -21,7 +21,7 @@ import {
 import { useField } from "@/hooks/use-field";
 import { useReviewList } from "@/hooks/queries/use-review";
 import { useProblemsList } from "@/hooks/queries/use-problems";
-import { useScopes, useScope, useScopeDetail, useUpdateScope } from "@/hooks/queries/use-scopes";
+import { useScopes, useScope, useScopeDetail, useScopeTimeline, useUpdateScope, sliceTimelineAtAsOf } from "@/hooks/queries/use-scopes";
 import { useProblemDialogs } from "@/hooks/use-problem-dialogs";
 import { usePageTitle } from "@/lib/page-context";
 import { todayJST } from "@/lib/date-utils";
@@ -118,18 +118,47 @@ export default function PlanPage() {
   const fieldId = (selectedScope?.filter as { fieldIds?: string[] } | undefined)?.fieldIds?.[0] ?? null;
 
   const { data: detail = null } = useScopeDetail(scopeId ?? "");
+  const { data: timeline = null } = useScopeTimeline(scopeId ?? "");
   const scopeQuery = useScope(scopeId ?? "");
   const updateScope = useUpdateScope();
   const allProblems = useProblemsList(fieldId ?? undefined).data ?? [];
   const reviewQuery = useReviewList(fieldId ?? undefined, null, scopeId ?? undefined);
 
+  // AsOf 時点の scope/layers/milestones を timeline から再構築。members/subjects/levels
+  // は live (detail) 由来 (problem は bitemporal でないので意味のある再構築不可)。
+  // 過去 asOf では filter も past scope のものを使い、past member set を再現する。
+  const detailAtAsOf = useMemo(() => {
+    if (!detail) return null;
+    if (!timeline) return detail;
+    const sliced = sliceTimelineAtAsOf(timeline, asOf);
+    if (!sliced.scope) return detail;
+    return {
+      ...detail,
+      scope: sliced.scope,
+      layers: sliced.layers.map((l) => ({
+        id: l.id, revision: l.revision, name: l.name,
+        color: l.color, opacity_pct: l.opacity_pct,
+        line_style: l.line_style, line_width: l.line_width,
+        sort_order: l.sort_order,
+      })),
+      milestones: sliced.milestones.map((m) => ({
+        id: m.id, revision: m.revision, layer_id: m.layer_id,
+        target: m.target, date: m.date,
+      })),
+    } as typeof detail;
+  }, [detail, timeline, asOf]);
+
   const edit = useScopeEditState({
     scopeId: scopeId ?? "",
-    data: detail,
+    data: detailAtAsOf,
     today,
     realToday,
     asOf,
     allProblems,
+    // asOf 切替で必ず再 sync。同 asOf 内 + 同 scope.revision なら編集を守る。
+    syncKey: detailAtAsOf
+      ? `${asOf ?? "live"}-${detailAtAsOf.scope.revision}-${detailAtAsOf.layers.length}-${detailAtAsOf.milestones.length}`
+      : null,
   });
 
   // 表示フィルタ (凡例ピルのトグル)。すべて select-only semantics:

@@ -68,8 +68,15 @@ export function useScopeEditState(args: {
   asOf: string | null;
   /** filter 変更時に scope 全 member を再計算するための problems 一覧。 */
   allProblems: ProblemRow[];
+  /**
+   * sync dedupe key。同じ key の間は server data の変化を local state に上書きしない
+   * (= 編集中の入力を保護)。デフォルトは `data.scope.revision`。
+   * AsOf 再生では caller 側で `${asOf}-${scope.revision}` 等を渡すと、asOf 切替で
+   * 必ず再 sync (= timeline 切替) しつつ同 asOf 内では編集を守れる。
+   */
+  syncKey?: string | number | null;
 }) {
-  const { scopeId, data, today, realToday, asOf, allProblems } = args;
+  const { scopeId, data, today, realToday, asOf, allProblems, syncKey } = args;
   const batchSave = useScopeBatchSave(scopeId);
 
   const [name, setName] = useState("");
@@ -80,11 +87,12 @@ export function useScopeEditState(args: {
   const [localMilestones, setLocalMilestones] = useState<LocalMilestone[]>([]);
   const [localFilter, setLocalFilter] = useState<MemberFilterInput>({});
 
-  const lastSyncRevRef = useRef<number | null>(null);
+  const lastSyncRevRef = useRef<number | string | null>(null);
   useEffect(() => {
     if (!data) return;
-    if (lastSyncRevRef.current === data.scope.revision) return;
-    lastSyncRevRef.current = data.scope.revision;
+    const key = syncKey ?? data.scope.revision;
+    if (lastSyncRevRef.current === key) return;
+    lastSyncRevRef.current = key;
     setName(data.scope.name);
     setDailyMinutes(data.scope.daily_minutes);
     setTimeMultiplier(data.scope.time_multiplier_pct / 100);
@@ -106,7 +114,8 @@ export function useScopeEditState(args: {
   }, [data]);
 
   const multPct = Math.round(timeMultiplier * 100);
-  const synced = data ? lastSyncRevRef.current === data.scope.revision : false;
+  const effectiveSyncKey = syncKey ?? data?.scope.revision ?? null;
+  const synced = data ? lastSyncRevRef.current === effectiveSyncKey : false;
   const planDirty = synced && data ? (
     name !== data.scope.name ||
     dailyMinutes !== data.scope.daily_minutes ||

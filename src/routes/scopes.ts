@@ -295,6 +295,55 @@ const app = new Hono<Env>()
     out.sort((a, b) => b.valid_from.localeCompare(a.valid_from));
     return c.json({ data: out });
   })
+  // Timeline: scope + layer + milestone の全 revision を full payload で返す。
+  // AsOf 再生用 — client が valid_from / valid_to で active row を切り替える。
+  // (history は summary 文字列だけなので再構築不可、ここは full payload)
+  .get("/:id/timeline", async (c) => {
+    const userId = c.get("authResult").userId;
+    const scopeId = c.req.param("id");
+    const [own] = await db.select({ id: scope.id }).from(scope)
+      .where(and(eq(scope.id, scopeId), eq(scope.userId, userId))).limit(1);
+    if (!own) return c.json({ error: "Not found" }, 404);
+    const [scopeRevs, layerRevs, milestoneRevs] = await Promise.all([
+      db.select().from(scope)
+        .where(eq(scope.id, scopeId))
+        .orderBy(desc(scope.validFrom)),
+      db.select().from(goalLayer)
+        .where(eq(goalLayer.scopeId, scopeId))
+        .orderBy(desc(goalLayer.validFrom)),
+      db.select().from(goalMilestone)
+        .where(eq(goalMilestone.scopeId, scopeId))
+        .orderBy(desc(goalMilestone.validFrom)),
+    ]);
+    return c.json({
+      data: {
+        scope_revisions: scopeRevs.map(scopeToApi),
+        layer_revisions: layerRevs.map((l) => ({
+          id: l.id,
+          revision: l.revision,
+          name: l.name,
+          color: l.color,
+          opacity_pct: l.opacityPct,
+          line_style: l.lineStyle,
+          line_width: l.lineWidth,
+          sort_order: l.sortOrder,
+          is_active: l.isActive,
+          valid_from: (l.validFrom as Date).toISOString(),
+          valid_to: l.validTo ? (l.validTo as Date).toISOString() : null,
+        })),
+        milestone_revisions: milestoneRevs.map((m) => ({
+          id: m.id,
+          revision: m.revision,
+          layer_id: m.layerId,
+          target: m.target,
+          date: typeof m.date === "string" ? m.date : (m.date as Date).toISOString().slice(0, 10),
+          is_active: m.isActive,
+          valid_from: (m.validFrom as Date).toISOString(),
+          valid_to: m.validTo ? (m.validTo as Date).toISOString() : null,
+        })),
+      },
+    });
+  })
   // Create: revision=1 で INSERT
   .post("/", zValidator("json", scopeCreateInputSchema), async (c) => {
     const userId = c.get("authResult").userId;
