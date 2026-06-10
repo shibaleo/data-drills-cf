@@ -743,14 +743,15 @@ export default function ScopesHubPage() {
                         >
                           <path
                             d={path}
-                            // 中心 hex hover (menu 出現) 時の sector は色塗り。
-                            // 個別 sector hover 時は黒背景 + 色枠 + blur に切替
+                            // 中心 hex hover (menu 出現) 時: 色塗り + 同色細枠
+                            // 個別 sector hover 時: 黒背景に切替 + 枠は消す + glow
+                            // (border 色は外して文字色で色付け)
                             fill={isSecHover ? "var(--background)" : sec.color}
-                            stroke={sec.color}
-                            strokeWidth={isSecHover ? 2.4 : 1.8}
+                            stroke={isSecHover ? "transparent" : sec.color}
+                            strokeWidth={1.8}
                             strokeLinejoin="round"
                             style={{
-                              transition: "fill 160ms, stroke-width 180ms, d 180ms cubic-bezier(0.34, 1.56, 0.64, 1), filter 180ms ease-out",
+                              transition: "fill 160ms, stroke 160ms, d 180ms cubic-bezier(0.34, 1.56, 0.64, 1), filter 180ms ease-out",
                               filter: isSecHover
                                 ? `drop-shadow(0 0 10px ${sec.color}) drop-shadow(0 0 24px ${sec.color}) drop-shadow(0 0 48px ${sec.color})`
                                 : "none",
@@ -761,8 +762,9 @@ export default function ScopesHubPage() {
                           <text
                             fontSize={16}
                             fontWeight={800}
-                            fill="white"
+                            fill={isSecHover ? sec.color : "white"}
                             letterSpacing={0.6}
+                            style={{ transition: "fill 160ms ease-out" }}
                             className="pointer-events-none select-none"
                           >
                             <textPath
