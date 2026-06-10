@@ -764,6 +764,7 @@ export default function ScopesHubPage() {
                             fontWeight={800}
                             fill={isSecHover ? sec.color : "white"}
                             letterSpacing={0.6}
+                            dominantBaseline="central"
                             style={{ transition: "fill 160ms ease-out" }}
                             className="pointer-events-none select-none"
                           >
