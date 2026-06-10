@@ -42,6 +42,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "codemirror-live-markdown": "0.5.1-alpha.1",
+    "@dd/db-schema": "workspace:*",
     "drizzle-orm": "^0.44.2",
     "drizzle-zod": "^0.8.3",
     "hono": "^4.7.10",
