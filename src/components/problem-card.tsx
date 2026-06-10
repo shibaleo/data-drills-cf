@@ -10,7 +10,7 @@ import { toJSTDate, jstDayDiff, todayJST } from '@/lib/date-utils'
 import { computeForgettingInfo } from '@/lib/forgetting-curve'
 import { computeNextReview } from '@/lib/review-scoring'
 import { useLookup } from '@/hooks/use-field'
-import { useSubjects, useLevels } from '@/hooks/queries/use-field-data'
+import { useSubjects, useLevels, useFields } from '@/hooks/queries/use-field-data'
 import { Markdown } from '@/components/markdown'
 import { DurationSparkline } from '@/components/duration-sparkline'
 import { ProblemPdfLink } from '@/components/problem-pdf-link'
@@ -125,6 +125,8 @@ export function ProblemCard({
   // の影響を受けない形)。
   const { data: subjects = [] } = useSubjects(p.field_id)
   const { data: levels = [] } = useLevels(p.field_id)
+  const { data: fields = [] } = useFields()
+  const field = fields.find((f) => f.id === p.field_id) ?? null
   const lookup = useLookup(subjects, levels)
   const answers = [...p.answers].sort(
     (a, b) => (b.date ?? '').localeCompare(a.date ?? '') || (b.created_at ?? '').localeCompare(a.created_at ?? ''),
@@ -153,6 +155,7 @@ export function ProblemCard({
     <div className="relative space-y-3">
         {/* Header: code + edit (left) | subject, level (right) */}
         <div className="flex items-center gap-1.5 text-xs">
+          {field && <OpaqueTag name={field.name} color={field.color || null} />}
           <OpaqueTag name={lookup.subjectName(p.subject_id)} color={lookup.subjectColor(p.subject_id) || null} />
           <OpaqueTag name={lookup.levelName(p.level_id)} color={lookup.levelColor(p.level_id) || null} />
           <span className="font-mono font-medium text-sm whitespace-nowrap">{p.code}</span>

@@ -193,11 +193,9 @@ export default function PlanPage() {
   const [filterLevels, setFilterLevels] = useState<Set<string>>(new Set());
   const [filterLastStatuses, setFilterLastStatuses] = useState<Set<string>>(new Set());
   // 過去実績 (throughput + past First) を隠す / 未解消エントリ (planned future) を隠す
-  // 表示カテゴリ独立 toggle (default 全表示):
-  // - Throughput = past throughput overlay + alloc.past (First)
-  // - Review     = review-next overlay (= 各 problem の最後 status 由来 1 段目)
-  // - Forecast   = smooth-future overlay + alloc.future (planned First)
-  const [hideThroughput, setHideThroughput] = useState(false);
+  // 表示カテゴリ独立 toggle。default は Throughput OFF + Review/Forecast ON
+  // (= 未来寄せの「現行 /review + projection」表示)。filter_prefs.plan で永続化。
+  const [hideThroughput, setHideThroughput] = useState(true);
   const [hideReview, setHideReview] = useState(false);
   const [hideForecast, setHideForecast] = useState(false);
 
