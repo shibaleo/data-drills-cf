@@ -7,12 +7,24 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
-import { env } from "@/lib/env";
 
 export const pdfExportInputSchema = z.object({
   // 100 件上限。Worker メモリ + Render free plan の処理時間を考慮。
   problem_ids: z.array(z.string().uuid()).min(1).max(100),
 });
+
+/**
+ * CF Workers / wrangler dev 双方で env を確実に取る。
+ * nodejs_compat 環境下でも .dev.vars / secret は env binding 経由でしか
+ * 確実に届かないので、c.env を最優先で見て process.env はフォールバック。
+ */
+function readEnv(c: { env?: unknown }, key: string): string | undefined {
+  const bag = (c.env ?? {}) as Record<string, unknown>;
+  const fromBinding = bag[key];
+  if (typeof fromBinding === "string" && fromBinding.length > 0) return fromBinding;
+  const fromProcess = typeof process !== "undefined" ? process.env?.[key] : undefined;
+  return fromProcess && fromProcess.length > 0 ? fromProcess : undefined;
+}
 
 const app = new Hono()
   /**
@@ -24,7 +36,7 @@ const app = new Hono()
    * to distinguish the "起床中" phase from "PDF 処理中".
    */
   .get("/health", async (c) => {
-    const pdfApiUrl = env.PDF_API_URL;
+    const pdfApiUrl = readEnv(c, "PDF_API_URL");
     if (!pdfApiUrl) {
       return c.json({ error: "PDF_API_URL is not configured" }, 500);
     }
@@ -35,16 +47,20 @@ const app = new Hono()
     return c.json({ ok: true });
   })
   .post("/", zValidator("json", pdfExportInputSchema), async (c) => {
-    const pdfApiUrl = env.PDF_API_URL;
+    const pdfApiUrl = readEnv(c, "PDF_API_URL");
+    const pdfServiceKey = readEnv(c, "PDF_SERVICE_KEY");
     if (!pdfApiUrl) {
       return c.json({ error: "PDF_API_URL is not configured" }, 500);
+    }
+    if (!pdfServiceKey) {
+      return c.json({ error: "PDF_SERVICE_KEY is not configured" }, 500);
     }
     const body = c.req.valid("json");
     const res = await fetch(`${pdfApiUrl}/api/v1/pdf-sync/export`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-pdf-service-key": env.PDF_SERVICE_KEY,
+        "x-pdf-service-key": pdfServiceKey,
       },
       body: JSON.stringify(body),
     });
