@@ -36,8 +36,8 @@ import { Filter, SlidersHorizontal, ArrowLeft, Archive, Save, RotateCcw, Loader2
 import { AsOfControls } from "@/components/as-of-controls";
 import { useTopicsList } from "@/hooks/queries/use-topics";
 import { usePageTitle, useHeaderSlot, usePageBack } from "@/lib/page-context";
-import { rpc } from "@/lib/rpc-client";
 import { toast } from "sonner";
+import { usePdfExport } from "@/hooks/use-pdf-export";
 import {
   useScope, useScopeRevisions, useUpdateScope,
   useScopeDetail, useScopeHistory, useScopeBatchSave, useDeleteScope,
@@ -112,9 +112,15 @@ export default function ScopeDetailPage() {
   const [filterLevels, setFilterLevels] = useState<Set<string>>(new Set());
   const [filterTopics, setFilterTopics] = useState<Set<string>>(new Set());
   const [hiddenLayerIds, setHiddenLayerIds] = useState<Set<string>>(new Set());
-  const [exportSelected, setExportSelected] = useState<Set<string>>(new Set());
-  const [exporting, setExporting] = useState(false);
-  const [exportPhase, setExportPhase] = useState<"waking" | "generating" | "downloading" | null>(null);
+  const {
+    selected: exportSelected,
+    toggle: toggleExport,
+    setAll: setAllExport,
+    clear: clearExport,
+    exporting,
+    phase: exportPhase,
+    exportPdf,
+  } = usePdfExport("backlog");
   const { data: topics = [] } = useTopicsList(scopeFieldId ?? undefined);
 
   // Filter prefs persistence
@@ -258,40 +264,7 @@ export default function ScopeDetailPage() {
   const renderHeaderSlot = useHeaderSlot();
   usePageBack(useCallback(() => navigate({ to: "/scopes" as string }), [navigate]));
 
-  const handleExport = useCallback(async () => {
-    if (exportSelected.size === 0) return;
-    setExporting(true);
-    setExportPhase("waking");
-    try {
-      const healthRes = await rpc.api.v1["pdf-export"].health.$get();
-      if (!healthRes.ok) {
-        const body = (await healthRes.json().catch(() => ({ error: healthRes.statusText }))) as { error?: string };
-        throw new Error(body.error || "PDF service unhealthy");
-      }
-      setExportPhase("generating");
-      const res = await rpc.api.v1["pdf-export"].$post({
-        json: { problem_ids: Array.from(exportSelected) },
-      });
-      if (!res.ok) {
-        const body = (await res.json().catch(() => ({ error: res.statusText }))) as { error?: string };
-        throw new Error(body.error || "Export failed");
-      }
-      setExportPhase("downloading");
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `backlog-${today}.pdf`;
-      a.click();
-      URL.revokeObjectURL(url);
-      toast.success("PDFエクスポート完了");
-    } catch (err) {
-      toast.error(`エクスポート失敗: ${err instanceof Error ? err.message : err}`);
-    } finally {
-      setExporting(false);
-      setExportPhase(null);
-    }
-  }, [exportSelected, today]);
+  const handleExport = useCallback(() => exportPdf(today), [exportPdf, today]);
 
   if (isLoading) return <div className="p-6">Loading...</div>;
   if (!data) return <div className="p-6">Not found</div>;
@@ -854,8 +827,8 @@ export default function ScopeDetailPage() {
                     checked={exportSelected.size > 0 && exportSelected.size === visibleMembers.length}
                     ref={(el) => { if (el) el.indeterminate = exportSelected.size > 0 && exportSelected.size < visibleMembers.length; }}
                     onChange={() => {
-                      if (exportSelected.size > 0) setExportSelected(new Set());
-                      else setExportSelected(new Set(visibleMembers.map((m) => m.id)));
+                      if (exportSelected.size > 0) clearExport();
+                      else setAllExport(visibleMembers.map((m) => m.id));
                     }}
                   />
                 </div>
@@ -891,13 +864,7 @@ export default function ScopeDetailPage() {
                         type="checkbox"
                         className="size-3.5 accent-primary cursor-pointer"
                         checked={exportSelected.has(m.id)}
-                        onChange={() => {
-                          setExportSelected((prev) => {
-                            const next = new Set(prev);
-                            if (next.has(m.id)) next.delete(m.id); else next.add(m.id);
-                            return next;
-                          });
-                        }}
+                        onChange={() => toggleExport(m.id)}
                       />
                     </div>
                   </TableCell>

@@ -23,8 +23,8 @@ import {
   type ColumnDef,
 } from "@tanstack/react-table";
 import { useQueryClient } from "@tanstack/react-query";
-import { rpc } from "@/lib/rpc-client";
 import { useField } from "@/hooks/use-field";
+import { usePdfExport } from "@/hooks/use-pdf-export";
 import { useSubjects, useLevels } from "@/hooks/queries/use-field-data";
 import { useFilterPrefs, useSaveFilterPrefs } from "@/hooks/queries/use-filter-prefs";
 import { usePageTitle, useHeaderSlot, usePageBack } from "@/lib/page-context";
@@ -444,9 +444,15 @@ export default function SchedulePage() {
   ]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const tableRef = useRef<HTMLDivElement>(null);
-  const [exportSelected, setExportSelected] = useState<Set<string>>(new Set());
-  const [exporting, setExporting] = useState(false);
-  const [exportPhase, setExportPhase] = useState<"waking" | "generating" | "downloading" | null>(null);
+  const {
+    selected: exportSelected,
+    toggle: toggleExport,
+    setAll: setAllExport,
+    clear: clearExport,
+    exporting,
+    phase: exportPhase,
+    exportPdf,
+  } = usePdfExport("review");
 
   // Filter state
   const [filterSubjects, setFilterSubjects] = useState<Set<string>>(new Set());
@@ -565,20 +571,14 @@ export default function SchedulePage() {
 
   const toggleExportSelect = useCallback((problemId: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    setExportSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(problemId)) next.delete(problemId);
-      else next.add(problemId);
-      return next;
-    });
-  }, []);
+    toggleExport(problemId);
+  }, [toggleExport]);
 
   const activeFilterCount = filterSubjects.size + filterLevels.size + filterLastStatuses.size;
 
   const selectAllVisible = useCallback(() => {
-    const ids = new Set(displayRows.map((r) => r.problemId));
-    setExportSelected(ids);
-  }, [displayRows]);
+    setAllExport(displayRows.map((r) => r.problemId));
+  }, [displayRows, setAllExport]);
 
   const selectedMinutes = useMemo(() => {
     if (exportSelected.size === 0) return 0;
@@ -589,45 +589,7 @@ export default function SchedulePage() {
     );
   }, [exportSelected, displayRows]);
 
-  const handleExport = useCallback(async () => {
-    if (exportSelected.size === 0) return;
-    setExporting(true);
-    setExportPhase("waking");
-    try {
-      // Phase 1: ensure Render PDF service is warm (cold start can take 30-60s)
-      const healthRes = await rpc.api.v1["pdf-export"].health.$get();
-      if (!healthRes.ok) {
-        const body = (await healthRes.json().catch(() => ({ error: healthRes.statusText }))) as { error?: string };
-        throw new Error(body.error || "PDF service unhealthy");
-      }
-
-      // Phase 2: generate the PDF
-      setExportPhase("generating");
-      const res = await rpc.api.v1["pdf-export"].$post({
-        json: { problem_ids: Array.from(exportSelected) },
-      });
-      if (!res.ok) {
-        const body = (await res.json().catch(() => ({ error: res.statusText }))) as { error?: string };
-        throw new Error(body.error || "Export failed");
-      }
-
-      // Phase 3: download to browser
-      setExportPhase("downloading");
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `review-${todayStr}.pdf`;
-      a.click();
-      URL.revokeObjectURL(url);
-      toast.success("PDFエクスポート完了");
-    } catch (err) {
-      toast.error(`エクスポート失敗: ${err instanceof Error ? err.message : err}`);
-    } finally {
-      setExporting(false);
-      setExportPhase(null);
-    }
-  }, [exportSelected, todayStr]);
+  const handleExport = useCallback(() => exportPdf(todayStr), [exportPdf, todayStr]);
 
   const handleSelect = useCallback((problemId: string) => {
     setSelectedId((prev) => (prev === problemId ? null : problemId));
@@ -1000,7 +962,7 @@ export default function SchedulePage() {
                           checked={exportSelected.size > 0 && exportSelected.size === displayRows.length}
                           ref={(el) => { if (el) el.indeterminate = exportSelected.size > 0 && exportSelected.size < displayRows.length; }}
                           onChange={() => {
-                            if (exportSelected.size > 0) setExportSelected(new Set());
+                            if (exportSelected.size > 0) clearExport();
                             else selectAllVisible();
                           }}
                         />
