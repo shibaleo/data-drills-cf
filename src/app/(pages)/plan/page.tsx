@@ -405,12 +405,21 @@ export default function PlanPage() {
   // Table: review API の rows をそのまま review-page と同じ columns で表示。
   // scope filter は review.ts 側で scope_id 適用済 → 追加処理なし。
   const allScheduleRows = useMemo(() => (reviewQuery.data ?? []).map(toScheduleRow), [reviewQuery.data]);
+  // chart で少なくとも 1 ブロック表示されている problem のみ table にも残す。
+  // → Throughput/Review/Forecast の 3 toggle が table 側にも自然に効く。
+  const visibleProblemIds = useMemo(() => {
+    const set = new Set<string>();
+    for (const a of filteredAllocated) set.add(a.problemId);
+    for (const o of filteredOverlay) set.add(o.problemId);
+    return set;
+  }, [filteredAllocated, filteredOverlay]);
   const scheduleRows = useMemo(() => allScheduleRows.filter((r) => {
     if (filterSubjects.size > 0 && (!r.subjectId || !filterSubjects.has(r.subjectId))) return false;
     if (filterLevels.size > 0 && (!r.levelId || !filterLevels.has(r.levelId))) return false;
     if (filterLastStatuses.size > 0 && !filterLastStatuses.has(r.lastStatus)) return false;
+    if (!visibleProblemIds.has(r.problemId)) return false;
     return true;
-  }), [allScheduleRows, filterSubjects, filterLevels, filterLastStatuses]);
+  }), [allScheduleRows, filterSubjects, filterLevels, filterLastStatuses, visibleProblemIds]);
   const availableStatuses = useMemo(() => {
     const set = new Set<string>();
     for (const r of allScheduleRows) set.add(r.lastStatus);
