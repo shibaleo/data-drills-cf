@@ -761,7 +761,7 @@ export default function ScopesHubPage() {
                           <path id={arcId} d={textArcPath} fill="none" stroke="none" />
                           <text
                             fontSize={16}
-                            fontWeight={800}
+                            fontWeight={900}
                             fill={isSecHover ? sec.color : "white"}
                             letterSpacing={0.6}
                             dominantBaseline="central"
