@@ -508,7 +508,7 @@ export default function PlanPage() {
             </PopoverContent>
           </Popover>
           {(historyPanelOpen || asOf != null) && (
-            <div className="flex-1 min-w-0 rounded-md border px-2 py-1 text-xs">
+            <div className="flex-1 min-w-0 h-[26px] rounded-md border px-2 flex items-center text-xs">
               <AsOfControls
                 asOf={asOf}
                 setAsOf={setAsOf}

@@ -64,13 +64,13 @@ export function AsOfControls({ asOf, setAsOf, earliest, latest, onClose }: Props
   }, [playing, speedIdx, latest, start, setAsOf]);
 
   return (
-    <div className="flex items-center gap-2 flex-wrap text-xs">
+    <div className="flex items-center gap-2 text-xs w-full">
       <History className="size-3.5 text-muted-foreground"/>
       <span className="text-muted-foreground">As of</span>
       <Input type="date" value={asOf ?? ""} min={start} max={latest}
         placeholder="now"
         onChange={(e) => { setPlaying(false); setAsOf(e.target.value || null); }}
-        className="h-6 text-[10px] w-32"/>
+        className="h-5 text-[10px] w-32 py-0"/>
       <button type="button"
         onClick={() => setLooping((v) => !v)}
         aria-pressed={looping}
