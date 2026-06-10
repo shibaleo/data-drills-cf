@@ -262,9 +262,12 @@ export const BacklogChart = forwardRef<BacklogChartHandle, BacklogChartProps>(fu
     },
   }), [dates, today]);
 
+  // override が指定された場合は「表示可能ブロック数 = override、フレーム = override+2」
+  // (他ページと同じ: 上に空き 2 段の余白を残す)。auto なら maxCount+2 で従来通り。
   const maxCount = Math.max(0, ...dates.map((d) => (grouped.get(d) ?? []).length));
+  const renderCap = maxStackOverride != null ? Math.max(1, maxStackOverride) : Infinity;
   const maxStack = maxStackOverride != null
-    ? Math.max(MIN_ROWS, maxStackOverride)
+    ? Math.max(MIN_ROWS, maxStackOverride + 2)
     : Math.max(MIN_ROWS, maxCount + 2);
 
   const ROW_H = 22;
@@ -400,7 +403,9 @@ export const BacklogChart = forwardRef<BacklogChartHandle, BacklogChartProps>(fu
 
           {/* グリッド + tetris ボックス */}
           {dates.map((date, colIdx) => {
-            const dayItems = grouped.get(date) ?? [];
+            const allDayItems = grouped.get(date) ?? [];
+            const dayItems = renderCap === Infinity ? allDayItems : allDayItems.slice(0, renderCap);
+            const truncated = allDayItems.length - dayItems.length;
             const x = colIdx * STEP;
             const isToday = date === axisToday;  // 軸ラベルハイライト基準は現実の今日
             return (
@@ -468,6 +473,15 @@ export const BacklogChart = forwardRef<BacklogChartHandle, BacklogChartProps>(fu
                     </g>
                   );
                 })}
+                {truncated > 0 && (() => {
+                  const by = chartHeight - BOTTOM_AXIS_H - (dayItems.length + 1) * STEP;
+                  return (
+                    <text key="truncated" x={x + CELL / 2} y={by + CELL / 2 + 3}
+                      textAnchor="middle" fontSize={9} fontWeight={700}
+                      fill="hsl(var(--muted-foreground))"
+                      className="pointer-events-none select-none">+{truncated}</text>
+                  );
+                })()}
                 {/* anchor ラベル — overlay は無視し alloc のみで判定 */}
                 {(() => {
                   const allocItems = dayItems.filter((it) => it.kind === "alloc").map((it) => it.alloc);

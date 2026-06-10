@@ -734,40 +734,31 @@ export default function PlanPage() {
 }
 
 function ChartHeightPicker({ value, onChange }: { value: number | null; onChange: (v: number | null) => void }) {
-  const PRESETS = [10, 20] as const;
-  const isPreset = value != null && (PRESETS as readonly number[]).includes(value);
-  const [draft, setDraft] = useState<string>(value != null && !isPreset ? String(value) : "");
-  useEffect(() => {
-    setDraft(value != null && !(PRESETS as readonly number[]).includes(value) ? String(value) : "");
-  }, [value]);
+  const [draft, setDraft] = useState<string>(value != null ? String(value) : "10");
+  useEffect(() => { if (value != null) setDraft(String(value)); }, [value]);
+  const numericActive = value != null;
   return (
     <div className="flex items-center gap-2 shrink-0">
-      <span className="text-[10px] text-muted-foreground">Max rows</span>
+      <span className="text-[10px] text-muted-foreground">Height</span>
       <div className="inline-flex rounded-md border text-[10px] overflow-hidden">
-        {PRESETS.map((v) => (
-          <button key={v} type="button"
-            className={`px-2 py-0.5 transition-colors ${value === v ? "bg-accent text-accent-foreground" : "text-muted-foreground hover:bg-muted"}`}
-            onClick={() => onChange(v)}>
-            {v}
-          </button>
-        ))}
+        <input type="text" inputMode="numeric" pattern="[0-9]*" value={draft}
+          onChange={(e) => setDraft(e.target.value.replace(/[^0-9]/g, ""))}
+          onFocus={(e) => e.currentTarget.select()}
+          onBlur={() => {
+            const n = parseInt(draft, 10);
+            if (Number.isFinite(n) && n > 0) onChange(n);
+            else setDraft(value != null ? String(value) : "10");
+          }}
+          onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+          className={`w-9 px-2 py-0.5 text-center tabular-nums bg-transparent outline-none transition-colors ${
+            numericActive ? "bg-accent text-accent-foreground" : "text-muted-foreground hover:bg-muted"
+          }`}/>
         <button type="button"
-          className={`px-2 py-0.5 transition-colors ${value == null ? "bg-accent text-accent-foreground" : "text-muted-foreground hover:bg-muted"}`}
+          className={`px-2 py-0.5 border-l transition-colors ${value == null ? "bg-accent text-accent-foreground" : "text-muted-foreground hover:bg-muted"}`}
           onClick={() => onChange(null)}>
-          Auto
+          Full
         </button>
       </div>
-      <input type="number" min={1} max={200} step={1} value={draft} placeholder="—"
-        onChange={(e) => setDraft(e.target.value)}
-        onBlur={() => {
-          const n = parseInt(draft, 10);
-          if (Number.isFinite(n) && n > 0) onChange(n);
-          else if (draft === "") setDraft(value != null && !isPreset ? String(value) : "");
-        }}
-        onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
-        className={`h-5 w-12 text-[10px] px-1.5 rounded-sm border bg-background tabular-nums text-center ${
-          value != null && !isPreset ? "border-primary/50 text-primary" : ""
-        }`}/>
     </div>
   );
 }
