@@ -568,38 +568,28 @@ export default function PlanPage() {
               )}
             </PopoverContent>
           </Popover>
-          {/* Throughput / Planned 表示 toggle。active (赤線) なら該当データを隠す。 */}
+          {/* Throughput / Planned 表示 toggle。明るい = 表示中、暗い = 非表示中。 */}
           <button type="button"
             onClick={() => setHideThroughput((v) => !v)}
             title={hideThroughput ? "Show throughput (past actuals)" : "Hide throughput (past actuals)"}
-            aria-pressed={hideThroughput}
-            className={`inline-flex items-center justify-center size-6 rounded-md border transition-colors shrink-0 relative ${
+            aria-pressed={!hideThroughput}
+            className={`inline-flex items-center justify-center size-6 rounded-md border transition-colors shrink-0 ${
               hideThroughput
-                ? "bg-accent text-accent-foreground border-accent-foreground/30"
-                : "text-muted-foreground hover:bg-muted"
+                ? "text-muted-foreground/40 hover:text-muted-foreground"
+                : "text-foreground hover:bg-muted"
             }`}>
             <Activity className="size-3"/>
-            {hideThroughput && (
-              <span className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <span className="block w-[18px] h-[1.5px] bg-current rotate-45"/>
-              </span>
-            )}
           </button>
           <button type="button"
             onClick={() => setHidePlanned((v) => !v)}
             title={hidePlanned ? "Show planned projections (smooth-future)" : "Hide planned projections (keep next review)"}
-            aria-pressed={hidePlanned}
-            className={`inline-flex items-center justify-center size-6 rounded-md border transition-colors shrink-0 relative ${
+            aria-pressed={!hidePlanned}
+            className={`inline-flex items-center justify-center size-6 rounded-md border transition-colors shrink-0 ${
               hidePlanned
-                ? "bg-accent text-accent-foreground border-accent-foreground/30"
-                : "text-muted-foreground hover:bg-muted"
+                ? "text-muted-foreground/40 hover:text-muted-foreground"
+                : "text-foreground hover:bg-muted"
             }`}>
             <Sparkles className="size-3"/>
-            {hidePlanned && (
-              <span className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <span className="block w-[18px] h-[1.5px] bg-current rotate-45"/>
-              </span>
-            )}
           </button>
           {(historyPanelOpen || asOf != null) && (
             <div className="flex-1 min-w-0 h-[26px] rounded-md border px-2 flex items-center text-xs">
