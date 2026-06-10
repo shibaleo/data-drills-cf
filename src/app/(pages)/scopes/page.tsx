@@ -460,7 +460,7 @@ export default function ScopesHubPage() {
             ].map(([px, py], i) => (
               <path
                 key={i}
-                d={hexPath(px, py, SMALL_SIDE - 1.6, 2.5)}
+                d={hexPath(px, py, SMALL_SIDE - 1.6, 1.6)}
                 fill="none"
                 stroke="currentColor"
                 strokeOpacity={0.32}
@@ -571,7 +571,7 @@ export default function ScopesHubPage() {
                     hover 中は menu や glow と被るので非表示 */}
                 {!hovered && stats.active > 0 && stats.goodPct > 0 && (
                   <path
-                    d={hexPath(cx, cy, RING_SIDE, 12)}
+                    d={hexPath(cx, cy, RING_SIDE, 8)}
                     fill="none"
                     stroke={heat.ring}
                     strokeWidth={3}
@@ -582,7 +582,7 @@ export default function ScopesHubPage() {
                   />
                 )}
                 <path
-                  d={hexPath(cx, cy, SIDE, 11)}
+                  d={hexPath(cx, cy, SIDE, 7)}
                   fill={hovered ? "url(#hexFillHover)" : "url(#hexFillIdle)"}
                   stroke={
                     hovered || stats.pending > 0
@@ -696,7 +696,7 @@ export default function ScopesHubPage() {
                       outerR,
                       adjStart,
                       adjEnd,
-                      8,
+                      5,
                     );
                     // textPath 用の arc 半径と方向。
                     // 下半円 (Plan SE / Throughput SW) は outer arc に baseline を載せる
