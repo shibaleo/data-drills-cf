@@ -206,6 +206,7 @@ export default function PlanPage() {
       if (p.allocFlags) for (const k of p.allocFlags) flags.add(k);
       setAllocFlagFilter(flags);
       setHiddenLayerIds(new Set(p.hiddenLayerIds ?? []));
+      if (p.chartMaxRows !== undefined) setChartMaxRows(p.chartMaxRows);
     }
     prefsLoadedRef.current = fieldId;
   }, [fieldId, filterPrefsQuery.data]);
@@ -219,6 +220,7 @@ export default function PlanPage() {
       k: [...allocKindFilter].sort(),
       f: [...allocFlagFilter].sort(),
       h: [...hiddenLayerIds].sort(),
+      r: chartMaxRows,
     });
     if (lastSavedPrefsRef.current === null) {
       lastSavedPrefsRef.current = snapshot;
@@ -235,10 +237,11 @@ export default function PlanPage() {
         allocKinds: [...allocKindFilter],
         allocFlags: [...allocFlagFilter],
         hiddenLayerIds: [...hiddenLayerIds],
+        chartMaxRows,
       },
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filterSubjects, filterLevels, filterLastStatuses, allocKindFilter, allocFlagFilter, hiddenLayerIds]);
+  }, [filterSubjects, filterLevels, filterLastStatuses, allocKindFilter, allocFlagFilter, hiddenLayerIds, chartMaxRows]);
   const chartRef = useRef<BacklogChartHandle>(null);
   const tableRef = useRef<HTMLDivElement>(null);
 

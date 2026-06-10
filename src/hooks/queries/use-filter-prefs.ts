@@ -39,6 +39,8 @@ export type PlanPrefs = {
   /** 凡例の overflow / overBudget リング選択 (select-only) */
   allocFlags?: ("overflow" | "overBudget")[];
   hiddenLayerIds?: string[];
+  /** Tetris 最大段数 (null = full/auto)。 */
+  chartMaxRows?: number | null;
 };
 export type FilterPrefsBag = {
   review?: ReviewPrefs;
