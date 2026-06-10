@@ -228,10 +228,10 @@ export const BacklogChart = forwardRef<BacklogChartHandle, BacklogChartProps>(fu
     const rank = (it: StackItem, isPast: boolean): number => {
       if (it.kind === "alloc") {
         if (it.alloc.side === "past") return 0;       // First (下端)
-        return 50;                                     // 未来 allocated
+        return 50;                                     // 未解消 (alloc future)
       }
-      if (isPast) return pastStatusRank(it.ov.statusName);  // 1..6
-      return 51;                                       // 未来 smooth-future
+      if (isPast) return pastStatusRank(it.ov.statusName);  // 1..6 (past 実績)
+      return 50;                                       // 未解消 (smooth-future) — alloc と同 rank
     };
     for (const [date, list] of map) {
       const isPast = date < today;
