@@ -50,7 +50,7 @@ user
 ```
 
 - 旧 `project`/`backlog`/`tag`/`topic`/`problem_tag` は drop 済 (2026-06-09)
-- option C: API wire (`project_id` query/列名) と内部変数 `currentProject` は据え置き、将来 Phase 6 で機械的 rename 予定
+- Phase 6 cosmetic rename 完了済 (2026-06-09, commit `5b8a0da`): `project_id` → `field_id`、`tag_id` → `review_type_id` を schema/wire/列名すべて統一。Toggl の `project_id` (外部概念) と `masters/page.tsx` 内部 `Project` alias のみ意図的に温存
 - 詳細: [docs/scope-refactor.md](docs/scope-refactor.md), [docs/scope-refactor-handoff.md](docs/scope-refactor-handoff.md)
 
 ## Deployed Services
@@ -112,11 +112,9 @@ user
 - TypeScript の generic narrowing 制限を回避するための cast
 - `isErrorBody` ガードで runtime 保証済み、意図的な妥協として維持
 
-#### 9. Phase 6: option C → option B の内部 rename
-- 現状 (Phase 4.1 完了, 2026-06-09 時点) は option C: 内部実装のみ field/scope/review_type に切り替え、wire (`project_id` query param, URL `/api/v1/projects/:id/...`) と列名 (`filter_pref.project_id`, `*_scope.project_id`, `review_tag.tag_id` 等) は据え置き
-- 内部変数 `currentProject` / `projectId` 引数名は ~28 ファイルで生存
-- Phase 6 で機械的 rename: 内部変数 → `currentField`、wire → `field_id`、列名 → `field_id` / `review_type_id`。SQL migration `006_phase6_rename.sql` + schema.ts + routes + hooks 同時変更
-- 詳細: [docs/scope-refactor-handoff.md](docs/scope-refactor-handoff.md) §Phase 6
+#### 9. (完了) Phase 6: option C → option B の内部 rename
+- 2026-06-09 commit `5b8a0da` で完了。SQL migration `006_phase6_rename.sql` 適用済 (Neon)、schema.ts/routes/hooks 全 rename 済
+- 残存していた `project_id` / `currentProject` / `projectId` 引数は撤去 (Toggl 固有概念と masters 内 alias のみ意図的温存)
 
 ## Conventions
 

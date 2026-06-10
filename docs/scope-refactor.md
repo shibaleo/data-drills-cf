@@ -1,7 +1,7 @@
 # Scope / Field 大改造プラン
 
 > 起案: 2026-06-08
-> 状態: **Phase 1〜4.1 完了 (2026-06-09)**。option C で停止中。Phase 6 (cosmetic rename) は未着手。
+> 状態: **Phase 1〜4.1 + Phase 6 完了 (2026-06-09)**。Phase 6 (cosmetic rename) は同日 commit `5b8a0da` で適用済。
 > 関連: [scope-refactor-handoff.md](./scope-refactor-handoff.md) (進捗詳細), [CLAUDE.md](../CLAUDE.md) §Pending Development #9
 >
 > 命名の遷移: 当初 `member_filter` で着手したが、UX 上 `scope` の方が直観的と判断して途中で改名。

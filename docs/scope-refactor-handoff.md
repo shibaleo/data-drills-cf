@@ -1,15 +1,15 @@
 # Scope / Field 大改造 — 次セッションへの申し送り
 
 > 作成: 2026-06-08
-> 更新: 2026-06-09 (Phase 4.1 SQL 適用 + 5.2 ドキュメント反映)
+> 更新: 2026-06-09 (Phase 4.1 SQL + Phase 6 cosmetic rename 適用、commit `5b8a0da`)
 > 関連: [`scope-refactor.md`](./scope-refactor.md) (元の設計プラン)
 > 前回の終端 commit: `ebefda6`
 
 ## 現在の状態
 
-**Phase 1〜4.2 + 4.1 SQL 完了**。コード側は option C (wire 互換維持、内部実装のみ
-field/scope 直叩き) で停止。DB 側も旧 entity は drop 済。次は Phase 5.1 (taxtant
-確認) → Phase 6 (cosmetic rename) の順。
+**Phase 1〜4.2 + 4.1 SQL + Phase 6 完了**。Phase 6 cosmetic rename (option C → B
+への wire/列名/内部変数の機械的 rename) も 2026-06-09 同日 commit `5b8a0da` で
+適用済。残タスクは Phase 5.1 (taxtant 確認) のみ。
 
 ### DB 状態
 - Phase 1 SQL (`drizzle/manual/004_phase1_field_scope.sql`) は **Neon 適用済**

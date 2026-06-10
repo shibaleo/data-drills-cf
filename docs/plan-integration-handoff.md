@@ -82,19 +82,15 @@
 - PDF 出力 (Render cold start 込)
 - table sort / checkbox / 行クリック→detail
 
-### 2. /scopes と /review を共有 hook/component に乗せ替え (中)
+### 2. /scopes と /review を共有 hook/component に乗せ替え ✅ 完了
 - ~~/review/$scopeId: `usePdfExport` に移行~~ ✅ 2026-06-10 完了
 - ~~/scopes/$scopeId: PDF export 部分のみ `usePdfExport` に移行~~ ✅ 2026-06-10 完了
-- **残り**: /scopes/$scopeId を `useScopeEditState` に乗せ替え (~150 行削減見込み)。
-  /plan の実機検証で hook shape が固まってから着手するのが安全。
-- UI が探索段階の今やる意味は薄いが、Phase 6 rename の前にやると衝突が減る
+- ~~/scopes/$scopeId を `useScopeEditState` に乗せ替え~~ ✅ 2026-06-10 完了 (commit `c531667`、~174 行削減)
 
-### 3. Phase 6 cosmetic rename (大)
-- `currentProject → currentField`、wire `project_id → field_id`、列名
-  `filter_pref.project_id` 等 ~28 ファイル機械的 rename
-- `006_phase6_rename.sql` 適用
-- throughput の "Please select a project" 文言もここで消える
-- コードベース全体に触る大規模 PR。/plan が安定してから
+### 3. Phase 6 cosmetic rename ✅ 完了
+- 2026-06-09 commit `5b8a0da` で完了済 (Phase 4 の翌日に実施されていた)。`006_phase6_rename.sql` 適用済 (Neon)、schema.ts/routes/hooks 全 rename 済
+- 残存していた `currentProject` / `projectId` 引数は撤去、wire `project_id` → `field_id`、列名 `filter_pref.project_id` 等も rename 済
+- Toggl 側の `project_id` (外部概念) と `masters/page.tsx` 内部 `Project` alias のみ意図的に温存
 
 ## 注意
 
