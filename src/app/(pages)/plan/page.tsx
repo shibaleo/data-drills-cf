@@ -402,8 +402,6 @@ export default function PlanPage() {
       if (hideForecast && a.side === "future") return false;
       const kind = a.side === "past" ? "First" : "Planned";
       if (hiddenAllocKinds.has(kind)) return false;
-      // allocFlags は ring 表示 (= 警告) なので「該当カテゴリを隠す」semantic では
-      // overflow/overBudget 自体ではなく「これらの警告マークの問題を隠す」と解釈。
       if (a.overflow && hiddenAllocFlags.has("overflow")) return false;
       if (a.overBudget && hiddenAllocFlags.has("overBudget")) return false;
       if (!passesSubjectLevel(a.problemId)) return false;
