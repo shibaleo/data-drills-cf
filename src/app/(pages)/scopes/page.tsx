@@ -130,12 +130,15 @@ type SectorDef = {
 // に揃える。意味は別途検討としていったん視覚一致のみ。
 // 配置: 長文字の Throughput は左下 (SW)、Stats は右 (E) に。
 const SECTORS: SectorDef[] = [
-  { startDeg: -150, endDeg: -90, label: "Edit", view: "edit", color: "#ec4899" },        // pink (Planned)
-  { startDeg: -90, endDeg: -30, label: "Review", view: "review", color: "#8b5cf6" },      // violet (First)
-  { startDeg: -30, endDeg: 30, label: "Stats", view: "stats", color: "#ef4444" },         // red (Miss)
-  { startDeg: 30, endDeg: 90, label: "Plan", view: "plan", color: "#f97316" },            // orange (Rough)
-  { startDeg: 90, endDeg: 150, label: "Throughput", view: "throughput", color: "#22c55e" }, // green (Fluent)
-  { startDeg: 150, endDeg: 210, label: "Digest", view: "digest", color: "#3b82f6" },      // blue (Done)
+  // テーマ primary (HSL 19 58% 56%) との距離 ΔH=-6 ΔS=-37 ΔL=+3 を全色に同一適用。
+  // Plan は theme primary そのものに収束、他色も同方向にトーンダウンして主色と
+  // 調和させる (= rainbow ではなく洗練されたパレット)。
+  { startDeg: -150, endDeg: -90, label: "Edit", view: "edit", color: "#ca77a9" },         // dusty rose (Planned)
+  { startDeg: -90, endDeg: -30, label: "Review", view: "review", color: "#9786da" },       // muted lavender (First)
+  { startDeg: -30, endDeg: 30, label: "Stats", view: "stats", color: "#cd747d" },          // dusty rose-red (Miss)
+  { startDeg: 30, endDeg: 90, label: "Plan", view: "plan", color: "#d0774e" },             // terracotta = theme primary (Rough)
+  { startDeg: 90, endDeg: 150, label: "Throughput", view: "throughput", color: "#51a467" },// muted forest (Fluent)
+  { startDeg: 150, endDeg: 210, label: "Digest", view: "digest", color: "#6e9fd4" },       // denim blue (Done)
 ];
 
 function truncate(s: string, n: number): string {
