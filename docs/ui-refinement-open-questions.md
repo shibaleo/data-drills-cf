@@ -3,6 +3,14 @@
 作成日: 2026-06-10 / 更新: 2026-06-11
 状態: ステータス位相は **(B) phased** で確定。次は色トークン化。
 
+## 新セッション開始時のチェックリスト
+
+1. **[CLAUDE.md](../CLAUDE.md) を最初に読む** — リポジトリ全体構成、tech stack、ディレクトリ規約、UI 文言は英語統一など重要な約束ごとが書いてある。本ファイルでは重複させない
+2. 本ファイルの §1 (位相判定) と §2 (提案パレット) を読んで色設計の前提を把握
+3. §3 の該当ファイル一覧 を眺めて変更スコープを掴む
+4. 着手前: dev サーバ起動 (`pnpm dev`) で現状の見た目を確認しながら作業
+5. **最初の具体作業**: `/statuses` ページで現行ステータス色を見る → §2 提案パレットと比較 → 違いの大きい所から書き換える経路を計画
+
 ## 0. 前提診断 (2026-06-10 会話で確定)
 
 data-drills の UI は **テンプレ感の対極** に振り切れている (六角形の構造メタファ、ハニカム背景、手描き風ストローク、自作放射メニュー、テトリス積層型 Plan ビズ)。shadcn の痕跡が残るのはテーブル UI のみ。
@@ -59,9 +67,25 @@ data-drills の UI は **テンプレ感の対極** に振り切れている (�
 
 ## 3. 該当ファイル (申し送り)
 
-### 色定義の源
-- [src/lib/block-color.ts](src/lib/block-color.ts) — `COLOR_PLANNED`, `COLOR_FIRST_ATTEMPT`, ring 用色定数。fill 系は status テーブルから引いていて該当 SQL に色データがある模様
-- [src/routes/review.ts](src/routes/review.ts) — status response shape (color フィールド見て確認要)
+### 色定義の源 (2026-06-11 調査確定)
+
+**ステータス色は DB に格納、UI から編集する**:
+
+- DB テーブル: `answer_status` (column: `color text`)
+  - schema: [packages/db-schema/src/](../packages/db-schema/src/) (line 71 付近、`export const answerStatus`)
+  - user 単位で持つ (`user_id` FK)、点数 / 安定度 (FSRS) / ソート順も同テーブル
+- 編集 UI: **`/statuses` ページ** ([src/app/(pages)/statuses/page.tsx](src/app/(pages)/statuses/page.tsx))
+  - color picker で任意の色に変更可能
+  - パレット書き換えは **このページ経由で行うのが規定経路** (migration 不要)
+- API: [src/routes/statuses.ts](src/routes/statuses.ts), hook: [src/hooks/queries/use-statuses.ts](src/hooks/queries/use-statuses.ts)
+
+**コード定数として残るのは特殊ケースのみ**:
+- [src/lib/block-color.ts](src/lib/block-color.ts):
+  - `COLOR_PLANNED = "#ec4899"` (未来 = 未着手)
+  - `COLOR_FIRST_ATTEMPT = "#8b5cf6"` (過去初回 fallback)
+  - `BORDER_OVERFLOW = "#ef4444"` (赤 dashed)
+  - `BORDER_OVER_BUDGET = "#f59e0b"` (amber dashed)
+- これらは DB に乗らない group label (Planned/First は擬似ステータス、Over budget/Overflow はメタ)。**§2 のパレット見直しで一緒に書き換える**
 
 ### 色を使っている主な箇所
 - [src/components/backlog-chart.tsx](src/components/backlog-chart.tsx)
