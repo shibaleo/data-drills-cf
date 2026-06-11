@@ -56,7 +56,8 @@ function getLambdaConfig(c: { env?: unknown }): LambdaConfig | null {
   if (!accessKeyId || !secretAccessKey) return null;
   return {
     invokeUrl: `https://lambda.${region}.amazonaws.com/2015-03-31/functions/${functionName}/invocations`,
-    client: new AwsClient({ accessKeyId, secretAccessKey, region, service: "lambda" }),
+    // Service omitted: aws4fetch auto-detects from URL host (lambda.* or s3.*).
+    client: new AwsClient({ accessKeyId, secretAccessKey, region }),
   };
 }
 
@@ -257,15 +258,47 @@ const app = new Hono<Env>()
       );
     }
 
-    // Buffer the entire PDF in CF Worker before responding. Streaming
-    // through with raw upstream headers caused intermittent client-side
-    // failures (idle disconnects during Render cold-start, header/encoding
-    // mismatches across browsers).
-    const buffer = await res.arrayBuffer();
-    const contentType = res.headers.get("content-type") ?? "application/pdf";
-    const contentDisposition =
-      res.headers.get("content-disposition") ??
-      `attachment; filename="${filenameStem}.pdf"`;
+    // ── Resolve PDF body ──
+    // Lambda path: response is JSON { s3_key, content_type, content_disposition }
+    //   → fetch from S3 with the SAME SigV4 client (cf-worker-pdf has s3:GetObject).
+    // Render path: response body IS the PDF directly.
+    let buffer: ArrayBuffer;
+    let contentType: string;
+    let contentDisposition: string;
+
+    if (upstream === "lambda" && lambda) {
+      const meta = (await res.json().catch(() => null)) as
+        | { s3_key?: string; content_type?: string; content_disposition?: string }
+        | null;
+      if (!meta?.s3_key) {
+        console.log("[pdf-export] lambda response missing s3_key, falling through to render is no longer possible at this point");
+        return c.json({ error: "Lambda returned invalid response", upstream }, 500);
+      }
+      const bucket = readEnv(c, "PDF_S3_BUCKET") ?? "data-drills-pdf-export-shibaleo";
+      const region = readEnv(c, "PDF_LAMBDA_AWS_REGION") ?? "ap-northeast-1";
+      const s3Url = `https://${bucket}.s3.${region}.amazonaws.com/${meta.s3_key}`;
+      const s3Res = await lambda.client.fetch(s3Url).catch((e) => {
+        console.log("[pdf-export] s3 fetch threw:", e instanceof Error ? e.message : String(e));
+        return null;
+      });
+      console.log("[pdf-export] s3 fetch status:", s3Res?.status ?? "null");
+      if (!s3Res || !s3Res.ok) {
+        return c.json({ error: "Failed to fetch PDF from S3", upstream }, 500);
+      }
+      buffer = await s3Res.arrayBuffer();
+      contentType = meta.content_type ?? "application/pdf";
+      contentDisposition = meta.content_disposition ?? `attachment; filename="${filenameStem}.pdf"`;
+    } else {
+      // Buffer the entire PDF in CF Worker before responding. Streaming
+      // through with raw upstream headers caused intermittent client-side
+      // failures (idle disconnects during Render cold-start, header/encoding
+      // mismatches across browsers).
+      buffer = await res.arrayBuffer();
+      contentType = res.headers.get("content-type") ?? "application/pdf";
+      contentDisposition =
+        res.headers.get("content-disposition") ??
+        `attachment; filename="${filenameStem}.pdf"`;
+    }
 
     return new Response(buffer, {
       status: 200,

@@ -97,11 +97,24 @@ export function createPdfSyncRoutes(opts: AppOptions) {
 
     const merged = await mergePdfs(parts.map((p) => p.buffer as ArrayBuffer));
     const stem = filename_stem ?? `exported-${new Date().toISOString().slice(0, 10)}`;
+    const contentDisposition = `attachment; filename="${stem}.pdf"`;
+
+    // S3 staging path — avoids Lambda Invoke API 6 MB response cap.
+    if (opts.delivery?.mode === "s3") {
+      const prefix = opts.delivery.keyPrefix ?? "exports/";
+      const key = `${prefix}${stem}-${crypto.randomUUID()}.pdf`;
+      await opts.delivery.upload(key, merged, "application/pdf");
+      return c.json({
+        s3_key: key,
+        content_type: "application/pdf",
+        content_disposition: contentDisposition,
+      });
+    }
 
     return new Response(Buffer.from(merged), {
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename="${stem}.pdf"`,
+        "Content-Disposition": contentDisposition,
       },
     });
   });
