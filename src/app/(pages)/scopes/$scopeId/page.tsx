@@ -15,7 +15,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { problemsKeys } from "@/hooks/queries/use-problems";
 import { BacklogChart, type BacklogChartHandle } from "@/components/backlog-chart";
 import { useScopeEditState } from "@/hooks/use-scope-edit-state";
-import { COLOR_PLANNED, COLOR_FIRST_ATTEMPT, PAST_ALPHA } from "@/lib/block-color";
+import { COLOR_PLANNED, COLOR_FIRST_ATTEMPT } from "@/lib/block-color";
 import { formatRelDay } from "@/lib/relative-day";
 import { todayJST } from "@/lib/date-utils";
 import { Input } from "@/components/ui/input";
@@ -501,7 +501,7 @@ export default function ScopeDetailPage() {
               </PopoverContent>
             </Popover>
             <BlockLegend entries={[
-              ...(hideFirst ? [] : [{ kind: "fill" as const, label: "Unrated", color: `${COLOR_FIRST_ATTEMPT}${PAST_ALPHA}` }]),
+              ...(hideFirst ? [] : [{ kind: "fill" as const, label: "Unrated", color: COLOR_FIRST_ATTEMPT }]),
               ...(hideFuture ? [] : [{ kind: "fill" as const, label: "Planned", color: COLOR_PLANNED }]),
               { kind: "ring" as const, label: "Over budget", color: "#f59e0b" },
               { kind: "ring" as const, label: "Overflow", color: "#ef4444" },

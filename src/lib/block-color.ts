@@ -16,11 +16,14 @@
 
 // 「prior grade なし」群 — Planned (未来) と First (過去) は同一 phase の時間両端。
 // 同色にすると past alpha 経由で First は自動的に「沈んだ Planned」として読める。
-export const COLOR_PLANNED = "#f472b6";        // pink-400 — 未来側、actionable
-export const COLOR_FIRST_ATTEMPT = "#f472b6";  // 同上 — 過去側、past alpha で沈む
+// purple 系: 評価グラデ (red→orange→yellow→green→blue) の hue 外。grade と混同されない。
+// purple は warm grade より perceived luminance が低いので past 側だけ一段明るい base を採用
+// (past alpha 適用後も読めるように)。未来は full alpha なので眩しさを避けて purple-400。
+export const COLOR_PLANNED = "#c084fc";        // purple-400 — 未来側、actionable
+export const COLOR_FIRST_ATTEMPT = "#d8b4fe99";  // purple-300 @ 60% — past 側用、grade の PAST_ALPHA (30%) より明るく
 
 // past actuals は「実体」として背景に沈める。塗りに被せる alpha (00-ff hex)
-export const PAST_ALPHA = "66"; // ~40%
+export const PAST_ALPHA = "4d"; // ~30% — soft smoke
 
 // メタ群 (border only — 塗らない)
 const BORDER_OVERFLOW = "#ef4444";   // red
