@@ -1,15 +1,20 @@
 /**
- * PDF Export — proxy to the external PDF service for read-only combined
- * PDF generation (no scan / no write-back).
+ * PDF Export — proxy to the PDF service for read-only combined PDF generation.
  *
  * Architecture (2026-06-10〜): cf-worker が DB から problem + file + subject + level
  * を join select して payload に同梱する。services/pdf は DB アクセスを持たず、
  * 受け取った gdrive_file_id / pages を Drive から DL → merge → 返すだけの
  * pure "PDF assembly" worker になる。schema drift が物理的に起きない。
+ *
+ * Dual-host (2026-06-11〜): プライマリは AWS Lambda (Function URL, AWS_IAM auth,
+ * SigV4 署名)、フォールバックは Render free plan (x-pdf-service-key)。Lambda が
+ * 5xx / network エラー / 設定欠落のいずれかなら Render に流す。両系統が同じ
+ * pdf-core を bundle しているので API 契約は同一。
  */
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
+import { AwsClient } from "aws4fetch";
 import { db } from "@/lib/db";
 import { problem, problemFile, subject, level } from "@/lib/db/schema";
 import { inArray } from "drizzle-orm";
@@ -22,11 +27,6 @@ export const pdfExportInputSchema = z.object({
   problem_ids: z.array(z.string().uuid()).min(1).max(100),
 });
 
-/**
- * CF Workers / wrangler dev 双方で env を確実に取る。
- * nodejs_compat 環境下でも .dev.vars / secret は env binding 経由でしか
- * 確実に届かないので、c.env を最優先で見て process.env はフォールバック。
- */
 function readEnv(c: { env?: unknown }, key: string): string | undefined {
   const bag = (c.env ?? {}) as Record<string, unknown>;
   const fromBinding = bag[key];
@@ -35,35 +35,59 @@ function readEnv(c: { env?: unknown }, key: string): string | undefined {
   return fromProcess && fromProcess.length > 0 ? fromProcess : undefined;
 }
 
+type LambdaConfig = {
+  url: string;
+  client: AwsClient;
+};
+
+/** Read Lambda config if all four env vars are present, else return null. */
+function getLambdaConfig(c: { env?: unknown }): LambdaConfig | null {
+  const url = readEnv(c, "PDF_LAMBDA_URL");
+  const accessKeyId = readEnv(c, "PDF_LAMBDA_AWS_ACCESS_KEY_ID");
+  const secretAccessKey = readEnv(c, "PDF_LAMBDA_AWS_SECRET_ACCESS_KEY");
+  const region = readEnv(c, "PDF_LAMBDA_AWS_REGION") ?? "ap-northeast-1";
+  if (!url || !accessKeyId || !secretAccessKey) return null;
+  return {
+    url: url.replace(/\/$/, ""),
+    client: new AwsClient({ accessKeyId, secretAccessKey, region, service: "lambda" }),
+  };
+}
+
+/** True when a fetch result is worth falling back on. */
+function shouldFallback(res: Response | null): boolean {
+  if (!res) return true; // network error
+  if (res.status >= 500) return true;
+  if (res.status === 429) return true; // Lambda throttle
+  return false;
+}
+
 const app = new Hono<Env>()
   /**
    * GET /health — proxy to the PDF service's /health endpoint.
    *
-   * On Render's free plan, the service sleeps after inactivity. Hitting
-   * /health from CF triggers wake-up; the request hangs until Render is
-   * ready (typically 30-60s) and then returns 200. The client uses this
-   * to distinguish the "起床中" phase from "PDF 処理中".
+   * Render free plan は idle 後コールドスタートに ~60s かかる。Lambda 経路が
+   * 使える限りそちらを先に試し、エラー時のみ Render に流す。
    */
   .get("/health", async (c) => {
-    const pdfApiUrl = readEnv(c, "PDF_API_URL");
-    if (!pdfApiUrl) {
-      return c.json({ error: "PDF_API_URL is not configured" }, 500);
+    const lambda = getLambdaConfig(c);
+    if (lambda) {
+      const res = await lambda.client
+        .fetch(`${lambda.url}/health`)
+        .catch(() => null);
+      if (res && res.ok) return c.json({ ok: true, upstream: "lambda" });
     }
-    const res = await fetch(`${pdfApiUrl}/health`);
-    if (!res.ok) {
-      return c.json({ error: `PDF service unhealthy (${res.status})` }, 503);
+
+    const renderUrl = readEnv(c, "PDF_API_URL");
+    if (!renderUrl) {
+      return c.json({ error: "No PDF backend configured" }, 500);
     }
-    return c.json({ ok: true });
+    const res = await fetch(`${renderUrl}/health`).catch(() => null);
+    if (!res || !res.ok) {
+      return c.json({ error: `PDF service unhealthy (${res?.status ?? "no response"})` }, 503);
+    }
+    return c.json({ ok: true, upstream: "render" });
   })
   .post("/", zValidator("json", pdfExportInputSchema), async (c) => {
-    const pdfApiUrl = readEnv(c, "PDF_API_URL");
-    const pdfServiceKey = readEnv(c, "PDF_SERVICE_KEY");
-    if (!pdfApiUrl) {
-      return c.json({ error: "PDF_API_URL is not configured" }, 500);
-    }
-    if (!pdfServiceKey) {
-      return c.json({ error: "PDF_SERVICE_KEY is not configured" }, 500);
-    }
     const { problem_ids } = c.req.valid("json");
 
     // 問題情報を 1 度の往復で join select。services/pdf 側に DB アクセスを
@@ -119,21 +143,47 @@ const app = new Hono<Env>()
     }
 
     const filenameStem = `exported-${new Date().toISOString().slice(0, 10)}`;
+    const payload = JSON.stringify({ items, filename_stem: filenameStem });
 
-    const res = await fetch(`${pdfApiUrl}/api/v1/pdf-sync/export`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-pdf-service-key": pdfServiceKey,
-      },
-      body: JSON.stringify({ items, filename_stem: filenameStem }),
-    });
+    // ── Try Lambda first (if configured) ──
+    let res: Response | null = null;
+    let upstream: "lambda" | "render" | null = null;
+    const lambda = getLambdaConfig(c);
+    if (lambda) {
+      res = await lambda.client
+        .fetch(`${lambda.url}/api/v1/pdf-sync/export`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: payload,
+        })
+        .catch(() => null);
+      if (!shouldFallback(res)) {
+        upstream = "lambda";
+      }
+    }
 
-    // On error, forward the upstream error body as JSON
-    if (!res.ok) {
-      const errorText = await res.text().catch(() => "");
+    // ── Fallback to Render ──
+    if (upstream !== "lambda") {
+      const renderUrl = readEnv(c, "PDF_API_URL");
+      const renderKey = readEnv(c, "PDF_SERVICE_KEY");
+      if (!renderUrl || !renderKey) {
+        return c.json({ error: "No usable PDF backend (Lambda failed and Render not configured)" }, 500);
+      }
+      res = await fetch(`${renderUrl}/api/v1/pdf-sync/export`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-pdf-service-key": renderKey,
+        },
+        body: payload,
+      }).catch(() => null);
+      upstream = "render";
+    }
+
+    if (!res || !res.ok) {
+      const errorText = await res?.text().catch(() => "") ?? "";
       return c.json(
-        { error: errorText || `PDF service returned ${res.status}` },
+        { error: errorText || `PDF service returned ${res?.status ?? "no response"}`, upstream },
         500,
       );
     }
@@ -143,8 +193,7 @@ const app = new Hono<Env>()
     // failures (idle disconnects during Render cold-start, header/encoding
     // mismatches across browsers).
     const buffer = await res.arrayBuffer();
-    const contentType =
-      res.headers.get("content-type") ?? "application/pdf";
+    const contentType = res.headers.get("content-type") ?? "application/pdf";
     const contentDisposition =
       res.headers.get("content-disposition") ??
       `attachment; filename="${filenameStem}.pdf"`;
@@ -155,6 +204,7 @@ const app = new Hono<Env>()
         "Content-Type": contentType,
         "Content-Disposition": contentDisposition,
         "Content-Length": String(buffer.byteLength),
+        "X-PDF-Upstream": upstream,
       },
     });
   });

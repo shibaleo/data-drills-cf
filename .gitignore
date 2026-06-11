@@ -5,6 +5,10 @@ node_modules/
 dist/
 .wrangler/
 
+# Lambda build artifacts (services/pdf-lambda/build.mjs outputs)
+services/pdf-lambda/lambda.zip
+services/pdf-lambda/assets/
+
 # env
 .env
 .env.*
@@ -22,3 +26,4 @@ dist/
 *.pem
 *.log
 .claude/
+out.json

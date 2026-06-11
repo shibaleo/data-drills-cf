@@ -13,6 +13,7 @@
     "esbuild": "^0.28.0",
     "typescript": "^5.9.3",
     "@types/node": "^22.19.15",
-    "@types/aws-lambda": "^8.10.145"
+    "@types/aws-lambda": "^8.10.145",
+    "archiver": "^7.0.1"
   }
 }
