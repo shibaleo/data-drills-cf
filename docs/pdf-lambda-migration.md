@@ -146,6 +146,41 @@ Lambda 運用が安定し、かつ以下のいずれも満たした時点で Ren
 
 それまでは Render を残す。
 
+## 8c. 最終構成 — Lambda Invoke API + S3 staging (2026-06-11 完了)
+
+実本番で確認した最終構成:
+
+```
+CF Worker (data-drills-cf)
+  └─ /api/v1/pdf-export
+       ├─ DB join select で items 解決 (既存)
+       ├─ aws4fetch で SigV4 invoke
+       │     POST https://lambda.ap-northeast-1.amazonaws.com/2015-03-31/functions/pdf-export/invocations
+       │     credentials: cf-worker-pdf user (lambda:InvokeFunction + s3:GetObject)
+       ├─ Lambda が PDF を S3 PUT、{s3_key, content_type, content_disposition} JSON 応答
+       ├─ aws4fetch で同じ client が S3 GET (service auto-detect)
+       │     https://data-drills-pdf-export-shibaleo.s3.ap-northeast-1.amazonaws.com/exports/{key}
+       └─ PDF body を client に転送 + X-PDF-Upstream: lambda
+```
+
+レイテンシ実測: **7 秒** (Render free plan の 27 秒比 4 倍速)。
+コスト: Always Free 100 GB/月 転送枠内で **真にゼロ**。
+
+### AWS リソース一覧
+
+| リソース | ID/Name | 用途 |
+| --- | --- | --- |
+| Lambda 関数 | `pdf-export` (ap-northeast-1, arm64, 2048 MB) | PDF 組み立て + S3 PUT |
+| Lambda role | `pdf-lambda-exec` | AWSLambdaBasicExecutionRole + S3PutPdfExport |
+| S3 bucket | `data-drills-pdf-export-shibaleo` | ステージング (1 日ライフサイクル) |
+| IAM user (CF) | `cf-worker-pdf` | InvokeFunction + GetObject |
+
+### Render の位置付け
+
+- フォールバックとして温存 (Lambda 障害時に CF Worker が自動切替)
+- Render free plan 1 分コールドスタートのため通常は使われない
+- `X-PDF-Upstream: render` が返ったら Lambda 側の状態確認 (CloudWatch Logs)
+
 ## 8b. 既知の制限 — 新規 AWS アカウントの Function URL block (2026-06-11)
 
 2026-06-11 に Lambda + Function URL (AWS_IAM auth) で構築完了 → SigV4 で叩くと AuthType / Principal / IAM policy すべて正しいにもかかわらず 403 AccessDeniedException が返る現象を確認。
@@ -162,10 +197,9 @@ Lambda 運用が安定し、かつ以下のいずれも満たした時点で Ren
 
 ### 対応
 
-- CF Worker 側の `pdf-export.ts` は Lambda 403 を fallback トリガに含めるよう実装済 (`shouldFallback()`)
-- 結果として Lambda が block されていても **Render 経由で本番 UX は維持**
-- ローカル再試行用: `services/pdf-lambda/scripts/test-sigv4.mjs`
-- **24〜72h 後に同じスクリプトで再試行**、200 が返ったら自動で本番が Lambda 経路に切り替わる (コード変更不要)
+- **Function URL を諦めて Lambda Invoke API に切替** (`lambda.{region}.amazonaws.com/2015-03-31/functions/...`) — Function URL の制限を回避
+- さらに Invoke API の 6 MB 応答上限を回避するため、S3 staging を導入 (§8c)
+- Function URL は不要になったため削除済 (`aws lambda delete-function-url-config`)
 
 ## 9. 補足: 採用しなかった代替案
 

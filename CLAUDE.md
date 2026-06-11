@@ -74,6 +74,15 @@ services/
 
 pdf-core は両 wrapper に workspace dep として参照される (`@data-drills/pdf-core: workspace:*`)。フォントアセット (`assets/fonts/yumin.ttf`) は pdf-core が保持し、Dockerfile で各 wrapper に copy される。フォールバック切り替えは CF Worker 側の `/api/v1/pdf-export` プロキシで実装 (Lambda → Render の 5xx/timeout 自動切替)。
 
+### Lambda 本番経路 (2026-06-11〜)
+
+- **AWS Lambda `pdf-export`** (ap-northeast-1, arm64, 2048 MB, Invoke API 経由)
+- 認証: CF Worker → SigV4 (`cf-worker-pdf` IAM user) → Lambda Invoke API
+- **S3 staging**: Lambda が PDF を `data-drills-pdf-export-shibaleo` バケットに PUT、CF Worker が同じ SigV4 client で GET (Invoke API の 6 MB 応答上限回避)
+- ライフサイクルポリシー: 1 日後に自動削除
+- レイテンシ: 7s (Render free plan の 27s 比 4 倍速)
+- 詳細: [docs/pdf-lambda-migration.md](docs/pdf-lambda-migration.md)
+
 ## PDF パイプライン (外部化済み)
 
 - PDF スキャン / 問題データ抽出 / 一括インポートは **外部の Python ツール** で実装
