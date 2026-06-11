@@ -36,21 +36,58 @@ function readEnv(c: { env?: unknown }, key: string): string | undefined {
 }
 
 type LambdaConfig = {
-  url: string;
+  invokeUrl: string;
   client: AwsClient;
 };
 
-/** Read Lambda config if all four env vars are present, else return null. */
+/**
+ * Read Lambda config if creds are present, else return null.
+ *
+ * 注: Function URL (lambda-url.*.on.aws) ではなく Lambda Invoke API
+ * (lambda.{region}.amazonaws.com/2015-03-31/functions/{name}/invocations) を
+ * 叩く。新規 AWS アカウントの Function URL 隠し block を回避するため
+ * (詳細: docs/pdf-lambda-migration.md §8b)。
+ */
 function getLambdaConfig(c: { env?: unknown }): LambdaConfig | null {
-  const url = readEnv(c, "PDF_LAMBDA_URL");
+  const functionName = readEnv(c, "PDF_LAMBDA_FUNCTION_NAME") ?? "pdf-export";
   const accessKeyId = readEnv(c, "PDF_LAMBDA_AWS_ACCESS_KEY_ID");
   const secretAccessKey = readEnv(c, "PDF_LAMBDA_AWS_SECRET_ACCESS_KEY");
   const region = readEnv(c, "PDF_LAMBDA_AWS_REGION") ?? "ap-northeast-1";
-  if (!url || !accessKeyId || !secretAccessKey) return null;
+  if (!accessKeyId || !secretAccessKey) return null;
   return {
-    url: url.replace(/\/$/, ""),
+    invokeUrl: `https://lambda.${region}.amazonaws.com/2015-03-31/functions/${functionName}/invocations`,
     client: new AwsClient({ accessKeyId, secretAccessKey, region, service: "lambda" }),
   };
+}
+
+/** Invoke Lambda via the runtime API and unwrap the API-Gateway-v2 style response. */
+async function invokeLambda(
+  lambda: LambdaConfig,
+  event: Record<string, unknown>,
+): Promise<Response | null> {
+  const res = await lambda.client
+    .fetch(lambda.invokeUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(event),
+    })
+    .catch(() => null);
+  if (!res || !res.ok) return res;
+
+  // Lambda Invoke API returns { statusCode, headers, body, isBase64Encoded }
+  // as the JSON body when the function returned an API-Gateway-v2 response.
+  const payload = (await res.json().catch(() => null)) as
+    | { statusCode?: number; headers?: Record<string, string>; body?: string; isBase64Encoded?: boolean; errorMessage?: string }
+    | null;
+  if (!payload || payload.errorMessage) return null;
+
+  const status = payload.statusCode ?? 200;
+  const headers = new Headers(payload.headers ?? {});
+  const bodyText = payload.body ?? "";
+  const body = payload.isBase64Encoded
+    ? Uint8Array.from(atob(bodyText), (ch) => ch.charCodeAt(0))
+    : bodyText;
+  return new Response(body, { status, headers });
 }
 
 /** True when a fetch result is worth falling back on. */
@@ -74,9 +111,12 @@ const app = new Hono<Env>()
   .get("/health", async (c) => {
     const lambda = getLambdaConfig(c);
     if (lambda) {
-      const res = await lambda.client
-        .fetch(`${lambda.url}/health`)
-        .catch(() => null);
+      const res = await invokeLambda(lambda, {
+        version: "2.0",
+        rawPath: "/health",
+        requestContext: { http: { method: "GET", path: "/health" } },
+        headers: {},
+      });
       if (res && res.ok) return c.json({ ok: true, upstream: "lambda" });
     }
 
@@ -152,16 +192,30 @@ const app = new Hono<Env>()
     let res: Response | null = null;
     let upstream: "lambda" | "render" | null = null;
     const lambda = getLambdaConfig(c);
+    console.log("[pdf-export] lambda config:", lambda ? "present" : "missing");
     if (lambda) {
-      res = await lambda.client
-        .fetch(`${lambda.url}/api/v1/pdf-sync/export`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: payload,
-        })
-        .catch(() => null);
+      // API Gateway v2 event payload — handler ([services/pdf-core])
+      // routes /api/v1/pdf-sync/export to the export handler.
+      // Render upstream は x-pdf-service-key 必須なので Lambda にも同じヘッダを
+      // 渡して pdf-core 側で同じ apiKeyAuth() を通せるようにする。
+      const renderKey = readEnv(c, "PDF_SERVICE_KEY") ?? "";
+      res = await invokeLambda(lambda, {
+        version: "2.0",
+        rawPath: "/api/v1/pdf-sync/export",
+        requestContext: { http: { method: "POST", path: "/api/v1/pdf-sync/export" } },
+        headers: {
+          "content-type": "application/json",
+          "x-pdf-service-key": renderKey,
+        },
+        body: payload,
+        isBase64Encoded: false,
+      });
+      console.log("[pdf-export] lambda response status:", res?.status ?? "null");
       if (!shouldFallback(res)) {
         upstream = "lambda";
+      } else {
+        const errText = await res?.clone().text().catch(() => "") ?? "(no body)";
+        console.log("[pdf-export] lambda fallback triggered, error body:", errText.slice(0, 300));
       }
     }
 

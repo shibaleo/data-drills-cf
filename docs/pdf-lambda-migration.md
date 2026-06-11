@@ -146,6 +146,27 @@ Lambda 運用が安定し、かつ以下のいずれも満たした時点で Ren
 
 それまでは Render を残す。
 
+## 8b. 既知の制限 — 新規 AWS アカウントの Function URL block (2026-06-11)
+
+2026-06-11 に Lambda + Function URL (AWS_IAM auth) で構築完了 → SigV4 で叩くと AuthType / Principal / IAM policy すべて正しいにもかかわらず 403 AccessDeniedException が返る現象を確認。
+
+切り分け結果:
+
+- Function URL config: `AuthType: AWS_IAM`, CORS disabled, BUFFERED ✓
+- 関数本体: `aws lambda invoke` で正常応答 ✓
+- cf-worker-invoker の identity policy + resource-based policy 両方 attach 済 ✓
+- aws4fetch / curl --aws-sigv4 両方で同じ 403
+- admin (AdministratorAccess) credentials でも同じ 403
+
+→ **AWS 新規アカウントの隠し制限**と判断 (UI には警告バナーが出ないが、AccountLimit の `UnreservedConcurrentExecutions: 10` と同様、新規アカウントは一定期間 Function URL 公開アクセスが block される模様)。
+
+### 対応
+
+- CF Worker 側の `pdf-export.ts` は Lambda 403 を fallback トリガに含めるよう実装済 (`shouldFallback()`)
+- 結果として Lambda が block されていても **Render 経由で本番 UX は維持**
+- ローカル再試行用: `services/pdf-lambda/scripts/test-sigv4.mjs`
+- **24〜72h 後に同じスクリプトで再試行**、200 が返ったら自動で本番が Lambda 経路に切り替わる (コード変更不要)
+
 ## 9. 補足: 採用しなかった代替案
 
 - **Web Adapter 方式**: 常駐サーバを生かす方針。常駐不要が確定したので採用しない。
