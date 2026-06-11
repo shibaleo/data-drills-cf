@@ -65,13 +65,17 @@ async function invokeLambda(
   lambda: LambdaConfig,
   event: Record<string, unknown>,
 ): Promise<Response | null> {
-  const res = await lambda.client
-    .fetch(lambda.invokeUrl, {
+  let res: Response | null = null;
+  try {
+    res = await lambda.client.fetch(lambda.invokeUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(event),
-    })
-    .catch(() => null);
+    });
+  } catch (e) {
+    console.log("[pdf-export] lambda fetch threw:", e instanceof Error ? `${e.name}: ${e.message}` : String(e));
+    return null;
+  }
   if (!res || !res.ok) return res;
 
   // Lambda Invoke API returns { statusCode, headers, body, isBase64Encoded }
