@@ -58,6 +58,9 @@ function shouldFallback(res: Response | null): boolean {
   if (!res) return true; // network error
   if (res.status >= 500) return true;
   if (res.status === 429) return true; // Lambda throttle
+  // 403 = Lambda 認可層拒否。SigV4 設定ズレ or AuthType ズレで起きる。
+  // Lambda が機能してないのは確かなので Render に流す。
+  if (res.status === 403) return true;
   return false;
 }
 
