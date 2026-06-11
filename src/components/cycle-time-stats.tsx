@@ -26,7 +26,7 @@ function percentile(arr: number[], p: number): number {
 }
 
 export function CycleTimeStats({ problems, statuses }: Props) {
-  // "Done" status = sortOrder 最大
+  // "Solid" status = sortOrder 最大
   const doneStatus = useMemo(() => {
     if (statuses.length === 0) return null;
     return [...statuses].sort((a, b) => b.sortOrder - a.sortOrder)[0];

@@ -1,7 +1,7 @@
 # UI 洗練 — 棚卸しと申し送り
 
 作成日: 2026-06-10 / 更新: 2026-06-11
-状態: ステータス位相は **(B) phased** で確定。次は色トークン化。
+状態: 位相は **2 軸 (時間 × 評価)** で確定。色トークン化第一弾と Done→Solid リネーム完了。
 
 ## 新セッション開始時のチェックリスト
 
@@ -22,18 +22,33 @@ data-drills の UI は **テンプレ感の対極** に振り切れている (�
 
 洗練の原則: **何が個性を担うかを 1〜2 個に絞り、残りはシステマティックに沈黙させる**。
 
-## 1. ステータス位相の確定 — (B) phased ✅
+## 1. ステータス位相 — 2 軸 (時間 × 評価) ✅
 
-`First / Planned / Miss / Rough / Fair / Fluent / Done / Over budget / Overflow` は単一 ordinal ではなく、**3 群 + メタ** の集合:
+ステータス集合は単一 ordinal ではなく、**直交する 2 軸 + メタ**:
 
-| 群 | ステータス | 性質 | 現行符号化 |
+- **軸 A 時間**: past / future. 視覚的には past 側を `PAST_ALPHA` (~40%) で沈める
+- **軸 B 評価**: 「prior grade なし」 → Miss → Rough → Fair → Fluent → Solid (ordinal、色相で表現)
+- **メタ** (Over budget / Overflow): 塗らず border のみ
+
+| ステータス | 軸 A | 軸 B | 色 |
 | --- | --- | --- | --- |
-| 着手前 | First, Planned | 未着手 / 計画済 (未評価) | 塗り (violet, pink) |
-| 評価 | Miss, Rough, Fair, Fluent | 答えた結果のグレード (悪→良) | 塗り (red→orange→yellow→green) |
-| 完了 | Done | 卒業 | 塗り (blue) |
-| メタ | Over budget, Overflow | 計画オーバー警告 | **枠線のみ** (amber/red dashed) |
+| Planned | future | no-grade | pink-400 (`#f472b6`) |
+| First | past | no-grade | pink-400 + past alpha (Planned と同色、沈む) |
+| Miss | past | grade=1 | red-500 (`#ef4444`) + past alpha |
+| Rough | past | grade=2 | orange-500 (`#f97316`) + past alpha |
+| Fair | past | grade=3 | yellow-500 (`#eab308`) + past alpha |
+| Fluent | past | grade=4 | green-500 (`#22c55e`) + past alpha |
+| Solid | past | grade=5 | blue-500 (`#3b82f6`) + past alpha |
+| Over budget | future | meta | amber border, 塗りなし |
+| Overflow | future | meta | red dashed border, 塗りなし |
 
-メタ層を塗りから外す判断は既に [src/lib/block-color.ts](src/lib/block-color.ts) で実装済。`blockColor()` は fill 用、`blockBorder()` は ring 用に分離されている。
+**鍵となる洞察**: First は「データ欠落の fallback」ではなく、**解答時点で前回評価がまだ無かった = past 側 no-grade**。よって Planned と同位相 (時間両端)。同色 + 時間 alpha で「沈んだ Planned」として読める。
+
+旧 doc の「着手前: First+Planned」括りは First が「もう触っている」以上、誤り。Done が「卒業」だった旧モデルも撤廃 — Done は評価群の最上位 grade として `Solid` にリネーム (2026-06-11)。再演習は単に再評価、別フラグ不要。
+
+実装は [src/lib/block-color.ts](src/lib/block-color.ts):
+- `blockColor()`: fill 用。past 側は base hex に `PAST_ALPHA` を append
+- `blockBorder()`: ring 用 (メタのみ)
 
 ## 2. 次アクション — 群の視覚的分離
 

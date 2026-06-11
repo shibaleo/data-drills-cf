@@ -8,20 +8,25 @@
  * 入れる前提。
  */
 
-export type LegendEntry = {
-  kind: "fill" | "ring";
-  label: string;
-  color: string;
-  /** true = 表示中 (明るい), false = 非表示中 (暗い)。 */
-  active?: boolean;
-  onClick?: () => void;
-};
+export type LegendEntry =
+  | {
+      kind: "fill" | "ring";
+      label: string;
+      color: string;
+      /** true = 表示中 (明るい), false = 非表示中 (暗い)。 */
+      active?: boolean;
+      onClick?: () => void;
+    }
+  | { kind: "divider"; label?: string };
 
 export function BlockLegend({ entries }: { entries: LegendEntry[] }) {
   const baseCls = "inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border whitespace-nowrap transition-colors";
   return (
     <div className="flex flex-wrap items-center gap-1.5">
-      {entries.map((e) => {
+      {entries.map((e, i) => {
+        if (e.kind === "divider") {
+          return <span key={`div-${i}`} aria-hidden className="mx-1 h-3 w-px bg-border/60" />;
+        }
         const swatchOpacity = e.onClick && e.active === false ? 0.35 : 1;
         const swatch = e.kind === "fill" ? (
           <span className="size-2 rounded-sm" style={{ background: e.color, opacity: swatchOpacity }}/>

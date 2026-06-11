@@ -220,7 +220,7 @@ export const BacklogChart = forwardRef<BacklogChartHandle, BacklogChartProps>(fu
       case "Rough": return 2;
       case "Fair": return 3;
       case "Fluent": return 4;
-      case "Done": return 5;
+      case "Solid": return 5;
       default: return 0;  // First / null / unknown
     }
   };
@@ -433,6 +433,46 @@ export const BacklogChart = forwardRef<BacklogChartHandle, BacklogChartProps>(fu
               )}
             </>
           )}
+
+          {/* selected problem のブロックを時間順に結ぶ polyline (ブロック背面)
+              past = solid (確定履歴), future = dashed (予測) */}
+          {selectedId && (() => {
+            const pastPts: { x: number; y: number }[] = [];
+            const futurePts: { x: number; y: number }[] = [];
+            dates.forEach((date, colIdx) => {
+              const allDayItems = grouped.get(date) ?? [];
+              const dayItems = renderCap === Infinity ? allDayItems : allDayItems.slice(0, renderCap);
+              dayItems.forEach((it, stackIdx) => {
+                const pid = it.kind === "alloc" ? it.alloc.problemId : it.ov.problemId;
+                if (pid !== selectedId) return;
+                const cx = colIdx * STEP + CELL / 2;
+                const cy = chartHeight - BOTTOM_AXIS_H - (stackIdx + 1) * STEP + CELL / 2;
+                if (date <= today) pastPts.push({ x: cx, y: cy });
+                else futurePts.push({ x: cx, y: cy });
+              });
+            });
+            const toPath = (ps: { x: number; y: number }[]) =>
+              ps.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ");
+            // future の起点に past の最終点を付けて連続させる (= 渡り segment は dashed)
+            const futureWithBridge = pastPts.length > 0 && futurePts.length > 0
+              ? [pastPts[pastPts.length - 1], ...futurePts]
+              : futurePts;
+            return (
+              <g className="pointer-events-none">
+                {pastPts.length >= 2 && (
+                  <path d={toPath(pastPts)} fill="none"
+                    stroke="hsl(var(--foreground))" strokeWidth={1.25}
+                    strokeLinejoin="round" strokeLinecap="round" opacity={0.55}/>
+                )}
+                {futureWithBridge.length >= 2 && (
+                  <path d={toPath(futureWithBridge)} fill="none"
+                    stroke="hsl(var(--foreground))" strokeWidth={1.25}
+                    strokeDasharray="3 3"
+                    strokeLinejoin="round" strokeLinecap="round" opacity={0.55}/>
+                )}
+              </g>
+            );
+          })()}
 
           {/* グリッド + tetris ボックス */}
           {dates.map((date, colIdx) => {

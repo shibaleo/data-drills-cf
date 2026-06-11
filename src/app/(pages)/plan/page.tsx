@@ -33,7 +33,7 @@ import { BacklogChart, type BacklogChartHandle, type OverlayBlock } from "@/comp
 import { ScopePlanRightPanel } from "@/components/scope-plan-right-panel";
 import { ScopeFSRSOverridePanel } from "@/components/scope-fsrs-override-panel";
 import { BlockLegend, type LegendEntry } from "@/components/block-legend";
-import { COLOR_PLANNED, COLOR_FIRST_ATTEMPT } from "@/lib/block-color";
+import { COLOR_PLANNED } from "@/lib/block-color";
 import { useThroughputList } from "@/hooks/queries/use-throughput";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -48,8 +48,8 @@ import { PdfExportButton } from "@/components/pdf-export-button";
 import { useFilterPrefs, useSaveFilterPrefs } from "@/hooks/queries/use-filter-prefs";
 
 /** 順調な status 進行順 (= 各 review を smooth に通した場合の遷移) */
-const SMOOTH_CHAIN = ["Rough", "Fair", "Fluent", "Done"] as const;
-/** Done の繰り返しはこの期間まで */
+const SMOOTH_CHAIN = ["Rough", "Fair", "Fluent", "Solid"] as const;
+/** Solid の繰り返しはこの期間まで */
 const PROJECTION_HORIZON_DAYS = 365 * 2;
 
 function addDays(s: string, n: number): string {
@@ -482,20 +482,7 @@ export default function PlanPage() {
   const isShownFlag = (k: "overflow" | "overBudget") => !hiddenAllocFlags.has(k);
 
   const legendEntries: LegendEntry[] = useMemo(() => [
-    {
-      kind: "fill",
-      label: "First",
-      color: COLOR_FIRST_ATTEMPT,
-      active: isShownKind("First"),
-      onClick: () => toggleAllocKind("First"),
-    },
-    {
-      kind: "fill",
-      label: "Planned",
-      color: COLOR_PLANNED,
-      active: isShownKind("Planned"),
-      onClick: () => toggleAllocKind("Planned"),
-    },
+    // 評価群 (ordinal): Miss → Solid
     ...statuses
       .filter((s) => availableStatuses.includes(s.name))
       .map<LegendEntry>((s) => ({
@@ -511,6 +498,20 @@ export default function PlanPage() {
             return next;
           }),
       })),
+    { kind: "divider" },
+    // 評価なし phase (past First + future Planned 同色、1 トグル)
+    {
+      kind: "fill",
+      label: "First",
+      color: COLOR_PLANNED,
+      active: isShownKind("First") && isShownKind("Planned"),
+      onClick: () => {
+        const shown = isShownKind("First") && isShownKind("Planned");
+        setHiddenAllocKinds(shown ? new Set(["First", "Planned"]) : new Set());
+      },
+    },
+    { kind: "divider" },
+    // メタ群: Planned に被せる警告 (ring)
     {
       kind: "ring",
       label: "Over budget",

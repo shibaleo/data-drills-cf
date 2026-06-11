@@ -5,7 +5,7 @@ import { useSubjects, useLevels } from "@/hooks/queries/use-field-data";
 import { useThroughputList, type ThroughputRow } from "@/hooks/queries/use-throughput";
 import { useProblemsList } from "@/hooks/queries/use-problems";
 import { useProblemDialogs } from "@/hooks/use-problem-dialogs";
-import { blockColor, COLOR_FIRST_ATTEMPT } from "@/lib/block-color";
+import { blockColor, COLOR_FIRST_ATTEMPT, PAST_ALPHA } from "@/lib/block-color";
 import { formatRelDay } from "@/lib/relative-day";
 import { usePageTitle, useHeaderSlot, usePageBack } from "@/lib/page-context";
 import { toast } from "sonner";
@@ -226,7 +226,7 @@ export default function ThroughputPage() {
   const uniqueFilteredProblemIds = useMemo(() => Array.from(new Set(filtered.map((r) => r.problemId))), [filtered]);
   const legendEntries: LegendEntry[] = useMemo(() => {
     const entries: LegendEntry[] = [{
-      kind: "fill", label: "First", color: COLOR_FIRST_ATTEMPT,
+      kind: "fill", label: "First", color: `${COLOR_FIRST_ATTEMPT}${PAST_ALPHA}`,
       active: filterPrevStatuses.has("First"),
       onClick: () => togglePrevStatus("First"),
     }];
