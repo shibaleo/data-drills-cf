@@ -58,9 +58,21 @@ user
 - **CF Worker**: data-drills-cf (本番)
 - **PDF Service**: https://pdf-service-r4i7.onrender.com (Render, free plan, Singapore)
   - Service ID: `srv-d7k658ho3t8c738s0flg`
-  - Root directory: `services/pdf`
+  - Root directory: `` (repo root) ※ 2026-06-11 monorepo 分割で変更。Render dashboard 上の rootDir を `services/pdf` → 空欄に、Dockerfile path を `services/pdf-render/Dockerfile` に更新する必要あり
   - 認証: `x-pdf-service-key` ヘッダー
   - 用途: **export のみ** (選択問題の印刷用 PDF レンダリング)。scan/apply は外部化済み (下記)
+  - Lambda 移行後はフォールバック経路として温存 (詳細: [docs/pdf-lambda-migration.md](docs/pdf-lambda-migration.md))
+
+### PDF パッケージ構成 (2026-06-11〜)
+
+```
+services/
+├── pdf-core/    フレームワーク非依存。Hono app factory + lib + routes (createApp({ fontPath }))
+├── pdf-render/  Render 用の薄いラッパ。@hono/node-server で createApp() を listen
+└── pdf-lambda/  AWS Lambda 用の薄いラッパ。hono/aws-lambda の handle() で createApp() を export
+```
+
+pdf-core は両 wrapper に workspace dep として参照される (`@data-drills/pdf-core: workspace:*`)。フォントアセット (`assets/fonts/yumin.ttf`) は pdf-core が保持し、Dockerfile で各 wrapper に copy される。フォールバック切り替えは CF Worker 側の `/api/v1/pdf-export` プロキシで実装 (Lambda → Render の 5xx/timeout 自動切替)。
 
 ## PDF パイプライン (外部化済み)
 

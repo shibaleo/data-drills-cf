@@ -13,6 +13,8 @@ dist/
 
 # secrets
 .mcp.json
+*_accessKeys.csv
+*accessKeys*.csv
 
 # misc
 .DS_Store

@@ -5,20 +5,19 @@
 import { PDFDocument, rgb } from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
 import * as fs from "fs";
-import * as path from "path";
 
 // ---------------------------------------------------------------------------
 // Extract pages + label (pdf-lib)
 // ---------------------------------------------------------------------------
 
-let _fontBytes: Buffer | null = null;
+const _fontCache = new Map<string, Buffer>();
 
-function loadFontBytes(): Buffer {
-  if (!_fontBytes) {
-    const fontPath = path.join(process.cwd(), "assets/fonts/yumin.ttf");
-    _fontBytes = fs.readFileSync(fontPath);
-  }
-  return _fontBytes;
+function loadFontBytes(fontPath: string): Buffer {
+  const cached = _fontCache.get(fontPath);
+  if (cached) return cached;
+  const bytes = fs.readFileSync(fontPath);
+  _fontCache.set(fontPath, bytes);
+  return bytes;
 }
 
 /**
@@ -28,6 +27,7 @@ export async function extractAndLabel(
   pdfBuffer: ArrayBuffer | Uint8Array,
   pageIndices: number[],
   label: string,
+  fontPath: string,
 ): Promise<Uint8Array> {
   const bytes = pdfBuffer instanceof Uint8Array
     ? new Uint8Array(pdfBuffer)
@@ -36,7 +36,7 @@ export async function extractAndLabel(
   const dstDoc = await PDFDocument.create();
   dstDoc.registerFontkit(fontkit);
 
-  const fontBytes = loadFontBytes();
+  const fontBytes = loadFontBytes(fontPath);
   const font = await dstDoc.embedFont(fontBytes);
 
   const copiedPages = await dstDoc.copyPages(srcDoc, pageIndices);

@@ -14,8 +14,7 @@ import { eq } from "drizzle-orm";
 import { getDriveClient } from "../lib/google-oauth.js";
 import { downloadDriveFile } from "../lib/drive-helpers.js";
 import { extractAndLabel, mergePdfs } from "../lib/pdf-processing.js";
-
-const app = new Hono();
+import type { AppOptions } from "../app.js";
 
 type ExportItem = { label: string; gdrive_file_id: string; pages: number[] };
 type ExportInput = { items: ExportItem[]; filename_stem?: string };
@@ -78,30 +77,34 @@ async function getDrive() {
 
 // ── POST /export — merge pre-resolved file pages into a single PDF ──
 
-app.post("/export", async (c) => {
-  const raw = await c.req.json().catch(() => null);
-  const parsed = parseInput(raw);
-  if ("error" in parsed) return c.json({ error: parsed.error }, 400);
-  const { items, filename_stem } = parsed;
+export function createPdfSyncRoutes(opts: AppOptions) {
+  const app = new Hono();
 
-  const { drive } = await getDrive();
+  app.post("/export", async (c) => {
+    const raw = await c.req.json().catch(() => null);
+    const parsed = parseInput(raw);
+    if ("error" in parsed) return c.json({ error: parsed.error }, 400);
+    const { items, filename_stem } = parsed;
 
-  // Download + extract with concurrency limit (avoid Drive API rate limits)
-  const parts = await pMap(items, async (w) => {
-    const raw = await downloadDriveFile(drive, w.gdrive_file_id);
-    const buf = new Uint8Array(raw);
-    return extractAndLabel(buf, w.pages, w.label);
-  }, 5);
+    const { drive } = await getDrive();
 
-  const merged = await mergePdfs(parts.map((p) => p.buffer as ArrayBuffer));
-  const stem = filename_stem ?? `exported-${new Date().toISOString().slice(0, 10)}`;
+    // Download + extract with concurrency limit (avoid Drive API rate limits)
+    const parts = await pMap(items, async (w) => {
+      const raw = await downloadDriveFile(drive, w.gdrive_file_id);
+      const buf = new Uint8Array(raw);
+      return extractAndLabel(buf, w.pages, w.label, opts.fontPath);
+    }, 5);
 
-  return new Response(Buffer.from(merged), {
-    headers: {
-      "Content-Type": "application/pdf",
-      "Content-Disposition": `attachment; filename="${stem}.pdf"`,
-    },
+    const merged = await mergePdfs(parts.map((p) => p.buffer as ArrayBuffer));
+    const stem = filename_stem ?? `exported-${new Date().toISOString().slice(0, 10)}`;
+
+    return new Response(Buffer.from(merged), {
+      headers: {
+        "Content-Type": "application/pdf",
+        "Content-Disposition": `attachment; filename="${stem}.pdf"`,
+      },
+    });
   });
-});
 
-export default app;
+  return app;
+}
