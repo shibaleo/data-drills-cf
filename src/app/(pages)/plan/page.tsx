@@ -44,6 +44,7 @@ import { FilterSection } from "@/components/filter-section";
 import { reviewTableColumns, toScheduleRow } from "@/components/review-table-columns";
 import { useScopeEditState } from "@/hooks/use-scope-edit-state";
 import { usePdfExport } from "@/hooks/use-pdf-export";
+import { PdfExportButton } from "@/components/pdf-export-button";
 import { useFilterPrefs, useSaveFilterPrefs } from "@/hooks/queries/use-filter-prefs";
 
 /** 順調な status 進行順 (= 各 review を smooth に通した場合の遷移) */
@@ -639,21 +640,14 @@ export default function PlanPage() {
             </div>
           )}
           <div className="flex items-center gap-2 shrink-0 ml-auto">
-            {pdfExport.selected.size > 0 && (
-              <Button
-                size="sm" variant="outline" className="h-6 text-[10px] px-2"
-                onClick={() => pdfExport.exportPdf(today)} disabled={pdfExport.exporting}>
-                {pdfExport.exporting
-                  ? <Loader2 className="size-3 mr-1 animate-spin"/>
-                  : <Download className="size-3 mr-1"/>}
-                {pdfExport.exporting
-                  ? pdfExport.phase === "waking" ? "Render 起床中..."
-                    : pdfExport.phase === "generating" ? "PDF 処理中..."
-                      : pdfExport.phase === "downloading" ? "ダウンロード中..."
-                        : "エクスポート中..."
-                  : `PDF (${pdfExport.selected.size})`}
-              </Button>
-            )}
+            <PdfExportButton
+              selectedCount={pdfExport.selected.size}
+              exporting={pdfExport.exporting}
+              phase={pdfExport.phase}
+              upstream={pdfExport.upstream}
+              onClick={() => pdfExport.exportPdf(today)}
+            />
+
             {edit.dirty && !readOnly && (
               <>
                 <button type="button"

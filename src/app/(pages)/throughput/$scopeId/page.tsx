@@ -8,8 +8,9 @@ import { useProblemDialogs } from "@/hooks/use-problem-dialogs";
 import { blockColor, COLOR_FIRST_ATTEMPT } from "@/lib/block-color";
 import { formatRelDay } from "@/lib/relative-day";
 import { usePageTitle, useHeaderSlot, usePageBack } from "@/lib/page-context";
-import { rpc } from "@/lib/rpc-client";
 import { toast } from "sonner";
+import { usePdfExport } from "@/hooks/use-pdf-export";
+import { PdfExportButton } from "@/components/pdf-export-button";
 import { useParams, useNavigate } from "@tanstack/react-router";
 import { Filter, Download, Loader2, SlidersHorizontal, History, ArrowLeft, Archive, Save, RotateCcw, ListFilter, MoreVertical, Check, X } from "lucide-react";
 import { AsOfControls } from "@/components/as-of-controls";
@@ -109,9 +110,10 @@ export default function ThroughputPage() {
   const [filterLevels, setFilterLevels] = useState<Set<string>>(new Set());
   const [filterPrevStatuses, setFilterPrevStatuses] = useState<Set<string>>(new Set());
   const [maxRowsCap, setMaxRowsCap] = useState<number | null>(10);  // null = auto
-  const [exportSelected, setExportSelected] = useState<Set<string>>(new Set());
-  const [exporting, setExporting] = useState(false);
-  const [exportPhase, setExportPhase] = useState<"waking" | "generating" | "downloading" | null>(null);
+  const pdfExport = usePdfExport("throughput");
+  const exportSelected = pdfExport.selected;
+  const setExportSelected = (next: Set<string>) => pdfExport.setAll(Array.from(next));
+  const { exporting, phase: exportPhase, upstream: exportUpstream } = pdfExport;
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [sortState, setSortState] = useState<SortState>({ key: "date", dir: "desc" });
 
@@ -219,40 +221,7 @@ export default function ThroughputPage() {
   }, [maxStack]);
 
   const todayStr = today;
-  const handleExport = useCallback(async () => {
-    if (exportSelected.size === 0) return;
-    setExporting(true);
-    setExportPhase("waking");
-    try {
-      const healthRes = await rpc.api.v1["pdf-export"].health.$get();
-      if (!healthRes.ok) {
-        const body = (await healthRes.json().catch(() => ({ error: healthRes.statusText }))) as { error?: string };
-        throw new Error(body.error || "PDF service unhealthy");
-      }
-      setExportPhase("generating");
-      const res = await rpc.api.v1["pdf-export"].$post({
-        json: { problem_ids: Array.from(exportSelected) },
-      });
-      if (!res.ok) {
-        const body = (await res.json().catch(() => ({ error: res.statusText }))) as { error?: string };
-        throw new Error(body.error || "Export failed");
-      }
-      setExportPhase("downloading");
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `throughput-${todayStr}.pdf`;
-      a.click();
-      URL.revokeObjectURL(url);
-      toast.success("PDFエクスポート完了");
-    } catch (err) {
-      toast.error(`エクスポート失敗: ${err instanceof Error ? err.message : err}`);
-    } finally {
-      setExporting(false);
-      setExportPhase(null);
-    }
-  }, [exportSelected, todayStr]);
+  const handleExport = useCallback(() => pdfExport.exportPdf(todayStr), [pdfExport, todayStr]);
 
   const uniqueFilteredProblemIds = useMemo(() => Array.from(new Set(filtered.map((r) => r.problemId))), [filtered]);
   const legendEntries: LegendEntry[] = useMemo(() => {
@@ -447,19 +416,13 @@ export default function ThroughputPage() {
             </PopoverContent>
           </Popover>
           <BlockLegend entries={legendEntries}/>
-          {exportSelected.size > 0 && (
-            <Button
-              size="sm" variant="outline" className="h-6 text-[10px] px-2"
-              onClick={handleExport} disabled={exporting}>
-              {exporting ? <Loader2 className="size-3 mr-1 animate-spin"/> : <Download className="size-3 mr-1"/>}
-              {exporting
-                ? exportPhase === "waking" ? "Render 起床中..."
-                  : exportPhase === "generating" ? "PDF 処理中..."
-                    : exportPhase === "downloading" ? "ダウンロード中..."
-                      : "エクスポート中..."
-                : `PDF (${exportSelected.size})`}
-            </Button>
-          )}
+          <PdfExportButton
+            selectedCount={exportSelected.size}
+            exporting={exporting}
+            phase={exportPhase}
+            upstream={exportUpstream}
+            onClick={handleExport}
+          />
         </div>
         <div className="flex items-center gap-2">
         <button type="button"
@@ -595,8 +558,8 @@ export default function ThroughputPage() {
                     checked={exportSelected.size > 0 && exportSelected.size === uniqueFilteredProblemIds.length}
                     ref={(el) => { if (el) el.indeterminate = exportSelected.size > 0 && exportSelected.size < uniqueFilteredProblemIds.length; }}
                     onChange={() => {
-                      if (exportSelected.size > 0) setExportSelected(new Set());
-                      else setExportSelected(new Set(uniqueFilteredProblemIds));
+                      if (exportSelected.size > 0) pdfExport.clear();
+                      else pdfExport.setAll(uniqueFilteredProblemIds);
                     }}
                   />
                 </div>
@@ -637,13 +600,7 @@ export default function ThroughputPage() {
                         type="checkbox"
                         className="size-3.5 accent-primary cursor-pointer"
                         checked={exportSelected.has(r.problemId)}
-                        onChange={() => {
-                          setExportSelected((prev) => {
-                            const next = new Set(prev);
-                            if (next.has(r.problemId)) next.delete(r.problemId); else next.add(r.problemId);
-                            return next;
-                          });
-                        }}
+                        onChange={() => pdfExport.toggle(r.problemId)}
                       />
                     </div>
                   </TableCell>

@@ -36,6 +36,7 @@ import { useTopicsList } from "@/hooks/queries/use-topics";
 import { usePageTitle, useHeaderSlot, usePageBack } from "@/lib/page-context";
 import { toast } from "sonner";
 import { usePdfExport } from "@/hooks/use-pdf-export";
+import { PdfExportButton } from "@/components/pdf-export-button";
 import {
   useScope, useScopeRevisions, useUpdateScope,
   useScopeDetail, useScopeHistory, useDeleteScope,
@@ -107,6 +108,7 @@ export default function ScopeDetailPage() {
     clear: clearExport,
     exporting,
     phase: exportPhase,
+    upstream: exportUpstream,
     exportPdf,
   } = usePdfExport("backlog");
   const { data: topics = [] } = useTopicsList(scopeFieldId ?? undefined);
@@ -504,19 +506,13 @@ export default function ScopeDetailPage() {
               { kind: "ring" as const, label: "Over budget", color: "#f59e0b" },
               { kind: "ring" as const, label: "Overflow", color: "#ef4444" },
             ]}/>
-            {exportSelected.size > 0 && (
-              <Button
-                size="sm" variant="outline" className="h-6 text-[10px] px-2"
-                onClick={handleExport} disabled={exporting}>
-                {exporting ? <Loader2 className="size-3 mr-1 animate-spin"/> : <Download className="size-3 mr-1"/>}
-                {exporting
-                  ? exportPhase === "waking" ? "Render 起床中..."
-                    : exportPhase === "generating" ? "PDF 処理中..."
-                      : exportPhase === "downloading" ? "ダウンロード中..."
-                        : "エクスポート中..."
-                  : `PDF (${exportSelected.size})`}
-              </Button>
-            )}
+            <PdfExportButton
+              selectedCount={exportSelected.size}
+              exporting={exporting}
+              phase={exportPhase}
+              upstream={exportUpstream}
+              onClick={handleExport}
+            />
             <span className="text-xs text-muted-foreground tabular-nums">{visibleMembers.length} / {memberCount}</span>
           </div>
           <div className="flex items-center gap-2">

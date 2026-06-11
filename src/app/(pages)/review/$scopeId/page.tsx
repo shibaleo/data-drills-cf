@@ -25,6 +25,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { useField } from "@/hooks/use-field";
 import { usePdfExport } from "@/hooks/use-pdf-export";
+import { PdfExportButton } from "@/components/pdf-export-button";
 import { useSubjects, useLevels } from "@/hooks/queries/use-field-data";
 import { useFilterPrefs, useSaveFilterPrefs } from "@/hooks/queries/use-filter-prefs";
 import { usePageTitle, useHeaderSlot, usePageBack } from "@/lib/page-context";
@@ -451,6 +452,7 @@ export default function SchedulePage() {
     clear: clearExport,
     exporting,
     phase: exportPhase,
+    upstream: exportUpstream,
     exportPdf,
   } = usePdfExport("review");
 
@@ -848,28 +850,13 @@ export default function SchedulePage() {
               }))}/>
               {exportSelected.size > 0 && (
                 <>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-6 text-[10px] px-2"
+                  <PdfExportButton
+                    selectedCount={exportSelected.size}
+                    exporting={exporting}
+                    phase={exportPhase}
+                    upstream={exportUpstream}
                     onClick={handleExport}
-                    disabled={exporting}
-                  >
-                    {exporting ? (
-                      <Loader2 className="size-3 mr-1 animate-spin" />
-                    ) : (
-                      <Download className="size-3 mr-1" />
-                    )}
-                    {exporting
-                      ? exportPhase === "waking"
-                        ? "Render 起床中..."
-                        : exportPhase === "generating"
-                          ? "PDF 処理中..."
-                          : exportPhase === "downloading"
-                            ? "ダウンロード中..."
-                            : "エクスポート中..."
-                      : `PDF (${exportSelected.size})`}
-                  </Button>
+                  />
                   {selectedMinutes > 0 && (
                     <div className="shrink-0 rounded-md border px-2 py-0.5 text-[10px] tabular-nums text-muted-foreground">
                       {selectedMinutes >= 60 && <>{Math.floor(selectedMinutes / 60)} H </>}
