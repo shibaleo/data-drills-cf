@@ -1,9 +1,9 @@
-# UI 洗練 — 棚卸しと未解決事項
+# UI 洗練 — 棚卸しと申し送り
 
-作成日: 2026-06-10
-状態: **未解決**。最初の決定 (ステータスの位相) 待ちで他の判断が連鎖する。
+作成日: 2026-06-10 / 更新: 2026-06-11
+状態: ステータス位相は **(B) phased** で確定。次は色トークン化。
 
-## 0. 前提診断
+## 0. 前提診断 (2026-06-10 会話で確定)
 
 data-drills の UI は **テンプレ感の対極** に振り切れている (六角形の構造メタファ、ハニカム背景、手描き風ストローク、自作放射メニュー、テトリス積層型 Plan ビズ)。shadcn の痕跡が残るのはテーブル UI のみ。
 
@@ -14,63 +14,99 @@ data-drills の UI は **テンプレ感の対極** に振り切れている (�
 
 洗練の原則: **何が個性を担うかを 1〜2 個に絞り、残りはシステマティックに沈黙させる**。
 
-## 1. 未解決の最重要決定
+## 1. ステータス位相の確定 — (B) phased ✅
 
-### ステータス群の位相
+`First / Planned / Miss / Rough / Fair / Fluent / Done / Over budget / Overflow` は単一 ordinal ではなく、**3 群 + メタ** の集合:
 
-`First / Planned / Miss / Rough / Fair / Fluent / Done / Over budget / Overflow` は:
+| 群 | ステータス | 性質 | 現行符号化 |
+| --- | --- | --- | --- |
+| 着手前 | First, Planned | 未着手 / 計画済 (未評価) | 塗り (violet, pink) |
+| 評価 | Miss, Rough, Fair, Fluent | 答えた結果のグレード (悪→良) | 塗り (red→orange→yellow→green) |
+| 完了 | Done | 卒業 | 塗り (blue) |
+| メタ | Over budget, Overflow | 計画オーバー警告 | **枠線のみ** (amber/red dashed) |
 
-- **(A)** 一本の連続した習熟度スケール (single ordinal)
-- **(B)** 着手前 / 評価 / 完了 + メタの複数位相の集合 (phased)
+メタ層を塗りから外す判断は既に [src/lib/block-color.ts](src/lib/block-color.ts) で実装済。`blockColor()` は fill 用、`blockBorder()` は ring 用に分離されている。
 
-のどちらか。これが決まらないと符号化が決まらない:
+## 2. 次アクション — 群の視覚的分離
 
-| ケース | 符号化方針 |
-| --- | --- |
-| (A) | 色相は捨て、**明度の単調ランプ** (viridis 系) に写す。色相は人間が順序として読まないチャネル |
-| (B) | **色相を位相 (群) に、明度を群内の程度に二重符号化**。現行の「寒色=前、暖色=評価、緑青=完了」の意味割り当ては妥当 |
+現行の塗り色 (Planned=pink, First=violet, Miss=red, Rough=orange, Fair=yellow, Fluent=green, Done=blue) は色相環を一周しており、群境界が視覚的に見えない。**色相ファミリで群を分け、評価群内は明度/彩度で ordinal を出す**。
 
-現行配列 (purple→pink→red→orange→yellow→green→blue) は色相環一周で順序の意図はあるが、色相は循環的・名義的なチャネルなので felt order として回収できない。**ordinal な変数を nominal なチャネルに載せている**のが診断。
+### 提案パレット (要レビュー)
 
-→ **次アクション**: 位相 (A/B) の判定 → 符号化方針の確定 → トークン化。
+```
+着手前群 (cool, calm — まだ評価でない)
+  ├─ Planned : 明るい紫/ピンク (未来 actionable、目立つ)
+  └─ First   : くすんだ violet (過去初回、控えめ)
 
-## 2. 色設計 (位相判定後に着手)
+評価群 (warm→cool gradient — 出来の段階)
+  ├─ Miss    : 深い赤 (要再学習)
+  ├─ Rough   : オレンジ
+  ├─ Fair    : 黄〜アンバー
+  └─ Fluent  : 緑 (合格圏)
 
-- **ブランド色とデータ色を分離**。アンバーはアイデンティティ、ステータスはデータ。役割が違う。
-- **データパレットを閉じたトークン集合として定義** (designative liability を握る)。現状はレインボーを既定として黙認している状態。
-- **暗地に乗せるなら彩度を落とす**。フル彩度は振動する。地の暗さに寄せる。
+完了群 (cool, settled)
+  └─ Done    : 落ち着いた青 (現行と同色帯)
 
-## 3. 六角形カードの可読性
+メタ群 (ring only、塗りなし — 現行通り)
+  ├─ Over budget : amber dashed
+  └─ Overflow    : red dashed
+```
 
-- テキストは **中央の内接矩形帯** だけに置く。すぼまる頂点に文字を入れない (現状「(auto fr...」と切れる)。
-- 階層を **ヒーロー数字 (例: 218 件) + 補助ラベル** に切る。タイトルは小さく省略、due はフッタ。
-- 情報密度を落とし、形と内容の喧嘩を止める。
+### 群境界を明示する追加手段
 
-## 4. 図と地の分離
+- 評価群とそれ以外で **彩度差** をつける (評価のみ高彩度、それ以外は低彩度)
+- 暗地に対し全色を **彩度 60-70% に圧縮**して chrome と振動を解消
 
-現状は hexagon on hexagon (カード・背景タイル・ブランドすべて六角形) で競合している。選択肢:
+## 3. 該当ファイル (申し送り)
 
-- 背景タイルのスケールをカードと大きくずらす (細かくするか薄くする)
-- 逆手に取り、Scopes 一覧を **ハニカム状に敷き詰めるレイアウト**に倒す (地と図が同じ語彙で噛む)
+### 色定義の源
+- [src/lib/block-color.ts](src/lib/block-color.ts) — `COLOR_PLANNED`, `COLOR_FIRST_ATTEMPT`, ring 用色定数。fill 系は status テーブルから引いていて該当 SQL に色データがある模様
+- [src/routes/review.ts](src/routes/review.ts) — status response shape (color フィールド見て確認要)
 
-## 5. 手描きストローク
+### 色を使っている主な箇所
+- [src/components/backlog-chart.tsx](src/components/backlog-chart.tsx)
+- [src/components/problem-card.tsx](src/components/problem-card.tsx)
+- [src/components/review-table-columns.tsx](src/components/review-table-columns.tsx)
+- [src/components/scope-fsrs-override-panel.tsx](src/components/scope-fsrs-override-panel.tsx)
+- [src/app/(pages)/plan/page.tsx](src/app/(pages)/plan/page.tsx) — Plan の凡例 pill
+- [src/app/(pages)/throughput/$scopeId/page.tsx](src/app/(pages)/throughput/$scopeId/page.tsx)
+- [src/app/(pages)/stats/$scopeId/page.tsx](src/app/(pages)/stats/$scopeId/page.tsx)
 
-- roughness のシード・振幅を **全カードで揃え、形が閉じることを保証** (現状は上端が開いて未完成・バグに見える箇所がある)
-- 一歩進めるなら、ラフさを常時装飾ではなく **状態シグナル** (アクティブ・選択中・due あり) に割り当てる。意味を持った差分になる
+ステータスの色は DB の `status` テーブルに `color` 列で持っている可能性が高い。schema 確認 → SQL migration or `masters/page.tsx` から更新する経路を取るべき。
 
-## 6. 放射メニュー
+## 4. その他の保留事項 (色の後で着手)
 
-- セグメントだけ放射状、**ラベルは水平固定**。
-- 弧沿い回転を残すなら緩い上半弧だけに限定、急角度はアイコンで代替。
-- Edit と Throughput の長さ差で環が歪む → **アイコン先行 or 略記で長さを揃える**。
+### 4.1 六角形カードの可読性
+- テキストは中央の内接矩形帯だけに置く (頂点に文字を入れない、現状「(auto fr...」と切れる)
+- ヒーロー数字 + 補助ラベルの階層に切る (現状情報密度過多)
 
-## 7. 進め方
+### 4.2 図と地の分離
+- hexagon on hexagon (カード・背景・ブランドすべて六角形) で競合
+- 背景タイルのスケールを大きくずらす or 逆手に取って scopes 一覧をハニカム敷き詰めレイアウトに
 
-1. ステータス位相 (A/B) を確定 ← **ここから**
-2. データパレットをトークン化 (色相/明度の役割を決める)
-3. 六角形カード内テキストレイアウトの規約化
-4. 背景タイルの図地分離方針を決める
-5. 手描きストロークを「装飾」か「状態シグナル」かに決める
-6. 放射メニューのラベル戦略を決める
+### 4.3 手描きストローク
+- roughness の seed/振幅を全カードで揃え、形が閉じることを保証 (現状 一部上端開きでバグに見える)
+- ラフさを装飾でなく **状態シグナル** (アクティブ・選択中・due) に割り当てる案
 
-各ステップは独立に着手できるが、1 がパレット全体の前提になるので最優先。
+### 4.4 放射メニュー
+- セグメントだけ放射状、ラベルは水平固定
+- Edit/Throughput の長さ差で環が歪む → アイコン先行 or 略記で長さを揃える
+
+## 5. 進め方
+
+1. ✅ ステータス位相 (B) 確定
+2. **→ 色トークン化**: 上記提案パレットを実コードに反映 (DB 経由か直接定数か要確認)
+3. 評価群以外の彩度を落として群境界を視覚的に出す
+4. 六角形カード内テキストレイアウトの規約化
+5. 背景タイル図地分離方針
+6. 手描きストロークを装飾 → 状態シグナルへ昇格
+7. 放射メニューのラベル戦略
+
+## 6. 申し送り (新セッション向け要点)
+
+- **位相は (B) phased**: 着手前/評価/完了+メタの 4 群。塗りはこの群構造を反映する
+- **メタは塗らない (ring)**: 既に block-color.ts で実装済
+- **chrome (アンバー基調) とデータ色は役割が違う**: アンバー = ブランド、ステータス = データ。混ぜない
+- **データパレットはトークンとして閉じた集合に**: 現状はレインボーを既定として黙認している状態
+- **暗地に乗せるなら彩度を落とす**: フル彩度は振動する
+- 過去会話で「テンプレ感」の話が出たが、診断は **逆**で、テンプレの対極。問題は「強い個性の管理コスト」
