@@ -80,10 +80,18 @@ async function invokeLambda(
 
   // Lambda Invoke API returns { statusCode, headers, body, isBase64Encoded }
   // as the JSON body when the function returned an API-Gateway-v2 response.
+  // If the function threw, the body is { errorMessage, errorType, trace }.
   const payload = (await res.json().catch(() => null)) as
-    | { statusCode?: number; headers?: Record<string, string>; body?: string; isBase64Encoded?: boolean; errorMessage?: string }
+    | { statusCode?: number; headers?: Record<string, string>; body?: string; isBase64Encoded?: boolean; errorMessage?: string; errorType?: string }
     | null;
-  if (!payload || payload.errorMessage) return null;
+  if (!payload) {
+    console.log("[pdf-export] lambda response not JSON");
+    return null;
+  }
+  if (payload.errorMessage) {
+    console.log("[pdf-export] lambda function error:", payload.errorType, payload.errorMessage);
+    return null;
+  }
 
   const status = payload.statusCode ?? 200;
   const headers = new Headers(payload.headers ?? {});
