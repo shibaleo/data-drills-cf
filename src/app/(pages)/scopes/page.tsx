@@ -512,16 +512,27 @@ export default function ScopesHubPage() {
           // 進捗リング: scope hex の外周「六角形の辺」に沿って描画
           const RING_SIDE = SIDE + 6;
           const RING_PERIMETER = 6 * RING_SIDE;
-          // 多行 name (= 9 字超は 2 行に折返し、合計 18 字超は ellipsis)。
-          // 「(」「(」の直前で折返しを優先 (= 括弧の中途切れを避ける)。
+          // 多行 name — 六角形の内接矩形帯に収める。
+          // 括弧の中身が overflow するなら、半端に切らず paren ごと畳んで "…" にする
+          // (例: "X (auto from Y)" の (...) が長ければ "X …" と表示。
+          //      "(auto fr…" のように頂点近くで切れて見える事故を防ぐ)
           const NAME_LINE = 9;
           const nameLines: string[] = (() => {
             const n = scope.name;
             if (n.length <= NAME_LINE) return [n];
-            // 自然な break point を探す: 半角/全角 ( の直前 (中間付近にあれば優先)
             const paren = Math.max(n.lastIndexOf("("), n.lastIndexOf("("));
-            const goodParen = paren > 1 && paren <= NAME_LINE * 2;
-            const split = goodParen ? paren : Math.ceil(n.length / 2);
+            // 括弧位置が適切で、tail が NAME_LINE 内に収まるなら 2 行表示
+            if (paren > 1 && paren <= NAME_LINE * 2) {
+              const head = n.slice(0, paren).trimEnd();
+              const tail = n.slice(paren);
+              if (tail.length <= NAME_LINE) return [head, tail];
+              // tail が overflow: 括弧コンテンツを畳んで head のみ表示
+              return head.length <= NAME_LINE * 2
+                ? [head + " …"]
+                : [head.slice(0, NAME_LINE * 2 - 1) + "…"];
+            }
+            // 括弧なし: 半分で折返し、それでも overflow なら ellipsis
+            const split = Math.ceil(n.length / 2);
             const line1 = n.slice(0, split).trimEnd();
             const rest = n.slice(split);
             if (rest.length <= NAME_LINE) return [line1, rest];
@@ -642,13 +653,13 @@ export default function ScopesHubPage() {
                   <g>
                     <circle
                       cx={cx - 22}
-                      cy={cy + 32}
+                      cy={cy + 26}
                       r={3.5}
                       fill="hsl(var(--primary))"
                     />
                     <text
                       x={cx - 14}
-                      y={cy + 32}
+                      y={cy + 26}
                       textAnchor="start"
                       dominantBaseline="central"
                       fontSize={11}
@@ -663,7 +674,7 @@ export default function ScopesHubPage() {
                 ) : pendingLine ? (
                   <text
                     x={cx}
-                    y={cy + 32}
+                    y={cy + 26}
                     textAnchor="middle"
                     dominantBaseline="central"
                     fontSize={10}
@@ -676,7 +687,7 @@ export default function ScopesHubPage() {
                 {nextLine && (
                   <text
                     x={cx}
-                    y={cy + 46}
+                    y={cy + 36}
                     textAnchor="middle"
                     dominantBaseline="central"
                     fontSize={9}
