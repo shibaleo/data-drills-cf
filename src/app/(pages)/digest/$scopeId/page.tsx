@@ -656,7 +656,7 @@ export default function DigestPage() {
                             {prevStatus ? (
                               <OpaqueTag name={prevStatus.name} color={prevStatus.color ?? null}/>
                             ) : (
-                              <span className="text-[10px] text-muted-foreground italic">First</span>
+                              <span className="text-[10px] text-muted-foreground italic">Unrated</span>
                             )}
                           </div>
                           <span className="text-muted-foreground text-[10px]">→</span>

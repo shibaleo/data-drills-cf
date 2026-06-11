@@ -1,5 +1,5 @@
 /**
- * Cycle time stats — First attempt → Done に達するまでの日数 / attempts 分布。
+ * Cycle time stats — Unrated → Solid に達するまでの日数 / attempts 分布。
  *
  * 行動:
  *  - 「Done まで平均どれくらいか」が見えると未着手問題の完了見込みが計算できる

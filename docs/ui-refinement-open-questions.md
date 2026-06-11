@@ -33,7 +33,7 @@ data-drills の UI は **テンプレ感の対極** に振り切れている (�
 | ステータス | 軸 A | 軸 B | 色 |
 | --- | --- | --- | --- |
 | Planned | future | no-grade | pink-400 (`#f472b6`) |
-| First | past | no-grade | pink-400 + past alpha (Planned と同色、沈む) |
+| Unrated | past | no-grade | pink-400 + past alpha (Planned と同色、沈む) |
 | Miss | past | grade=1 | red-500 (`#ef4444`) + past alpha |
 | Rough | past | grade=2 | orange-500 (`#f97316`) + past alpha |
 | Fair | past | grade=3 | yellow-500 (`#eab308`) + past alpha |
@@ -42,9 +42,9 @@ data-drills の UI は **テンプレ感の対極** に振り切れている (�
 | Over budget | future | meta | amber border, 塗りなし |
 | Overflow | future | meta | red dashed border, 塗りなし |
 
-**鍵となる洞察**: First は「データ欠落の fallback」ではなく、**解答時点で前回評価がまだ無かった = past 側 no-grade**。よって Planned と同位相 (時間両端)。同色 + 時間 alpha で「沈んだ Planned」として読める。
+**鍵となる洞察**: Unrated は「データ欠落の fallback」ではなく、**解答時点で前回評価がまだ無かった = past 側 no-grade**。よって Planned と同位相 (時間両端)。同色 + 時間 alpha で「沈んだ Planned」として読める。
 
-旧 doc の「着手前: First+Planned」括りは First が「もう触っている」以上、誤り。Done が「卒業」だった旧モデルも撤廃 — Done は評価群の最上位 grade として `Solid` にリネーム (2026-06-11)。再演習は単に再評価、別フラグ不要。
+旧 doc の「着手前: Unrated+Planned」括りは Unrated が「もう触っている」以上、誤り。Done が「卒業」だった旧モデルも撤廃 — Done は評価群の最上位 grade として `Solid` にリネーム (2026-06-11)。再演習は単に再評価、別フラグ不要。
 
 実装は [src/lib/block-color.ts](src/lib/block-color.ts):
 - `blockColor()`: fill 用。past 側は base hex に `PAST_ALPHA` を append
@@ -52,14 +52,14 @@ data-drills の UI は **テンプレ感の対極** に振り切れている (�
 
 ## 2. 次アクション — 群の視覚的分離
 
-現行の塗り色 (Planned=pink, First=violet, Miss=red, Rough=orange, Fair=yellow, Fluent=green, Done=blue) は色相環を一周しており、群境界が視覚的に見えない。**色相ファミリで群を分け、評価群内は明度/彩度で ordinal を出す**。
+現行の塗り色 (Planned=pink, Unrated=violet, Miss=red, Rough=orange, Fair=yellow, Fluent=green, Done=blue) は色相環を一周しており、群境界が視覚的に見えない。**色相ファミリで群を分け、評価群内は明度/彩度で ordinal を出す**。
 
 ### 提案パレット (要レビュー)
 
 ```
 着手前群 (cool, calm — まだ評価でない)
   ├─ Planned : 明るい紫/ピンク (未来 actionable、目立つ)
-  └─ First   : くすんだ violet (過去初回、控えめ)
+  └─ Unrated   : くすんだ violet (過去初回、控えめ)
 
 評価群 (warm→cool gradient — 出来の段階)
   ├─ Miss    : 深い赤 (要再学習)
@@ -100,7 +100,7 @@ data-drills の UI は **テンプレ感の対極** に振り切れている (�
   - `COLOR_FIRST_ATTEMPT = "#8b5cf6"` (過去初回 fallback)
   - `BORDER_OVERFLOW = "#ef4444"` (赤 dashed)
   - `BORDER_OVER_BUDGET = "#f59e0b"` (amber dashed)
-- これらは DB に乗らない group label (Planned/First は擬似ステータス、Over budget/Overflow はメタ)。**§2 のパレット見直しで一緒に書き換える**
+- これらは DB に乗らない group label (Planned/Unrated は擬似ステータス、Over budget/Overflow はメタ)。**§2 のパレット見直しで一緒に書き換える**
 
 ### 色を使っている主な箇所
 - [src/components/backlog-chart.tsx](src/components/backlog-chart.tsx)

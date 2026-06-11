@@ -205,12 +205,12 @@ export default function AboutPage() {
             </thead>
             <tbody className="text-muted-foreground">
               <tr className="border-b border-border/50"><td className="pr-4 py-1" style={{ color: COLOR_PLANNED }}>Planned</td><td className="py-1">Backlog 未着手</td></tr>
-              <tr className="border-b border-border/50"><td className="pr-4 py-1" style={{ color: COLOR_FIRST_ATTEMPT }}>First attempt</td><td className="py-1">初回回答</td></tr>
+              <tr className="border-b border-border/50"><td className="pr-4 py-1" style={{ color: COLOR_FIRST_ATTEMPT }}>Unrated</td><td className="py-1">初回回答 (評価グレードなし、Planned と同 phase の past 側)</td></tr>
               <tr className="border-b border-border/50"><td className="pr-4 py-1" style={{ color: "#ef4444" }}>Repeat after Miss</td><td className="py-1">red 塗り</td></tr>
               <tr className="border-b border-border/50"><td className="pr-4 py-1" style={{ color: "#f97316" }}>Repeat after Rough</td><td className="py-1">orange 塗り</td></tr>
               <tr className="border-b border-border/50"><td className="pr-4 py-1" style={{ color: "#eab308" }}>Repeat after Fair</td><td className="py-1">yellow 塗り</td></tr>
               <tr className="border-b border-border/50"><td className="pr-4 py-1" style={{ color: "#22c55e" }}>Repeat after Fluent</td><td className="py-1">green 塗り</td></tr>
-              <tr className="border-b border-border/50"><td className="pr-4 py-1" style={{ color: "#3b82f6" }}>Repeat after Done</td><td className="py-1">blue 塗り</td></tr>
+              <tr className="border-b border-border/50"><td className="pr-4 py-1" style={{ color: "#3b82f6" }}>Repeat after Solid</td><td className="py-1">blue 塗り</td></tr>
               <tr className="border-b border-border/50"><td className="pr-4 py-1 text-amber-500">Over budget</td><td className="py-1">Planned 塗り + amber 破線枠 (1問が日次枠超過)</td></tr>
               <tr><td className="pr-4 py-1 text-red-500">Overflow</td><td className="py-1">Planned 塗り + red 破線枠 (milestone 締切超過 pile-up)</td></tr>
             </tbody>
