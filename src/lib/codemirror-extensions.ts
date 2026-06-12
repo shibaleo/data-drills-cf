@@ -49,7 +49,10 @@ function renderMath(source: string, displayMode: boolean): string {
  * トランザクション単位で「テーブルデリミタ行末の trailing space」を自動除去する。
  * (= 行全体が pipe/dash/colon/space のみのとき末尾空白を削る)
  */
-const TABLE_DELIM_RE = /^[\s|:\-]+$/;
+// `|` を必須にする (= テーブル区切り行は最低 1 つの pipe を持つ)。
+// これがないと "- " のような単純な箇条書き入力でも regex がマッチして
+// 末尾スペースが消され、bullet 後に空白を入力できなくなる。
+const TABLE_DELIM_RE = /^[\s:\-]*\|[\s|:\-]*$/;
 
 export const tableDelimiterTrimmer = EditorState.transactionFilter.of(
   (tr: Transaction) => {
