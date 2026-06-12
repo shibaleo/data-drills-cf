@@ -28,7 +28,7 @@ export default function StatsDetailPage() {
   const renderHeaderSlot = useHeaderSlot();
   const { scope_id: scopeId } = useParams({ strict: false }) as { scope_id: string };
   const navigate = useNavigate();
-  usePageBack(useCallback(() => navigate({ to: "/stats" as string }), [navigate]));
+  usePageBack(useCallback(() => navigate({ to: "/scopes" as string }), [navigate]));
   const { statuses, setCurrentScopeId } = useField();
 
   const scopeQuery = useStatsScope(scopeId);

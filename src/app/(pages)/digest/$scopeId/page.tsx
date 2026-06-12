@@ -1,9 +1,9 @@
 "use client";
-import { useMemo, useState, useEffect, Fragment } from "react";
+import { useCallback, useMemo, useState, useEffect, Fragment } from "react";
 import { COLOR_FIRST_ATTEMPT } from "@/lib/block-color";
 import { Markdown } from "@/components/markdown";
-import { ChevronLeft, ChevronRight, Clock, ChevronDown, ChevronUp, MessageSquareText, Layers, ArrowUpRight, AlertTriangle, ArrowLeft } from "lucide-react";
-import { Link, useParams } from "@tanstack/react-router";
+import { ChevronLeft, ChevronRight, Clock, ChevronDown, ChevronUp, MessageSquareText, Layers, ArrowUpRight, AlertTriangle } from "lucide-react";
+import { Link, useParams, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useField } from "@/hooks/use-field";
 import { useSubjects, useLevels } from "@/hooks/queries/use-field-data";
@@ -15,7 +15,7 @@ import { useFlashcardsData } from "@/hooks/queries/use-flashcards";
 import { useTogglEntries, type TogglEntry } from "@/hooks/queries/use-toggl";
 import { useDigestScope } from "@/hooks/queries/use-digest-scopes";
 import { useProblemDialogs } from "@/hooks/use-problem-dialogs";
-import { usePageTitle } from "@/lib/page-context";
+import { usePageTitle, usePageBack } from "@/lib/page-context";
 import { todayJST, formatMonthDay } from "@/lib/date-utils";
 import { allocate, type MemberInput, type Milestone } from "@/lib/backlog-allocate";
 import { applyMemberFilter } from "@/lib/member-filter";
@@ -48,7 +48,9 @@ export default function DigestPage() {
   const { scope_id: scopeId } = useParams({ strict: false }) as { scope_id: string };
   const { data: scopeData } = useDigestScope(scopeId);
   const scope = scopeData?.scope;
-  usePageTitle(scope?.name ? `Digest · ${scope.name}` : "Digest");
+  usePageTitle("Digest");
+  const navigate = useNavigate();
+  usePageBack(useCallback(() => navigate({ to: "/scopes" as string }), [navigate]));
   const { statuses, setCurrentScopeId } = useField();
   const scopeFieldId = scope?.field_id ?? null;
   const { data: subjects = [] } = useSubjects(scopeFieldId ?? undefined);
@@ -155,6 +157,27 @@ export default function DigestPage() {
     }
     return Math.round(sec);
   }, [togglEntries, date]);
+
+  // 選択日を最右に置いた 7 日 study 時間 sparkbar。
+  // 各日を project_color ごとの分数 segments に分けて stacked 表示する。
+  const study7d = useMemo(() => {
+    type Day = { date: string; min: number; byColor: Map<string, number> };
+    const days: Day[] = [];
+    for (let i = 6; i >= 0; i--) days.push({ date: addDays(date, -i), min: 0, byColor: new Map() });
+    const byDate = new Map(days.map((d) => [d.date, d] as const));
+    for (const e of togglEntriesAll) {
+      if (e.personal_category !== "Education") continue;
+      if (e.duration_seconds == null || e.duration_seconds <= 0) continue;
+      const jst = new Date(new Date(e.started_at).getTime() + JST_OFFSET_MS).toISOString().slice(0, 10);
+      const slot = byDate.get(jst);
+      if (!slot) continue;
+      const minutes = e.duration_seconds / 60;
+      slot.min += minutes;
+      const color = e.project_color ?? "#888";
+      slot.byColor.set(color, (slot.byColor.get(color) ?? 0) + minutes);
+    }
+    return days;
+  }, [togglEntriesAll, date]);
 
   const dayFlashcardReviews = useMemo(() => {
     return fcReviews
@@ -414,16 +437,6 @@ export default function DigestPage() {
 
   return (
     <div className="p-3 md:p-4 flex flex-col gap-3 max-w-4xl">
-      {/* scope header (back + name) */}
-      <div className="flex items-center gap-2">
-        <Link to={"/digest" as string}
-          className="inline-flex items-center justify-center size-7 rounded-md border text-muted-foreground hover:text-foreground hover:bg-muted"
-          title="Back to scope list">
-          <ArrowLeft className="size-3.5"/>
-        </Link>
-        <div className="text-sm font-semibold">{scope?.name ?? ""}</div>
-      </div>
-
       {/* 日付ナビ */}
       <div className="flex items-center gap-2 flex-wrap">
         <button type="button"
@@ -498,7 +511,45 @@ export default function DigestPage() {
             togglStudySec > 0 && summary.totalSec > 0
               ? `Problem ${Math.round((summary.totalSec * 100) / togglStudySec)}%`
               : (togglStudySec > 0 ? "Problem 0%" : "")
-          }/>
+          }
+          chart={(() => {
+            const peak = Math.max(60, ...study7d.map((d) => d.min));
+            const MAX_H = 22;
+            const DOW = ["S", "M", "T", "W", "T", "F", "S"]; // 0=Sun..6=Sat
+            return (
+              <div className="flex flex-col gap-0.5" aria-label="last 7 days">
+                <div className="flex items-end gap-[3px] h-6">
+                  {study7d.map((d, i) => {
+                    const totalH = peak > 0 ? Math.max(2, (d.min / peak) * MAX_H) : 2;
+                    const isSel = i === study7d.length - 1;
+                    const segs = Array.from(d.byColor.entries()).sort((a, b) => b[1] - a[1]);
+                    return (
+                      <div key={d.date} title={`${d.date.slice(5)}: ${d.min >= 60 ? `${Math.floor(d.min/60)}h${Math.round(d.min%60)}m` : `${Math.round(d.min)}m`}`}
+                        className="w-[6px] rounded-sm overflow-hidden flex flex-col-reverse"
+                        style={{ height: `${totalH}px`, opacity: isSel ? 1 : 0.55 }}>
+                        {segs.length === 0 ? (
+                          <div className="w-full flex-1 bg-foreground/20"/>
+                        ) : segs.map(([color, min]) => (
+                          <div key={color} style={{ background: color, flex: `${min} 0 0` }}/>
+                        ))}
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="flex items-center gap-[3px] text-[8px] leading-none tabular-nums">
+                  {study7d.map((d) => {
+                    // JST 曜日: 元 date string は JST 日付。UTC midnight + JST offset で安全に取得
+                    const ms = new Date(`${d.date}T00:00:00Z`).getTime();
+                    const jstDow = new Date(ms + JST_OFFSET_MS).getUTCDay();
+                    const cls = jstDow === 0 ? "text-red-500" : jstDow === 6 ? "text-blue-500" : "text-muted-foreground";
+                    return (
+                      <span key={d.date} className={`w-[6px] text-center ${cls}`}>{DOW[jstDow]}</span>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}/>
         <SummaryCard label="Daily target"
           value={dailyTargetMin > 0 ? `${dailyTargetMin}m` : "—"}
           sub={
@@ -1080,11 +1131,12 @@ function TogglProjectColumn({
   );
 }
 
-function SummaryCard({ label, value, sub, trend }: {
+function SummaryCard({ label, value, sub, trend, chart }: {
   label: string;
   value: string;
   sub?: string;
   trend?: { label: string; color: string } | null;
+  chart?: React.ReactNode;
 }) {
   return (
     <div className="rounded-md border p-3 flex flex-col gap-0.5 min-h-[88px]">
@@ -1093,6 +1145,7 @@ function SummaryCard({ label, value, sub, trend }: {
         {trend && <div className={`text-[9px] tabular-nums ${trend.color}`}>{trend.label}</div>}
       </div>
       <div className="text-base font-semibold tabular-nums">{value}</div>
+      {chart && <div className="mt-1">{chart}</div>}
       {sub && <div className="text-[10px] text-muted-foreground tabular-nums mt-auto">{sub}</div>}
     </div>
   );

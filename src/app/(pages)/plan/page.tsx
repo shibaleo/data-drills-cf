@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useSearch } from "@tanstack/react-router";
+import { useSearch, useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 import {
   SlidersHorizontal,
@@ -26,14 +26,13 @@ import { useReviewList } from "@/hooks/queries/use-review";
 import { useProblemsList } from "@/hooks/queries/use-problems";
 import { useScopes, useScope, useScopeDetail, useScopeTimeline, useUpdateScope, sliceTimelineAtAsOf } from "@/hooks/queries/use-scopes";
 import { useProblemDialogs } from "@/hooks/use-problem-dialogs";
-import { usePageTitle } from "@/lib/page-context";
+import { usePageTitle, usePageBack } from "@/lib/page-context";
 import { todayJST } from "@/lib/date-utils";
 import { BacklogChart, type BacklogChartHandle, type OverlayBlock } from "@/components/backlog-chart";
 import { assembleOverlay } from "@/lib/answer-history-overlay";
 import { ScopePlanRightPanel } from "@/components/scope-plan-right-panel";
 import { ScopeFSRSOverridePanel } from "@/components/scope-fsrs-override-panel";
 import { BlockLegend, type LegendEntry } from "@/components/block-legend";
-import { TogglStudyWidget } from "@/components/toggl-study-widget";
 import { COLOR_PLANNED } from "@/lib/block-color";
 import { useAnswerHistoryList } from "@/hooks/queries/use-answer-history";
 import { Button } from "@/components/ui/button";
@@ -59,6 +58,8 @@ function addDays(s: string, n: number): string {
 
 export default function PlanPage() {
   usePageTitle("Plan");
+  const navigate = useNavigate();
+  usePageBack(useCallback(() => navigate({ to: "/scopes" as string }), [navigate]));
   const { statuses, currentScopeId, setCurrentScopeId } = useField();
   const realToday = todayJST();
   const [asOf, setAsOf] = useState<string | null>(null);
@@ -455,9 +456,6 @@ export default function PlanPage() {
 
   return (
     <div className="p-3 md:p-4 flex flex-col gap-2">
-      <div className="flex justify-end">
-        <TogglStudyWidget />
-      </div>
       <div className="rounded-md border p-3 space-y-2">
         <div className="flex items-center gap-2">
           <Popover>
