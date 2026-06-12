@@ -1,7 +1,7 @@
 # UI 洗練 — 棚卸しと申し送り
 
-作成日: 2026-06-10 / 更新: 2026-06-11
-状態: 位相は **2 軸 (時間 × 評価)** で確定。色トークン化第一弾と Done→Solid リネーム完了。
+作成日: 2026-06-10 / 更新: 2026-06-12
+状態: 位相 2 軸 / 色トークン化 / Done→Solid・First→Unrated / Review・Throughput 削除 (Plan に統合) / 学習トラジェクトリ polyline / Toggl sparkbar (Digest) 完了。
 
 ## 新セッション開始時のチェックリスト
 
@@ -94,52 +94,58 @@ data-drills の UI は **テンプレ感の対極** に振り切れている (�
   - パレット書き換えは **このページ経由で行うのが規定経路** (migration 不要)
 - API: [src/routes/statuses.ts](src/routes/statuses.ts), hook: [src/hooks/queries/use-statuses.ts](src/hooks/queries/use-statuses.ts)
 
-**コード定数として残るのは特殊ケースのみ**:
+**コード定数として残るのは特殊ケースのみ** (2026-06-12 確定値):
 - [src/lib/block-color.ts](src/lib/block-color.ts):
-  - `COLOR_PLANNED = "#ec4899"` (未来 = 未着手)
-  - `COLOR_FIRST_ATTEMPT = "#8b5cf6"` (過去初回 fallback)
+  - `COLOR_PLANNED = "#c084fc"` (purple-400, 未来 no-grade)
+  - `COLOR_FIRST_ATTEMPT = "#d8b4fe99"` (purple-300 @ 60%, 過去 no-grade。past alpha より高めで luminance bias 補正)
+  - `PAST_ALPHA = "4d"` (~30%, past actuals を smoke に沈める)
   - `BORDER_OVERFLOW = "#ef4444"` (赤 dashed)
   - `BORDER_OVER_BUDGET = "#f59e0b"` (amber dashed)
-- これらは DB に乗らない group label (Planned/Unrated は擬似ステータス、Over budget/Overflow はメタ)。**§2 のパレット見直しで一緒に書き換える**
+- これらは DB に乗らない group label (Planned/Unrated は擬似ステータス、Over budget/Overflow はメタ)
 
 ### 色を使っている主な箇所
-- [src/components/backlog-chart.tsx](src/components/backlog-chart.tsx)
+- [src/components/backlog-chart.tsx](src/components/backlog-chart.tsx) — Tetris 本体 + 選択 problem の時間順 polyline (past=solid / future=dashed)
 - [src/components/problem-card.tsx](src/components/problem-card.tsx)
 - [src/components/review-table-columns.tsx](src/components/review-table-columns.tsx)
 - [src/components/scope-fsrs-override-panel.tsx](src/components/scope-fsrs-override-panel.tsx)
-- [src/app/(pages)/plan/page.tsx](src/app/(pages)/plan/page.tsx) — Plan の凡例 pill
-- [src/app/(pages)/throughput/$scopeId/page.tsx](src/app/(pages)/throughput/$scopeId/page.tsx)
+- [src/app/(pages)/plan/page.tsx](src/app/(pages)/plan/page.tsx) — Plan の凡例 pill (divider で 3 群分離: 評価 | Unrated | meta)
 - [src/app/(pages)/stats/$scopeId/page.tsx](src/app/(pages)/stats/$scopeId/page.tsx)
 
-ステータスの色は DB の `status` テーブルに `color` 列で持っている可能性が高い。schema 確認 → SQL migration or `masters/page.tsx` から更新する経路を取るべき。
-
-## 4. その他の保留事項 (色の後で着手)
+## 4. その他の保留事項
 
 ### 4.1 六角形カードの可読性
-- テキストは中央の内接矩形帯だけに置く (頂点に文字を入れない、現状「(auto fr...」と切れる)
-- ヒーロー数字 + 補助ラベルの階層に切る (現状情報密度過多)
+- ✅ 括弧切れ truncation 解消、テキスト位置を内接矩形帯内に (2026-06-12 commit `821e390`)
+- 残: **ヒーロー数字 + 補助ラベルの階層化** — 現状 "件数 / due / next" が並列、優先順位を視覚化したい (例: 件数を大きく、due 等を補助)
 
 ### 4.2 図と地の分離
-- hexagon on hexagon (カード・背景・ブランドすべて六角形) で競合
-- 背景タイルのスケールを大きくずらす or 逆手に取って scopes 一覧をハニカム敷き詰めレイアウトに
+- ✅ 背景タイル styling を tetris 空セルと同じ (`hsl(var(--border))` + width 0.5) に揃え、figure-ground の役割分担を明確化 (2026-06-12)
+- 残: 背景タイル × カード × ブランドが全部六角形である根本問題。**chrome (amber 基調) vs データ色の語彙分離** と合わせて検討 (doc §0)
 
 ### 4.3 手描きストローク
-- roughness の seed/振幅を全カードで揃え、形が閉じることを保証 (現状 一部上端開きでバグに見える)
-- ラフさを装飾でなく **状態シグナル** (アクティブ・選択中・due) に割り当てる案
+- ✅ 実コード非該当と確定 — roughjs / feTurbulence 等の "ラフ描画" は導入されていない。本項は **削除予定**
 
 ### 4.4 放射メニュー
-- セグメントだけ放射状、ラベルは水平固定
-- Edit/Throughput の長さ差で環が歪む → アイコン先行 or 略記で長さを揃える
+- ✅ ラベルは水平固定に変更 (textPath 廃止、sec 幾何中点に horizontal text)
+- ✅ Throughput → Output → Throughput sector ごと削除 (Plan 統合に伴い)。現在 4 sector (Edit / Plan / Stats / Digest) + 2 空欄幾何
 
-## 5. 進め方
+### 4.5 Plan 統合 (2026-06-12)
+- Review/Throughput page を撤去し Plan に吸収
+- stability slider live preview を ScopeFSRSOverridePanel の onLocalChange 経由で Plan に統合
+- past-throughput / review-next / smooth-future を `src/lib/answer-history-overlay.ts:assembleOverlay()` に pure 関数として切り出し
+- 選択 problem の時間順 polyline (past=solid / future=dashed) で学習トラジェクトリ可視化
 
-1. ✅ ステータス位相 (B) 確定
-2. **→ 色トークン化**: 上記提案パレットを実コードに反映 (DB 経由か直接定数か要確認)
-3. 評価群以外の彩度を落として群境界を視覚的に出す
-4. 六角形カード内テキストレイアウトの規約化
-5. 背景タイル図地分離方針
-6. 手描きストロークを装飾 → 状態シグナルへ昇格
-7. 放射メニューのラベル戦略
+### 4.6 Digest 拡張 (2026-06-12)
+- Study time (Toggl) SummaryCard に 7d sparkbar 追加 (project_color 別 stacked + 曜日キャピタル / 日=赤 / 土=青)
+- ヘッダーパターン (← / page name / scope picker) を全画面で統一、← は /scopes に redirect
+
+## 5. 残作業
+
+- **§4.1 ヒーロー数字 + 補助ラベルの階層化** (scope hex 情報密度)
+- **chrome vs データ色の語彙分離** (doc §0、§4.2 と紐づく)
+- **CodeMirror バンドル分割** (1.5MB chunk の dynamic import)
+- **PDF font subset 実装** ([docs/pdf-font-subset-plan.md](pdf-font-subset-plan.md))
+- **Vitest 導入**
+- **Digest 洗練** (UI / 情報量 / バックエンド設計 / API) — 次に着手予定
 
 ## 6. 申し送り (新セッション向け要点)
 

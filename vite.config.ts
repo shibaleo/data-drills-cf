@@ -74,4 +74,21 @@ export default defineConfig({
     alias: { "@": path.resolve(__dirname, "src") },
   },
   server: { port: 5180 },
+  build: {
+    // 1.5MB の単一 chunk を vendor 別に割り。React.lazy(codemirror-editor) で遅延読み込み時に
+    // codemirror / katex を別々のキャッシュ単位として並列フェッチでき、片方の更新がもう片方の
+    // キャッシュを無効化しない。
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes("node_modules")) {
+            if (id.includes("katex")) return "vendor-katex";
+            if (id.includes("@codemirror") || id.includes("codemirror-live-markdown") || id.includes("@uiw/react-codemirror") || id.includes("@lezer")) return "vendor-codemirror";
+          }
+          return undefined;
+        },
+      },
+    },
+    chunkSizeWarningLimit: 700,
+  },
 });
