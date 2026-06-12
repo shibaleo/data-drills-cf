@@ -11,7 +11,7 @@ import {
   Download,
   Filter,
   Activity,
-  RotateCw,
+  Footprints,
   Sparkles,
 } from "lucide-react";
 import {
@@ -150,7 +150,7 @@ export default function PlanPage() {
   // 表示カテゴリ独立 toggle。default は Throughput OFF + Review/Forecast ON
   // (= 未来寄せの「現行 /review + projection」表示)。filter_prefs.plan で永続化。
   const [hideThroughput, setHideThroughput] = useState(true);
-  const [hideReview, setHideReview] = useState(false);
+  const [hideNextStep, setHideNextStep] = useState(false);
   const [hideForecast, setHideForecast] = useState(false);
 
   // filter prefs 永続化 (Phase 7 で scope_id 単位、scope ごとに独立)
@@ -170,7 +170,7 @@ export default function PlanPage() {
       setHiddenLayerIds(new Set(p.hiddenLayerIds ?? []));
       if (p.chartMaxRows !== undefined) setChartMaxRows(p.chartMaxRows);
       setHideThroughput(!!p.hideThroughput);
-      setHideReview(!!p.hideReview);
+      setHideNextStep(!!p.hideNextStep);
       setHideForecast(!!p.hideForecast);
     }
     prefsLoadedRef.current = scopeId;
@@ -187,7 +187,7 @@ export default function PlanPage() {
       h: [...hiddenLayerIds].sort(),
       r: chartMaxRows,
       ht: hideThroughput,
-      hr: hideReview,
+      hn: hideNextStep,
       hf: hideForecast,
     });
     if (lastSavedPrefsRef.current === null) {
@@ -207,12 +207,12 @@ export default function PlanPage() {
         hiddenLayerIds: [...hiddenLayerIds],
         chartMaxRows,
         hideThroughput,
-        hideReview,
+        hideNextStep,
         hideForecast,
       },
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filterSubjects, filterLevels, hiddenLastStatuses, hiddenAllocKinds, hiddenAllocFlags, hiddenLayerIds, chartMaxRows, hideThroughput, hideReview, hideForecast]);
+  }, [filterSubjects, filterLevels, hiddenLastStatuses, hiddenAllocKinds, hiddenAllocFlags, hiddenLayerIds, chartMaxRows, hideThroughput, hideNextStep, hideForecast]);
   const chartRef = useRef<BacklogChartHandle>(null);
   const tableRef = useRef<HTMLDivElement>(null);
 
@@ -282,20 +282,27 @@ export default function PlanPage() {
 
   const filteredOverlay = useMemo(() => {
     return overlayItems.filter((o) => {
-      if (hideThroughput && o.kind === "past-throughput") return false;
-      if (hideReview && o.kind === "review-next") return false;
-      if (hideForecast && o.kind === "smooth-future") return false;
+      // 左 = 実績
+      if (hideThroughput && o.kind === "throughput") return false;
+      // 中央 = 今すぐ 1 回のエントリ (overlay 側 = answered の next-step)。
+      //        unanswered の initial は allocated.future 側で hide
+      if (hideNextStep && o.kind === "next-step") return false;
+      // 右 = forecast (= 全 cascade)
+      if (hideForecast && o.kind === "forecast") return false;
       // hide-set: set にあるカテゴリだけ非表示
       if (o.statusName && hiddenLastStatuses.has(o.statusName)) return false;
       if (!passesSubjectLevel(o.problemId)) return false;
       return true;
     });
-  }, [overlayItems, hiddenLastStatuses, hideThroughput, hideReview, hideForecast, passesSubjectLevel]);
+  }, [overlayItems, hiddenLastStatuses, hideThroughput, hideNextStep, hideForecast, passesSubjectLevel]);
 
   const filteredAllocated = useMemo(() => {
     return edit.allocated.filter((a) => {
+      // 左 = 実績: hideThroughput は past allocated (= 初回回答済) を隠す
       if (hideThroughput && a.side === "past") return false;
-      if (hideForecast && a.side === "future") return false;
+      // 中央 = 今すぐ 1 回: hideNextStep は allocator の初回 (Unrated 未来) も含めて隠す
+      // (next-step は unanswered の initial + answered の next-review の両方を包括する概念)
+      if (hideNextStep && a.side === "future") return false;
       const kind = a.side === "past" ? "First" : "Planned";
       if (hiddenAllocKinds.has(kind)) return false;
       if (a.overflow && hiddenAllocFlags.has("overflow")) return false;
@@ -303,7 +310,7 @@ export default function PlanPage() {
       if (!passesSubjectLevel(a.problemId)) return false;
       return true;
     });
-  }, [edit.allocated, hiddenAllocKinds, hiddenAllocFlags, hideThroughput, hideForecast, passesSubjectLevel]);
+  }, [edit.allocated, hiddenAllocKinds, hiddenAllocFlags, hideThroughput, hideNextStep, passesSubjectLevel]);
 
   const memberCount = edit.effectiveMembers.length;
   const doneCount = edit.effectiveMembers.filter((m) => m.first_answer_date).length;
@@ -510,7 +517,7 @@ export default function PlanPage() {
               明るい = 表示中、暗い = 非表示中。 */}
           {[
             { hidden: hideThroughput, setH: setHideThroughput, Icon: Activity,  label: "throughput (past actuals)" },
-            { hidden: hideReview,     setH: setHideReview,     Icon: RotateCw,  label: "review (next review per problem)" },
+            { hidden: hideNextStep,   setH: setHideNextStep,   Icon: Footprints,  label: "next step (1 immediate entry per problem)" },
             { hidden: hideForecast,   setH: setHideForecast,   Icon: Sparkles,  label: "forecast (smooth-future projections)" },
           ].map(({ hidden, setH, Icon, label }) => (
             <button key={label} type="button"

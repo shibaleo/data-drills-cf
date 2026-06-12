@@ -56,11 +56,11 @@ export type OverlayBlock = {
   /** 未解消 (= future column) で stability 昇順に積み上げるためのキー。省略可。 */
   stabilityDays?: number;
   /** 用途分類。caller 側のフィルタで使う:
-   *   - "past-throughput": 過去 re-answer (実績)
-   *   - "review-next":     各 problem の最後 status から計算した 1 段目 (現行 review)
-   *   - "smooth-future":   review-next の先の cascade 予測
+   *   - "throughput": 過去実績 (= re-answer overlay。1 answer = 1 block)
+   *   - "next-step":  各 problem の "今すぐ 1 回" の next entry (review 由来)
+   *   - "forecast":   next-step / 初回未着手の以降の cascade 予測
    */
-  kind?: "past-throughput" | "review-next" | "smooth-future";
+  kind?: "throughput" | "next-step" | "forecast";
 };
 
 type BacklogChartProps = {

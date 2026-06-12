@@ -51,7 +51,7 @@ function projectSmoothFuture(args: {
       color: info.color ?? "#a3a3a3",
       statusName: nextStatusName,
       stabilityDays: intervalDays,
-      kind: "smooth-future",
+      kind: "forecast",
     });
     date = projected;
     chainIdx = nextIdx;
@@ -107,7 +107,7 @@ export function assembleOverlay(input: AssembleOverlayInput): OverlayBlock[] {
       color: stColor,
       statusName: r.lastStatus,
       stabilityDays: reviewIntervalDays,
-      kind: "review-next",
+      kind: "next-step",
     });
     out.push(
       ...projectSmoothFuture({
@@ -136,7 +136,7 @@ export function assembleOverlay(input: AssembleOverlayInput): OverlayBlock[] {
       color: r.prevStatusColor,
       statusName: r.prevStatusName,
       opacity: 0.5,
-      kind: "past-throughput",
+      kind: "throughput",
     });
   }
 

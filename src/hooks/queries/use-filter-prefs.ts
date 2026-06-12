@@ -44,9 +44,9 @@ export type PlanPrefs = {
   chartMaxRows?: number | null;
   /** 過去 throughput overlay + alloc.past を隠す。 */
   hideThroughput?: boolean;
-  /** Review-next overlay (1 entry/problem) を隠す。 */
-  hideReview?: boolean;
-  /** Smooth-future overlay + alloc.future を隠す。 */
+  /** Next-step overlay (1 entry/problem の "今すぐ") を隠す。 */
+  hideNextStep?: boolean;
+  /** Smooth-future overlay (next-step 以降の cascade) を隠す。 */
   hideForecast?: boolean;
 };
 export type FilterPrefsBag = {
