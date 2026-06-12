@@ -10,9 +10,9 @@ import {
   History,
   Download,
   Filter,
-  Activity,
-  Footprints,
-  Sparkles,
+  Waypoints,
+  ListTodo,
+  Telescope,
 } from "lucide-react";
 import {
   useReactTable,
@@ -516,9 +516,9 @@ export default function PlanPage() {
           {/* Throughput / Review / Forecast 3 カテゴリ独立 toggle。
               明るい = 表示中、暗い = 非表示中。 */}
           {[
-            { hidden: hideThroughput, setH: setHideThroughput, Icon: Activity,  label: "throughput (past actuals)" },
-            { hidden: hideNextStep,   setH: setHideNextStep,   Icon: Footprints,  label: "next step (1 immediate entry per problem)" },
-            { hidden: hideForecast,   setH: setHideForecast,   Icon: Sparkles,  label: "forecast (smooth-future projections)" },
+            { hidden: hideThroughput, setH: setHideThroughput, Icon: Waypoints, label: "throughput (past actuals)" },
+            { hidden: hideNextStep,   setH: setHideNextStep,   Icon: ListTodo,  label: "next step (1 immediate entry per problem)" },
+            { hidden: hideForecast,   setH: setHideForecast,   Icon: Telescope, label: "forecast (cascade after next step)" },
           ].map(({ hidden, setH, Icon, label }) => (
             <button key={label} type="button"
               onClick={() => setH((v) => !v)}
