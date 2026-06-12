@@ -229,15 +229,20 @@ export default function PlanPage() {
     onDataChanged: handleDataChanged,
   });
 
+  // FSRS slider の live preview 用 local 状態。
+  // ScopeFSRSOverridePanel の onLocalChange で受け取り、statusByName に反映。
+  // null = まだ panel 側の初期化が走ってない (= saved override を使う)
+  const [livePreviewOverride, setLivePreviewOverride] = useState<Record<string, number> | null>(null);
+
   const statusByName = useMemo(() => {
     const m = new Map<string, { stabilityDays: number; color: string | null }>();
-    const override = scopeQuery.data?.status_stabilities ?? {};
+    const override = livePreviewOverride ?? scopeQuery.data?.status_stabilities ?? {};
     for (const s of statuses) {
       const days = override[s.name] !== undefined ? override[s.name] : s.stabilityDays;
       m.set(s.name, { stabilityDays: days, color: s.color ?? null });
     }
     return m;
-  }, [statuses, scopeQuery.data]);
+  }, [statuses, scopeQuery.data, livePreviewOverride]);
 
   const horizonDate = useMemo(() => addDays(today, PROJECTION_HORIZON_DAYS), [today]);
 
@@ -584,6 +589,7 @@ export default function PlanPage() {
                 onSave={(next) =>
                   updateScope.mutateAsync({ id: scopeId, payload: { status_stabilities: next } })
                 }
+                onLocalChange={setLivePreviewOverride}
               />
             </div>
             <ChartHeightPicker value={chartMaxRows} onChange={setChartMaxRows}/>

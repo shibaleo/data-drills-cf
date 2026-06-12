@@ -17,15 +17,19 @@ export function ScopeFSRSOverridePanel({
   current,
   disabled,
   onSave,
+  onLocalChange,
 }: {
   statuses: { id: string; name: string; color: string | null; stabilityDays: number }[];
   current: Record<string, number>;
   disabled?: boolean;
   onSave: (next: Record<string, number>) => Promise<unknown>;
+  /** 編集中の override マップを live で吐く。Plan チャートの live preview 用 */
+  onLocalChange?: (local: Record<string, number>) => void;
 }) {
   const [local, setLocal] = useState<Record<string, number>>(current);
   const [saving, setSaving] = useState(false);
   useEffect(() => { setLocal(current); }, [current]);
+  useEffect(() => { onLocalChange?.(local); }, [local, onLocalChange]);
   const dirty = JSON.stringify(local) !== JSON.stringify(current);
 
   const overrides = useMemo(() => {

@@ -206,7 +206,7 @@ type SectorDef = {
   startDeg: number;
   endDeg: number;
   label: string;
-  view: "edit" | "review" | "throughput" | "plan" | "stats" | "digest";
+  view: "edit" | "plan" | "stats" | "digest";
   color: string;
 };
 
@@ -218,12 +218,11 @@ const SECTORS: SectorDef[] = [
   // 全 6 色を同距離でトーン調整: rainbow の元気は残しつつ vibrancy を半分ほど
   // 抑えて theme と協和。やる気が出る (saturated) と落ち着き (controlled) の
   // 中間。Plan は theme より少し saturated を残してアクセント化。
-  { startDeg: -150, endDeg: -90, label: "Edit", view: "edit", color: "#d75ba5" },          // rich rose (Planned)
-  { startDeg: -90, endDeg: -30, label: "Review", view: "review", color: "#846ce5" },        // rich lavender (First)
-  { startDeg: -30, endDeg: 30, label: "Stats", view: "stats", color: "#da5865" },           // vibrant coral (Miss)
-  { startDeg: 30, endDeg: 90, label: "Plan", view: "plan", color: "#e1662d" },              // vivid terracotta (Rough)
-  { startDeg: 90, endDeg: 150, label: "Output", view: "throughput", color: "#38ad58" }, // forest green (Fluent)
-  { startDeg: 150, endDeg: 210, label: "Digest", view: "digest", color: "#5197e1" },        // denim blue (Done)
+  // Review / Throughput は Plan に吸収済 (2026-06-12)。幾何位置は意図的に空欄。
+  { startDeg: -150, endDeg: -90, label: "Edit", view: "edit", color: "#d75ba5" },          // rich rose
+  { startDeg: -30, endDeg: 30, label: "Stats", view: "stats", color: "#da5865" },           // vibrant coral
+  { startDeg: 30, endDeg: 90, label: "Plan", view: "plan", color: "#e1662d" },              // vivid terracotta
+  { startDeg: 150, endDeg: 210, label: "Digest", view: "digest", color: "#5197e1" },        // denim blue
 ];
 
 function truncate(s: string, n: number): string {
@@ -382,8 +381,8 @@ export default function ScopesHubPage() {
     setCurrentScopeId(scopeId);
     if (view === "edit") {
       setEditingScopeId(scopeId);
-    } else if (view === "review" || view === "throughput" || view === "stats" || view === "digest") {
-      // Plan A: 4 view すべて canonical scope.id 直行
+    } else if (view === "stats" || view === "digest") {
+      // canonical scope.id 直行
       navigate({ to: `/${view}/$scope_id` as string, params: { scope_id: scopeId } });
     } else {
       navigate({ to: `/${view}` as string, search: { scope_id: scopeId } });

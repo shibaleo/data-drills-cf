@@ -4,7 +4,6 @@ import { useState, useEffect } from "react";
 import { Link, usePathname } from "@/lib/router";
 import { SITE_NAME } from "@/lib/site";
 import {
-  Activity,
   BarChart3,
   CalendarRange,
   Info,
@@ -14,7 +13,6 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   PenLine,
-  RotateCw,
   Target,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -60,9 +58,7 @@ function OverdueBadge() {
 const navItems: NavItem[] = [
   // Scope = 「何を演習対象とするか」の入口。一番上。
   { href: "/scopes", label: "Scopes", icon: Target },
-  { href: "/review", label: "Review", icon: RotateCw, Badge: OverdueBadge },
-  { href: "/plan", label: "Plan", icon: CalendarRange },
-  { href: "/throughput", label: "Throughput", icon: Activity },
+  { href: "/plan", label: "Plan", icon: CalendarRange, Badge: OverdueBadge },
   { href: "/stats", label: "Stats", icon: BarChart3 },
   { href: "/digest", label: "Digest", icon: Newspaper, dividerAfter: true },
   { href: "/flashcards", label: "Flashcards", icon: Layers },

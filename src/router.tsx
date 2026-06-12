@@ -13,12 +13,10 @@ import { AuthenticateWithRedirectCallback } from "@clerk/react";
 
 /* ── Lazy page imports ── */
 
-const ReviewPage = lazy(() => import("./app/(pages)/review/page"));
 const StatsPage = lazy(() => import("./app/(pages)/stats/page"));
 const DigestPage = lazy(() => import("./app/(pages)/digest/page"));
 const DigestDetailPage = lazy(() => import("./app/(pages)/digest/$scopeId/page"));
 const StatsDetailPage = lazy(() => import("./app/(pages)/stats/$scopeId/page"));
-const ThroughputPage = lazy(() => import("./app/(pages)/throughput/page"));
 const FlashcardsPage = lazy(() => import("./app/(pages)/flashcards/page"));
 const SubjectsPage = lazy(() => import("./app/(pages)/subjects/page"));
 const LevelsPage = lazy(() => import("./app/(pages)/levels/page"));
@@ -32,8 +30,6 @@ const ScopesPage = lazy(() => import("./app/(pages)/scopes/page"));
 const ScopesNewPage = lazy(() => import("./app/(pages)/scopes/new/page"));
 const ScopesDetailPage = lazy(() => import("./app/(pages)/scopes/$scopeId/page"));
 const PlanPage = lazy(() => import("./app/(pages)/plan/page"));
-const ReviewDetailPage = lazy(() => import("./app/(pages)/review/$scopeId/page"));
-const ThroughputDetailPage = lazy(() => import("./app/(pages)/throughput/$scopeId/page"));
 
 /* ── Route tree ── */
 
@@ -69,36 +65,6 @@ function lazyRoute(
   });
 }
 
-const reviewRoute = createRoute({
-  getParentRoute: () => authLayout,
-  path: "/review",
-  validateSearch: (search: Record<string, unknown>): { scope_id?: string } => ({
-    scope_id: typeof search.scope_id === "string" ? search.scope_id : undefined,
-  }),
-  component: () => (
-    <Suspense>
-      <ReviewPage />
-    </Suspense>
-  ),
-});
-const reviewDetailRoute = createRoute({
-  getParentRoute: () => authLayout,
-  path: "/review/$scope_id",
-  component: () => (
-    <Suspense>
-      <ReviewDetailPage />
-    </Suspense>
-  ),
-});
-const throughputDetailRoute = createRoute({
-  getParentRoute: () => authLayout,
-  path: "/throughput/$scope_id",
-  component: () => (
-    <Suspense>
-      <ThroughputDetailPage />
-    </Suspense>
-  ),
-});
 function scopeSearchRoute(path: string, Component: React.LazyExoticComponent<React.ComponentType>) {
   return createRoute({
     getParentRoute: () => authLayout,
@@ -113,7 +79,6 @@ function scopeSearchRoute(path: string, Component: React.LazyExoticComponent<Rea
     ),
   });
 }
-const throughputRoute = scopeSearchRoute("/throughput", ThroughputPage);
 const statsRoute = scopeSearchRoute("/stats", StatsPage);
 const digestRoute = scopeSearchRoute("/digest", DigestPage);
 const digestDetailRoute = createRoute({
@@ -166,12 +131,12 @@ const scopesDetailRoute = createRoute({
   ),
 });
 
-// / → /review redirect
+// / → /plan redirect
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/",
   beforeLoad: () => {
-    throw redirect({ to: "/review" as string });
+    throw redirect({ to: "/plan" as string });
   },
 });
 
@@ -184,8 +149,6 @@ const ssoCallbackRoute = createRoute({
 
 const routeTree = rootRoute.addChildren([
   authLayout.addChildren([
-    reviewRoute,
-    reviewDetailRoute,
     flashcardsRoute,
     subjectsRoute,
     levelsRoute,
@@ -198,8 +161,6 @@ const routeTree = rootRoute.addChildren([
     scopesNewRoute,
     scopesDetailRoute,
     planRoute,
-    throughputRoute,
-    throughputDetailRoute,
     statsRoute,
     statsDetailRoute,
     digestRoute,
