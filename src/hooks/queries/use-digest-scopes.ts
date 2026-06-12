@@ -14,6 +14,8 @@ export type DigestScopeDetail = ReturnType<typeof adaptDetail>;
 function adaptDetail(d: CanonicalDetail) {
   const fieldIds = d.scope.filter?.fieldIds;
   const derivedFieldId = fieldIds && fieldIds.length > 0 ? fieldIds[0] : null;
+  // useScopeDetail と queryKey を共有しているため、milestones / layers を落とすと
+  // 先勝ち cache 起因で後続のフックが壊れる。adapted を superset にしておく。
   return {
     scope: {
       ...d.scope,
@@ -23,6 +25,8 @@ function adaptDetail(d: CanonicalDetail) {
     members: d.members,
     subjects: d.subjects,
     levels: d.levels,
+    milestones: d.milestones,
+    layers: d.layers,
   };
 }
 

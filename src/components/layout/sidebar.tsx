@@ -16,9 +16,6 @@ import {
   Target,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useReviewList } from "@/hooks/queries/use-review";
-import { useQueryClient } from "@tanstack/react-query";
-import { reviewKeys } from "@/hooks/queries/use-review";
 import { UserMenu } from "./user-menu";
 
 // Widths are sourced from CSS vars (see src/app/globals.css :root).
@@ -29,36 +26,12 @@ interface NavItem {
   label: string;
   icon: typeof PenLine;
   dividerAfter?: boolean;
-  Badge?: React.ComponentType;
-}
-
-/* ── Overdue badge ── */
-
-function OverdueBadge() {
-  const qc = useQueryClient();
-  const { data = [] } = useReviewList();
-  const count = data.filter((r) => r.answerCount > 0 && r.daysUntil === 0).length;
-
-  useEffect(() => {
-    const invalidate = () => {
-      qc.invalidateQueries({ queryKey: reviewKeys.all });
-    };
-    window.addEventListener("review-changed", invalidate);
-    return () => window.removeEventListener("review-changed", invalidate);
-  }, [qc]);
-
-  if (count <= 0) return null;
-  return (
-    <span className="absolute -right-2 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-0.5 text-[10px] font-bold leading-none text-destructive-foreground">
-      {count > 99 ? "99+" : count}
-    </span>
-  );
 }
 
 const navItems: NavItem[] = [
   // Scope = 「何を演習対象とするか」の入口。一番上。
   { href: "/scopes", label: "Scopes", icon: Target },
-  { href: "/plan", label: "Plan", icon: CalendarRange, Badge: OverdueBadge },
+  { href: "/plan", label: "Plan", icon: CalendarRange },
   { href: "/stats", label: "Stats", icon: BarChart3 },
   { href: "/digest", label: "Digest", icon: Newspaper, dividerAfter: true },
   { href: "/flashcards", label: "Flashcards", icon: Layers },
@@ -104,7 +77,6 @@ export function SidebarNav({
                 >
                   <div className="relative shrink-0">
                     <item.icon className="size-4" />
-                    {item.Badge && <item.Badge />}
                   </div>
                   <span
                     className={cn(

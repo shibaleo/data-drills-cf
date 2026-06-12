@@ -9,8 +9,8 @@ import { useField } from "@/hooks/use-field";
 import { useSubjects, useLevels } from "@/hooks/queries/use-field-data";
 import { useAnswerHistoryList } from "@/hooks/queries/use-answer-history";
 import { useProblemsList } from "@/hooks/queries/use-problems";
-import { useReviewList } from "@/hooks/queries/use-review";
-import { useScopes, type ScopeDetail } from "@/hooks/queries/use-scopes";
+import { computeNextReview } from "@/lib/review-scoring";
+import { hmsToSeconds } from "@/lib/duration";
 import { useFlashcardsData } from "@/hooks/queries/use-flashcards";
 import { useTogglEntries, type TogglEntry } from "@/hooks/queries/use-toggl";
 import { useDigestScope } from "@/hooks/queries/use-digest-scopes";
@@ -214,18 +214,60 @@ export default function DigestPage() {
   //          (= 現 backlog 設定 + その日時点の first_answer_date で allocate)
   const yesterday = useMemo(() => addDays(date, -1), [date]);
 
-  // Review schedule as of yesterday EOD → nextReview === D が今日 due、< D が overdue
-  // 未回答 (answerCount === 0) は Review ページと同様に対象外 (= まだ復習対象ではない)
-  const { data: reviewYesterdayRaw = [] } = useReviewList(scopeFieldId ?? undefined, yesterday);
-  // scope filter を適用 (= scope 配下の problem だけを Review 予実の対象にする)
-  const reviewYesterday = useMemo(
-    () => scopedProblemIds ? reviewYesterdayRaw.filter((r) => scopedProblemIds.has(r.problemId)) : reviewYesterdayRaw,
-    [reviewYesterdayRaw, scopedProblemIds],
-  );
-  const reviewYesterdayAnswered = useMemo(
-    () => reviewYesterday.filter((r) => r.answerCount > 0),
-    [reviewYesterday],
-  );
+  // Review schedule as of yesterday EOD を **client 計算**。
+  // (旧: useReviewList(asOf=yesterday) で server fetch していたが、date を動かす度に
+  //  RPC roundtrip が起きて重かった。allProblems + statuses + scope FSRS override から
+  //  client 計算するとデータが純粋に date 同期で即時更新できる。)
+  type ClientReviewRow = {
+    problemId: string; code: string; name: string | null;
+    lastStatus: string | null; statusColor: string | null;
+    nextReview: string; answerCount: number;
+    standardTime: number | null; lastDuration: number | null;
+  };
+  const stabilityByStatusName = useMemo(() => {
+    const override = (scopeData?.scope.status_stabilities ?? {}) as Record<string, number>;
+    const m = new Map<string, number>();
+    for (const s of statuses) {
+      const v = override[s.name];
+      m.set(s.name, v !== undefined ? v : s.stabilityDays);
+    }
+    return m;
+  }, [statuses, scopeData]);
+  const colorByStatusName = useMemo(() => {
+    const m = new Map<string, string | null>();
+    for (const s of statuses) m.set(s.name, s.color ?? null);
+    return m;
+  }, [statuses]);
+  const reviewYesterdayAnswered = useMemo<ClientReviewRow[]>(() => {
+    if (!allProblems.length) return [];
+    const out: ClientReviewRow[] = [];
+    for (const p of allProblems) {
+      // answers は date ASC ソート済 (route 側で order by date, createdAt)
+      let lastIdx = -1;
+      let answerCountAsOf = 0;
+      for (let i = 0; i < p.answers.length; i++) {
+        if (p.answers[i].date <= yesterday) { lastIdx = i; answerCountAsOf++; }
+        else break;
+      }
+      if (lastIdx < 0) continue;
+      const last = p.answers[lastIdx];
+      const status = last.status ?? null;
+      if (!status) continue;
+      const stab = stabilityByStatusName.get(status) ?? 0;
+      const durSec = last.duration ? hmsToSeconds(last.duration) : null;
+      const nextReview = computeNextReview(last.date, stab, p.standard_time, durSec);
+      out.push({
+        problemId: p.id, code: p.code, name: p.name,
+        lastStatus: status,
+        statusColor: colorByStatusName.get(status) ?? null,
+        nextReview,
+        answerCount: answerCountAsOf,
+        standardTime: p.standard_time,
+        lastDuration: durSec,
+      });
+    }
+    return out;
+  }, [allProblems, yesterday, stabilityByStatusName, colorByStatusName]);
   const reviewPlanToday = useMemo(
     () => reviewYesterdayAnswered.filter((r) => r.nextReview === date),
     [reviewYesterdayAnswered, date],
@@ -236,85 +278,61 @@ export default function DigestPage() {
     [reviewYesterdayAnswered, date],
   );
 
-  // Scopes (= 旧 backlog): active な scope 全部を取り、各 scope の detail を fan-out
-  // して allocate(today=D) で D 割当を抽出
-  const { data: allScopes = [] } = useScopes();
-  const activeBacklogs = useMemo(
-    () => allScopes.filter((s) => s.is_active && !s.valid_to),
-    [allScopes],
-  );
-  const activeBacklogIds = useMemo(() => activeBacklogs.map((b) => b.id).sort().join(","), [activeBacklogs]);
-  const { data: backlogDetailMap = new Map<string, ScopeDetail>() } = useQuery({
-    queryKey: ["digest", "scope-details", activeBacklogIds],
-    queryFn: async () => {
-      const out = new Map<string, ScopeDetail>();
-      for (const b of activeBacklogs) {
-        try {
-          const json = await unwrap(rpc.api.v1.scopes[":id"].detail.$get({ param: { id: b.id } }));
-          out.set(b.id, json.data);
-        } catch { /* skip missing */ }
-      }
-      return out;
-    },
-    enabled: !!scopeFieldId && activeBacklogs.length > 0,
-    staleTime: 5 * 60_000,
-  });
+  // 当該 scope の detail を取り、allocate(today=D) で D 割当を抽出。
+  // (旧: 全 active scope 横断 fan-out。Digest が scope 単位の view である以上、
+  //  cross-scope は scope picker で切り替える方が筋。画面遷移時の重い再計算も解消。)
+  // useDigestScope と同じ data を再利用。useScopeDetail は queryKey 共有衝突するため使わない
+  const currentScopeDetail = scopeData ?? null;
 
   type PlanItem = { problemId: string; code: string; name: string | null; sub: string | null };
   const backlogPlanToday = useMemo<PlanItem[]>(() => {
+    const d = currentScopeDetail;
+    if (!d) return [];
     const out: PlanItem[] = [];
-    const seen = new Set<string>();
-    for (const d of backlogDetailMap.values()) {
-      if (!d) continue;
-      // backlog ページの effectiveMembers と同じ:
-      //   allProblems を scope.filter で絞り、firstAnswerDate を D-1 までの answer から再計算
-      //   (= 「その日時点で未着手だった問題」を future として allocate に渡す)
-      const filtered = allProblems.length > 0
-        ? applyMemberFilter(
-            allProblems.map((p) => ({
-              subjectId: p.subject_id || null,
-              levelId: p.level_id || null,
-              _orig: p,
-            })),
-            d.scope.filter ?? {},
-          )
-        : null;
-      const members: MemberInput[] = filtered
-        ? filtered
-            .map(({ _orig: p }) => ({
-              id: p.id,
-              code: p.code,
-              name: p.name || null,
-              standardTimeSec: p.standard_time,
-              firstAnswerDate: p.answers.find((a) => a.date <= yesterday)?.date ?? null,
-            }))
-            .sort((a, b) => a.code === b.code ? a.id.localeCompare(b.id) : a.code.localeCompare(b.code))
-        : d.members.map((m) => ({
-            id: m.id, code: m.code, name: m.name,
-            standardTimeSec: m.standard_time, firstAnswerDate: m.first_answer_date,
-          }));
-      const ms: Milestone[] = d.milestones.map((m) => ({
-        target: m.target, date: m.date, id: m.id, layer_id: m.layer_id,
-      }));
-      const allocated = allocate(
-        members, ms, d.scope.daily_minutes, date,
-        d.scope.time_multiplier_pct, d.scope.weekday_weights,
-      );
-      const memberInfo = new Map(members.map((m) => [m.id, { code: m.code, name: m.name }]));
-      for (const a of allocated) {
-        if (a.date !== date || a.side !== "future" || seen.has(a.problemId)) continue;
-        seen.add(a.problemId);
-        const m = memberInfo.get(a.problemId);
-        out.push({
-          problemId: a.problemId,
-          code: m?.code ?? a.code,
-          name: m?.name ?? a.name,
-          sub: d.scope.name,
-        });
-      }
+    const filtered = allProblems.length > 0
+      ? applyMemberFilter(
+          allProblems.map((p) => ({
+            subjectId: p.subject_id || null,
+            levelId: p.level_id || null,
+            _orig: p,
+          })),
+          d.scope.filter ?? {},
+        )
+      : null;
+    const members: MemberInput[] = filtered
+      ? filtered
+          .map(({ _orig: p }) => ({
+            id: p.id,
+            code: p.code,
+            name: p.name || null,
+            standardTimeSec: p.standard_time,
+            firstAnswerDate: p.answers.find((a) => a.date <= yesterday)?.date ?? null,
+          }))
+          .sort((a, b) => a.code === b.code ? a.id.localeCompare(b.id) : a.code.localeCompare(b.code))
+      : d.members.map((m) => ({
+          id: m.id, code: m.code, name: m.name,
+          standardTimeSec: m.standard_time, firstAnswerDate: m.first_answer_date,
+        }));
+    const ms: Milestone[] = d.milestones.map((m) => ({
+      target: m.target, date: m.date, id: m.id, layer_id: m.layer_id,
+    }));
+    const allocated = allocate(
+      members, ms, d.scope.daily_minutes, date,
+      d.scope.time_multiplier_pct, d.scope.weekday_weights,
+    );
+    const memberInfo = new Map(members.map((m) => [m.id, { code: m.code, name: m.name }]));
+    for (const a of allocated) {
+      if (a.date !== date || a.side !== "future") continue;
+      const m = memberInfo.get(a.problemId);
+      out.push({
+        problemId: a.problemId,
+        code: m?.code ?? a.code,
+        name: m?.name ?? a.name,
+        sub: d.scope.name,
+      });
     }
     return out;
-  }, [date, yesterday, allProblems, backlogDetailMap]);
+  }, [date, yesterday, allProblems, currentScopeDetail]);
 
   // 実績 = D に answer 行があった problemId
   const actualProblemIds = useMemo(
@@ -343,7 +361,7 @@ export default function DigestPage() {
     return m;
   }, [reviewPlanToday, reviewOverdue, backlogPlanToday, dayRows]);
   const plannedTotalDue = reviewPlanToday.length + reviewOverdue.length + backlogPlanToday.length;
-  const plannedDoneCount = (() => {
+  const plannedDoneCount = useMemo(() => {
     const due = new Set<string>();
     for (const r of reviewPlanToday) due.add(r.problemId);
     for (const r of reviewOverdue) due.add(r.problemId);
@@ -351,7 +369,7 @@ export default function DigestPage() {
     let n = 0;
     for (const id of due) if (actualProblemIds.has(id)) n++;
     return n;
-  })();
+  }, [reviewPlanToday, reviewOverdue, backlogPlanToday, actualProblemIds]);
 
   const reviewTodayDone = reviewPlanToday.filter((r) => actualProblemIds.has(r.problemId));
   const reviewTodayMissed = reviewPlanToday.filter((r) => !actualProblemIds.has(r.problemId));
@@ -409,16 +427,14 @@ export default function DigestPage() {
     };
   }, [rows, date]);
 
-  // Daily target (分) — D の曜日に対応する weekday_weight × daily_minutes を active backlog 合算
+  // Daily target (分) — D の曜日に対応する weekday_weight × daily_minutes (current scope のみ)
   const dailyTargetMin = useMemo(() => {
-    const dow = new Date(`${date}T12:00:00+09:00`).getDay();  // 0=Sun..6=Sat
-    let total = 0;
-    for (const b of activeBacklogs) {
-      const w = (b.weekday_weights as number[])?.[dow] ?? 1;
-      total += b.daily_minutes * w;
-    }
-    return Math.round(total);
-  }, [activeBacklogs, date]);
+    const s = currentScopeDetail?.scope;
+    if (!s) return 0;
+    const dow = new Date(`${date}T12:00:00+09:00`).getDay();
+    const w = (s.weekday_weights as number[] | undefined)?.[dow] ?? 1;
+    return Math.round(s.daily_minutes * w);
+  }, [currentScopeDetail, date]);
 
   // Toggl Education entry を project_name 別に集計 (= 分野別勉強時間)。
   // 日跨ぎ entry は当日に重なった部分だけカウント。
