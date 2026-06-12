@@ -32,11 +32,20 @@ CF Pages (React + Vite SPA, TanStack Router)
 
 ### Key Features
 
-- **Review** — FSRS を参考にしたスケジューリングアルゴリズムによる復習 Tetris (問題ごとに次回復習日を算出)
+- **Plan** — FSRS を参考にしたスケジューリングアルゴリズムでの復習 + 配分 Tetris。過去実績 (answer-history overlay) + 未来予測 (smooth-future / review-next) を 1 view に統合 (2026-06-12 に旧 Review/Throughput ページを吸収)
 - **Scope** — cross-field 横断可能な member 絞り込み (`fieldIds[]/subjectIds[]/levelIds[]`) + scheduling (daily_minutes, weekday_weights) + milestone 配分 Tetris を 1 entity に統合。bitemporal 履歴付き
-- **Throughput** — 過去回答実績の Tetris (1 answer = 1 ブロック、色は直前 status)
 - **Flashcards** — Markdown 表裏のフラッシュカード演習
 - **PDF エクスポート** — 選択問題を Render サービスで PDF 結合
+
+### Status 位相 (2 軸モデル, 2026-06-12 確定)
+
+ステータス集合は単一 ordinal ではなく **時間軸 × 評価軸 + メタ**:
+
+- **時間軸**: past / future (past は PAST_ALPHA で沈める)
+- **評価軸**: `no-grade (Planned/Unrated)` → Miss → Rough → Fair → Fluent → **Solid** (旧 Done を rename, 2026-06-11)
+- **メタ**: Over budget / Overflow (塗らず border のみ)
+
+Planned (未来 no-grade) と Unrated (過去 no-grade、旧 First) は同 phase の時間両端で同色 (purple-300/400)。詳細: [docs/ui-refinement-open-questions.md](docs/ui-refinement-open-questions.md), 実装: [src/lib/block-color.ts](src/lib/block-color.ts)
 
 ### Domain Model (Phase 4 完了後)
 
@@ -46,7 +55,7 @@ user
   ├─ review_type   (review 評価種別。Miss/Rough/Fair/Fluent 等)
   └─ scope         (bitemporal、cross-field 横断 member filter + scheduling + goals)
         ├─ goal_layer / goal_milestone (scope_id FK)
-        └─ review_scope / throughput_scope / stats_scope / digest_scope は scope_id FK で接続
+        └─ stats_scope / digest_scope は scope_id FK で接続 (review_scope / throughput_scope は 2026-06-12 にコード側削除、DB table は温存)
 ```
 
 - 旧 `project`/`backlog`/`tag`/`topic`/`problem_tag` は drop 済 (2026-06-09)

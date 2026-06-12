@@ -33,6 +33,7 @@ import {
   tableMarkdownPlugin,
   dollarMathPlugin,
   tableDelimiterTrimmer,
+  listContinuationExtension,
 } from "@/lib/codemirror-extensions";
 
 interface Props {
@@ -58,6 +59,7 @@ export default function CodemirrorEditor({ defaultValue, onChange, placeholder, 
       collapseOnSelectionFacet.of(true),
       history(),
       indentUnit.of("    "),
+      listContinuationExtension, // defaultKeymap より前に置いて Enter を先取り
       keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
       EditorView.lineWrapping,
 

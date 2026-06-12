@@ -10,8 +10,10 @@ import {
   ViewPlugin,
   Decoration,
   WidgetType,
+  keymap,
   type ViewUpdate,
   type DecorationSet,
+  type KeyBinding,
 } from "@codemirror/view";
 import { EditorState, RangeSetBuilder, Transaction } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
@@ -41,6 +43,54 @@ function renderMath(source: string, displayMode: boolean): string {
   mathRenderCache.set(key, html);
   return html;
 }
+
+/* ── Bullet/numbered list 自動継続 keymap ──
+ *
+ * Enter で:
+ *   - "- text" / "* text" / "+ text" / "N. text" の末尾 → 同 prefix で改行
+ *   - 空の bullet 行 ("- ") で Enter → bullet を消してプレーン改行 (= リスト終了)
+ */
+
+const LIST_LINE_RE = /^(\s*)([-*+]|\d+\.)(\s+)(.*)$/;
+
+function continueListOnEnter(view: EditorView): boolean {
+  const { state, dispatch } = view;
+  const { from, to } = state.selection.main;
+  if (from !== to) return false; // 範囲選択中は default 動作
+  const line = state.doc.lineAt(from);
+  // カーソルが行末でなければ default 動作 (途中改行は割り込まない)
+  if (from !== line.to) return false;
+  const m = LIST_LINE_RE.exec(line.text);
+  if (!m) return false;
+  const [, indent, marker, , content] = m;
+  // bullet コンテンツが空 → リスト終了。行頭から末尾までを消去 + プレーン改行
+  if (content.length === 0) {
+    dispatch({
+      changes: { from: line.from, to: line.to, insert: "" },
+      selection: { anchor: line.from },
+    });
+    return true;
+  }
+  // 番号付きリストは番号インクリメント
+  let nextMarker = marker;
+  if (/^\d+\.$/.test(marker)) {
+    const n = parseInt(marker, 10);
+    nextMarker = `${n + 1}.`;
+  }
+  const insert = `\n${indent}${nextMarker} `;
+  dispatch({
+    changes: { from, to, insert },
+    selection: { anchor: from + insert.length },
+    scrollIntoView: true,
+  });
+  return true;
+}
+
+export const listContinuationKeymap: KeyBinding[] = [
+  { key: "Enter", run: continueListOnEnter },
+];
+
+export const listContinuationExtension = keymap.of(listContinuationKeymap);
 
 /* ── Table delimiter trimmer ──
  *

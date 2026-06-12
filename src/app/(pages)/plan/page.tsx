@@ -33,6 +33,7 @@ import { assembleOverlay } from "@/lib/answer-history-overlay";
 import { ScopePlanRightPanel } from "@/components/scope-plan-right-panel";
 import { ScopeFSRSOverridePanel } from "@/components/scope-fsrs-override-panel";
 import { BlockLegend, type LegendEntry } from "@/components/block-legend";
+import { TogglStudyWidget } from "@/components/toggl-study-widget";
 import { COLOR_PLANNED } from "@/lib/block-color";
 import { useAnswerHistoryList } from "@/hooks/queries/use-answer-history";
 import { Button } from "@/components/ui/button";
@@ -454,6 +455,9 @@ export default function PlanPage() {
 
   return (
     <div className="p-3 md:p-4 flex flex-col gap-2">
+      <div className="flex justify-end">
+        <TogglStudyWidget />
+      </div>
       <div className="rounded-md border p-3 space-y-2">
         <div className="flex items-center gap-2">
           <Popover>
