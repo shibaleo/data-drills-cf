@@ -155,26 +155,27 @@ export default function AboutPage() {
         <section>
           <h2 className="text-base font-semibold mb-2">主要ビュー</h2>
           <p className="text-xs text-muted-foreground leading-relaxed">
-            学習の3つの軸 — <strong>復習・新規消化・実績振り返り</strong> — をそれぞれ独立した Tetris チャートで可視化する。
+            scope を主体に、4 つのビューがそれぞれ別の問いに答える: <strong>Plan = 計画と実行 / Stats = 傾向分析 / Digest = 1 日の事実 / Edit = 設定</strong>
           </p>
           <ul className="text-xs text-muted-foreground space-y-2 mt-2">
             <li>
-              <span className="text-foreground font-medium">Review</span> —
-              FSRS を参考にしたスケジューリングアルゴリズムで、今日と未来の復習予定を Tetris で表示。
-              当日の問題数はサイドバーバッジに出る。
-              Subject / Level / Status でフィルタ、選択した問題を PDF 一括出力可能。
+              <span className="text-foreground font-medium">Plan</span> —
+              復習 (FSRS スケジューリング) + 新規消化 (milestone 配分) + 過去実績 を 1 つの Tetris に統合。
+              選択 problem の時間順 polyline (past=solid / future=dashed) で学習トラジェクトリを可視化。
+              daily_minutes / 時間係数 / 曜日別ウェイト / FSRS slider を live preview で編集、テーブルから PDF 一括出力可能。
             </li>
             <li>
-              <span className="text-foreground font-medium">Backlog</span> —
-              未着手の新規問題を milestone (目標達成日と問題数) に沿って未来の日付に配分する Tetris。
-              daily_minutes / 時間係数 / 曜日別ウェイトを編集して計画を組む。
-              レイヤごとに色・線種を分けて複数の目標群を可視化。bitemporal 履歴により編集記録が残る。
+              <span className="text-foreground font-medium">Stats</span> —
+              複数日にまたがる<strong>傾向と分析</strong>のビュー。Status transition matrix、cycle time (Unrated → Solid 所要日数)、
+              hour pattern (時間帯別パフォーマンス)、activity heatmap (90 日連続性)、Up/Same/Down トレンドなど。
+              「最近どう変化してるか」「どんなパターンがあるか」を読む。
             </li>
             <li>
-              <span className="text-foreground font-medium">Throughput</span> —
-              過去の全解答実績を時系列の Tetris で振り返るビュー。
-              1 answer = 1 ブロック、色は <strong>その回答の直前 status</strong>。
-              初回回答は pink で表示。バーストや谷といった学習リズムが可視化される。
+              <span className="text-foreground font-medium">Digest</span> —
+              <strong>ある 1 日の勉強に関する時間の使い方を一覧する</strong>ビュー。Toggl の study 時間 / project 別配分 / daily target との差 /
+              timeline (時間帯分布) を中心に、勉強最適化のための<strong>事実提示</strong>に徹する。
+              生活コンテキスト (睡眠・1 日の時間バジェット) も合わせて表示予定。
+              複数日にまたがる傾向分析は Stats に切り分けている。
             </li>
             <li>
               <span className="text-foreground font-medium">Flashcards</span> —
@@ -182,7 +183,7 @@ export default function AboutPage() {
             </li>
             <li>
               <span className="text-foreground font-medium">PDF エクスポート</span> —
-              Review / Backlog のテーブルから問題を選択し、Render 経由で PDF 結合・ダウンロード。
+              Plan のテーブルから問題を選択し、AWS Lambda (fallback: Render) 経由で PDF 結合・ダウンロード。
               新規問題スキャン・自動登録は外部 Python ツール (taxtant) に分離済。
             </li>
           </ul>
@@ -204,7 +205,7 @@ export default function AboutPage() {
               </tr>
             </thead>
             <tbody className="text-muted-foreground">
-              <tr className="border-b border-border/50"><td className="pr-4 py-1" style={{ color: COLOR_PLANNED }}>Planned</td><td className="py-1">Backlog 未着手</td></tr>
+              <tr className="border-b border-border/50"><td className="pr-4 py-1" style={{ color: COLOR_PLANNED }}>Planned</td><td className="py-1">未来側、未着手 (no-grade)</td></tr>
               <tr className="border-b border-border/50"><td className="pr-4 py-1" style={{ color: COLOR_FIRST_ATTEMPT }}>Unrated</td><td className="py-1">初回回答 (評価グレードなし、Planned と同 phase の past 側)</td></tr>
               <tr className="border-b border-border/50"><td className="pr-4 py-1" style={{ color: "#ef4444" }}>Repeat after Miss</td><td className="py-1">red 塗り</td></tr>
               <tr className="border-b border-border/50"><td className="pr-4 py-1" style={{ color: "#f97316" }}>Repeat after Rough</td><td className="py-1">orange 塗り</td></tr>
