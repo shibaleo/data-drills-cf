@@ -28,8 +28,8 @@ import { useScopes, useScope, useScopeDetail, useScopeTimeline, useUpdateScope, 
 import { useProblemDialogs } from "@/hooks/use-problem-dialogs";
 import { usePageTitle } from "@/lib/page-context";
 import { todayJST } from "@/lib/date-utils";
-import { computeNextReview } from "@/lib/review-scoring";
 import { BacklogChart, type BacklogChartHandle, type OverlayBlock } from "@/components/backlog-chart";
+import { assembleOverlay } from "@/lib/answer-history-overlay";
 import { ScopePlanRightPanel } from "@/components/scope-plan-right-panel";
 import { ScopeFSRSOverridePanel } from "@/components/scope-fsrs-override-panel";
 import { BlockLegend, type LegendEntry } from "@/components/block-legend";
@@ -47,8 +47,6 @@ import { usePdfExport } from "@/hooks/use-pdf-export";
 import { PdfExportButton } from "@/components/pdf-export-button";
 import { useFilterPrefs, useSaveFilterPrefs } from "@/hooks/queries/use-filter-prefs";
 
-/** 順調な status 進行順 (= 各 review を smooth に通した場合の遷移) */
-const SMOOTH_CHAIN = ["Rough", "Fair", "Fluent", "Solid"] as const;
 /** Solid の繰り返しはこの期間まで */
 const PROJECTION_HORIZON_DAYS = 365 * 2;
 
@@ -56,55 +54,6 @@ function addDays(s: string, n: number): string {
   const d = new Date(`${s}T00:00:00Z`);
   d.setUTCDate(d.getUTCDate() + n);
   return d.toISOString().slice(0, 10);
-}
-
-/** 順調進行を仮定して将来 review 日を生成する。
- *  - currentStatus が SMOOTH_CHAIN に無ければ (First / Miss など) → chain 先頭から開始
- *  - Done に到達後はそのまま Done インターバルで horizon までループ
- */
-function projectSmoothFuture(args: {
-  problemId: string;
-  code: string;
-  name: string | null;
-  startDate: string;
-  startStatus: string;
-  standardTimeSec: number | null;
-  lastDurationSec: number | null;
-  statusByName: Map<string, { stabilityDays: number; color: string | null }>;
-  horizonDate: string;
-}): OverlayBlock[] {
-  const out: OverlayBlock[] = [];
-  let date = args.startDate;
-  let chainIdx = SMOOTH_CHAIN.indexOf(args.startStatus as (typeof SMOOTH_CHAIN)[number]);
-  let safety = 200;
-  while (safety-- > 0) {
-    const nextIdx = Math.min(chainIdx + 1, SMOOTH_CHAIN.length - 1);
-    const nextStatusName = SMOOTH_CHAIN[nextIdx];
-    const info = args.statusByName.get(nextStatusName);
-    if (!info || info.stabilityDays <= 0) break;
-    const projected = computeNextReview(date, info.stabilityDays, args.standardTimeSec, args.lastDurationSec);
-    if (projected <= date) break;
-    if (projected > args.horizonDate) break;
-    // 実効 interval (= projected - date) を stabilityDays として渡す。
-    // info.stabilityDays をそのまま使うと status 一様になるので、std/dur で
-    // 補正された個別の interval を反映する。
-    const intervalDays = Math.round(
-      (new Date(`${projected}T00:00:00Z`).getTime() - new Date(`${date}T00:00:00Z`).getTime()) / 86400000,
-    );
-    out.push({
-      problemId: args.problemId,
-      code: args.code,
-      name: args.name,
-      date: projected,
-      color: info.color ?? "#a3a3a3",
-      statusName: nextStatusName,
-      stabilityDays: intervalDays,
-      kind: "smooth-future",
-    });
-    date = projected;
-    chainIdx = nextIdx;
-  }
-  return out;
 }
 
 export default function PlanPage() {
@@ -292,82 +241,21 @@ export default function PlanPage() {
 
   const horizonDate = useMemo(() => addDays(today, PROJECTION_HORIZON_DAYS), [today]);
 
-  // FSRS-projected smooth-future overlay (allocated 上に積む)
+  // overlay assembly は lib に切り出し済。Plan は inputs を渡すだけ。
   const overlayItems = useMemo<OverlayBlock[]>(() => {
     if (!detail) return [];
-    const out: OverlayBlock[] = [];
-    // backlog 未来 (= 初回予定日) からは smooth-future を投影
-    const memberStd = new Map<string, number | null>();
-    for (const m of detail.members) memberStd.set(m.id, m.standard_time);
-    for (const a of edit.allocated) {
-      if (a.side !== "future") continue;
-      out.push(
-        ...projectSmoothFuture({
-          problemId: a.problemId,
-          code: a.code,
-          name: a.name,
-          startDate: a.date,
-          startStatus: "First",
-          standardTimeSec: memberStd.get(a.problemId) ?? null,
-          lastDurationSec: null,
-          statusByName,
-          horizonDate,
-        }),
-      );
-    }
-    // 既に答えたことがある問題 (review 持ち) の next review + smooth-future
-    for (const r of reviewQuery.data ?? []) {
-      if (r.answerCount === 0) continue;
-      const stColor = r.statusColor ?? "#a3a3a3";
-      // r.nextReview は server で std/dur 補正済み next review 日。今日からの interval
-      // を stabilityDays として渡し、同 status の中でも問題ごとに stability が
-      // 違うようにする。
-      const reviewIntervalDays = Math.max(0, Math.round(
-        (new Date(`${r.nextReview}T00:00:00Z`).getTime() - new Date(`${today}T00:00:00Z`).getTime()) / 86400000,
-      ));
-      out.push({
-        problemId: r.problemId,
-        code: r.code,
-        name: r.name,
-        date: r.nextReview,
-        color: stColor,
-        statusName: r.lastStatus,
-        stabilityDays: reviewIntervalDays,
-        kind: "review-next",
-      });
-      out.push(
-        ...projectSmoothFuture({
-          problemId: r.problemId,
-          code: r.code,
-          name: r.name,
-          startDate: r.nextReview,
-          startStatus: r.lastStatus,
-          standardTimeSec: r.standardTime ?? null,
-          lastDurationSec: r.lastDuration ?? null,
-          statusByName,
-          horizonDate,
-        }),
-      );
-    }
-    // 過去実績 (throughput) を opacity 0.5 で overlay。allocated past (= first attempt) と
-    // 重複しないよう、prevStatus 非 null の re-answer のみ採用。
-    // asOf 再生時はチャート上 today より右の点が今日扱いになるので today 比較で十分。
-    for (const r of throughputQuery.data ?? []) {
-      if (r.date > today) continue;             // 未来は overlay しない (当日 re-answer は含める)
-      if (!r.prevStatusColor) continue;          // 初回回答は allocated past 側で表示済
-      out.push({
-        problemId: r.problemId,
-        code: r.code,
-        name: r.name,
-        date: r.date,
-        color: r.prevStatusColor,
-        statusName: r.prevStatusName,
-        opacity: 0.5,
-        kind: "past-throughput",
-      });
-    }
-    return out;
-  }, [detail, edit.allocated, reviewQuery.data, statusByName, horizonDate, throughputQuery.data, today]);
+    const memberStandardTimeById = new Map<string, number | null>();
+    for (const m of detail.members) memberStandardTimeById.set(m.id, m.standard_time);
+    return assembleOverlay({
+      memberStandardTimeById,
+      allocated: edit.allocated,
+      reviews: reviewQuery.data ?? [],
+      history: throughputQuery.data ?? [],
+      statusByName,
+      horizonDate,
+      today,
+    });
+  }, [detail, edit.allocated, reviewQuery.data, throughputQuery.data, statusByName, horizonDate, today]);
 
   // problemId → {subjectId, levelId} の lookup (filter 用)
   const problemMeta = useMemo(() => {
