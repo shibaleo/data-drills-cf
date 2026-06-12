@@ -353,7 +353,7 @@ export default function PlanPage() {
     // 重複しないよう、prevStatus 非 null の re-answer のみ採用。
     // asOf 再生時はチャート上 today より右の点が今日扱いになるので today 比較で十分。
     for (const r of throughputQuery.data ?? []) {
-      if (r.date >= today) continue;            // 未来 / 当日は overlay しない
+      if (r.date > today) continue;             // 未来は overlay しない (当日 re-answer は含める)
       if (!r.prevStatusColor) continue;          // 初回回答は allocated past 側で表示済
       out.push({
         problemId: r.problemId,

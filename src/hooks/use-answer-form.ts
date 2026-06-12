@@ -3,7 +3,10 @@
 import { useState, useMemo } from 'react'
 import { useForm, useFieldArray, type UseFormReturn, type UseFieldArrayReturn } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { answerHistoryKeys } from '@/hooks/queries/use-answer-history'
+import { reviewKeys } from '@/hooks/queries/use-review'
+import { problemsKeys } from '@/hooks/queries/use-problems'
 import { toast } from 'sonner'
 import { rpc, unwrap } from '@/lib/rpc-client'
 import { nextStatus } from '@/lib/answer-utils'
@@ -123,6 +126,7 @@ export type AnswerFormHandle = {
 /* ── Create answer form ── */
 
 export function useAnswerForm(fieldId: string | null, onSaved: (problemId: string) => void) {
+  const qc = useQueryClient()
   const { statuses } = useField()
   const { data: subjects = [] } = useSubjects(fieldId ?? undefined)
   const { data: levels = [] } = useLevels(fieldId ?? undefined)
@@ -236,6 +240,10 @@ export function useAnswerForm(fieldId: string | null, onSaved: (problemId: strin
         }
       }
 
+      // 解答作成で影響を受ける query cache を invalidate
+      qc.invalidateQueries({ queryKey: answerHistoryKeys.all })
+      qc.invalidateQueries({ queryKey: reviewKeys.all })
+      qc.invalidateQueries({ queryKey: problemsKeys.all })
       toast.success('解答を登録しました')
       setOpen(false)
       onSaved(pid)
@@ -262,6 +270,7 @@ export function useAnswerForm(fieldId: string | null, onSaved: (problemId: strin
 /* ── Edit answer form ── */
 
 export function useEditAnswerForm(fieldId: string | null, onSaved: (problemId: string) => void) {
+  const qc = useQueryClient()
   const { statuses } = useField()
   const [open, setOpen] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -394,6 +403,9 @@ export function useEditAnswerForm(fieldId: string | null, onSaved: (problemId: s
         }
       }
 
+      qc.invalidateQueries({ queryKey: answerHistoryKeys.all })
+      qc.invalidateQueries({ queryKey: reviewKeys.all })
+      qc.invalidateQueries({ queryKey: problemsKeys.all })
       toast.success('解答を更新しました')
       setOpen(false)
       onSaved(pid)
