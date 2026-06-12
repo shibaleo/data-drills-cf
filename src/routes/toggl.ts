@@ -36,7 +36,37 @@ type Row = {
   social_category: string | null;
 };
 
+type CategoryRow = {
+  name: string;
+  name_ja: string | null;
+  description: string | null;
+  coarse_category: string | null;
+  sort_order: number | null;
+};
+
 const app = new Hono<Env>()
+  /**
+   * GET /categories — Toggl personal_category 一覧 (dim_category_time_personal)。
+   * digest の生活軸 tab を DWH 駆動で動的描画するための master endpoint。
+   * Education/Sleep/Exercise/... を sort_order 昇順で返す。
+   */
+  .get("/categories", async (c) => {
+    // dim は dbt の default schema (= profile target.schema = data_warehouse) に materialize される
+    const rows = await neonSql<CategoryRow[]>`
+      SELECT name, name_ja, description, coarse_category, sort_order
+      FROM data_warehouse.dim_category_time_personal
+      ORDER BY sort_order ASC NULLS LAST, name ASC
+    `;
+    return c.json({
+      data: rows.map((r) => ({
+        name: r.name,
+        name_ja: r.name_ja,
+        description: r.description,
+        coarse_category: r.coarse_category,
+        sort_order: r.sort_order == null ? null : Number(r.sort_order),
+      })),
+    });
+  })
   /**
    * GET /time-entries?from=YYYY-MM-DD&to=YYYY-MM-DD[&category=...]
    *

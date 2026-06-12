@@ -58,6 +58,22 @@ export default function DigestPage() {
   const subjectMap = useMemo(() => new Map(subjects.map((s) => [s.id, s])), [subjects]);
   const levelMap = useMemo(() => new Map(levels.map((l) => [l.id, l])), [levels]);
   const [date, setDate] = useState<string>(todayJST());
+
+  // 生活軸タブは data-drills 側で定義する (Toggl は 1 data source であって
+  // Digest の "切り口" とは別次元の概念)。各 tab は 1 つ以上の Toggl personal_category を
+  // 集約 — 将来 DWH 側で Vitals → Nutrition/Hygiene 等に分割されてもここで吸収可能。
+  type DigestTab = { id: string; label: string; togglCategories: string[] };
+  const categoryTabs = useMemo<DigestTab[]>(() => [
+    { id: "study", label: "勉強", togglCategories: ["Education"] },
+    { id: "sleep", label: "睡眠", togglCategories: ["Sleep"] },
+    { id: "exercise", label: "運動", togglCategories: ["Exercise"] },
+    { id: "work", label: "仕事", togglCategories: ["Work"] },
+    { id: "social", label: "社交", togglCategories: ["Social"] },
+  ], []);
+  const [activeCategory, setActiveCategory] = useState<string>("study");
+  const activeTab = categoryTabs.find((t) => t.id === activeCategory) ?? categoryTabs[0];
+  const activeTogglCategories = activeTab.togglCategories;
+  const activeLabel = activeTab.label;
   useEffect(() => { setCurrentScopeId(scopeId); }, [scopeId, setCurrentScopeId]);
 
   // scope_id 指定で server-side filter (cross-field 対応)
@@ -142,13 +158,14 @@ export default function DigestPage() {
     });
   }, [togglEntriesAll, date]);
 
-  // Study 時間は日跨ぎ entry を当日に重なった秒数だけカウントする
+  // 当日カテゴリ時間 (= active tab に紐づく personal_category 群の合計)。日跨ぎ entry は重なった秒数のみ
   const togglStudySec = useMemo(() => {
     const dayStart = new Date(`${date}T00:00:00+09:00`).getTime();
     const dayEnd = new Date(`${addDays(date, 1)}T00:00:00+09:00`).getTime();
+    const catSet = new Set(activeTogglCategories);
     let sec = 0;
     for (const e of togglEntries) {
-      if (e.personal_category !== "Education") continue;
+      if (!e.personal_category || !catSet.has(e.personal_category)) continue;
       const s = new Date(e.started_at).getTime();
       const dur = e.duration_seconds ?? 0;
       const en = e.stopped_at ? new Date(e.stopped_at).getTime() : s + dur * 1000;
@@ -156,17 +173,18 @@ export default function DigestPage() {
       sec += overlap / 1000;
     }
     return Math.round(sec);
-  }, [togglEntries, date]);
+  }, [togglEntries, date, activeTogglCategories]);
 
-  // 選択日を最右に置いた 7 日 study 時間 sparkbar。
+  // 選択日を最右に置いた 7 日 sparkbar (active tab の categories 合算)。
   // 各日を project_color ごとの分数 segments に分けて stacked 表示する。
   const study7d = useMemo(() => {
     type Day = { date: string; min: number; byColor: Map<string, number> };
     const days: Day[] = [];
     for (let i = 6; i >= 0; i--) days.push({ date: addDays(date, -i), min: 0, byColor: new Map() });
     const byDate = new Map(days.map((d) => [d.date, d] as const));
+    const catSet = new Set(activeTogglCategories);
     for (const e of togglEntriesAll) {
-      if (e.personal_category !== "Education") continue;
+      if (!e.personal_category || !catSet.has(e.personal_category)) continue;
       if (e.duration_seconds == null || e.duration_seconds <= 0) continue;
       const jst = new Date(new Date(e.started_at).getTime() + JST_OFFSET_MS).toISOString().slice(0, 10);
       const slot = byDate.get(jst);
@@ -177,7 +195,7 @@ export default function DigestPage() {
       slot.byColor.set(color, (slot.byColor.get(color) ?? 0) + minutes);
     }
     return days;
-  }, [togglEntriesAll, date]);
+  }, [togglEntriesAll, date, activeTogglCategories]);
 
   const dayFlashcardReviews = useMemo(() => {
     return fcReviews
@@ -435,6 +453,7 @@ export default function DigestPage() {
 
   const sortedStatuses = [...statuses].sort((a, b) => a.sortOrder - b.sortOrder);
 
+
   return (
     <div className="p-3 md:p-4 flex flex-col gap-3 max-w-4xl">
       {/* 日付ナビ */}
@@ -496,6 +515,27 @@ export default function DigestPage() {
         </span>
       </div>
 
+      {/* 生活軸タブ (Toggl personal_category 別) */}
+      <div className="flex items-center gap-1 border-b border-border">
+        {categoryTabs.map((t) => {
+          const active = t.id === activeCategory;
+          return (
+            <button key={t.id} type="button"
+              onClick={() => setActiveCategory(t.id)}
+              className={`relative px-3 py-1.5 text-xs font-medium transition-colors ${
+                active
+                  ? "text-foreground"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}>
+              {t.label}
+              {active && (
+                <span className="absolute left-2 right-2 -bottom-px h-0.5 bg-primary rounded-t"/>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
       {/* サマリ */}
       <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
         <SummaryCard label="Attempts" value={dayRows.length.toString()}
@@ -505,7 +545,7 @@ export default function DigestPage() {
           value={summary.totalSec > 0 ? fmtSec(summary.totalSec) : "—"}
           sub={dayRows.length > 0 ? `Avg ${fmtSec(summary.totalSec / Math.max(1, dayRows.filter((r) => r.duration).length))}` : ""}
           trend={formatDelta(summary.totalSec, trend.totalSecAvg)}/>
-        <SummaryCard label="Study time (Toggl)"
+        <SummaryCard label={`${activeLabel} time (Toggl)`}
           value={togglStudySec > 0 ? fmtSec(togglStudySec) : "—"}
           sub={
             togglStudySec > 0 && summary.totalSec > 0
@@ -815,7 +855,7 @@ function DayTimeline({
   flashcards: { id: string; quality: number; reviewedAt: string; front: string }[];
   onOpenAnswer: (problemId: string) => void;
 }) {
-  const HOUR_START = 5;
+  const HOUR_START = 0;
   const HOUR_END = 24;
   const ROW_H = 16;
   const TRACK_TOGGL_TOP = 14;
