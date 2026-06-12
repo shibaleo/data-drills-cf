@@ -467,14 +467,15 @@ export default function PlanPage() {
         <div className="flex items-center gap-2">
           <Popover>
             <PopoverTrigger asChild>
-              <Button size="sm" variant="outline" className="h-6 px-2 relative shrink-0" title="Filter">
+              <button type="button" title="Filter"
+                className="relative inline-flex items-center justify-center size-6 rounded-md border shrink-0 transition-colors text-foreground hover:bg-muted">
                 <Filter className="size-3"/>
                 {activeFilterCount > 0 && (
                   <span className="absolute -top-1.5 -right-1.5 size-4 rounded-full bg-primary text-primary-foreground text-[9px] flex items-center justify-center">
                     {activeFilterCount}
                   </span>
                 )}
-              </Button>
+              </button>
             </PopoverTrigger>
             <PopoverContent className="w-52 p-3 space-y-3" align="start">
               {(detail.subjects?.length ?? 0) > 0 && (
