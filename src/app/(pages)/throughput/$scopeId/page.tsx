@@ -2,7 +2,7 @@
 import { useMemo, useRef, useEffect, useState, useCallback } from "react";
 import { useField } from "@/hooks/use-field";
 import { useSubjects, useLevels } from "@/hooks/queries/use-field-data";
-import { useThroughputList, type ThroughputRow } from "@/hooks/queries/use-throughput";
+import { useAnswerHistoryList, type AnswerHistoryRow } from "@/hooks/queries/use-answer-history";
 import { useProblemsList } from "@/hooks/queries/use-problems";
 import { useProblemDialogs } from "@/hooks/use-problem-dialogs";
 import { blockColor, COLOR_FIRST_ATTEMPT } from "@/lib/block-color";
@@ -89,7 +89,7 @@ export default function ThroughputPage() {
 
   // 常に全データを fetch、asOf によるフィルタはクライアントで適用 (= アニメーション再生に必要)。
   // scope_id 指定で server-side member filter を適用 (cross-field 対応)
-  const { data: rawRows = [], isLoading } = useThroughputList(undefined, null, scopeId);
+  const { data: rawRows = [], isLoading } = useAnswerHistoryList(undefined, null, scopeId);
   const rows = useMemo(() => {
     let base = rawRows;
     if (asOf) base = base.filter((r) => r.date <= asOf);
@@ -160,7 +160,7 @@ export default function ThroughputPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterSubjects, filterLevels, filterPrevStatuses, maxRowsCap]);
 
-  const filtered = useMemo<ThroughputRow[]>(() => rows.filter((r) => {
+  const filtered = useMemo<AnswerHistoryRow[]>(() => rows.filter((r) => {
     if (filterSubjects.size > 0 && (!r.subjectId || !filterSubjects.has(r.subjectId))) return false;
     if (filterLevels.size > 0 && (!r.levelId || !filterLevels.has(r.levelId))) return false;
     if (filterPrevStatuses.size > 0) {
@@ -185,7 +185,7 @@ export default function ThroughputPage() {
   const today = useMemo(() => asOf ?? todayJST(), [asOf]);
 
   const { startDate, totalDays, columns, maxStack, renderCap, todayIdx } = useMemo(() => {
-    const cols = new Map<string, ThroughputRow[]>();
+    const cols = new Map<string, AnswerHistoryRow[]>();
     for (const r of filtered) {
       const arr = cols.get(r.date) ?? [];
       arr.push(r);

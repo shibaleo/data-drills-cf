@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { useField } from "@/hooks/use-field";
-import { useThroughputList } from "@/hooks/queries/use-throughput";
+import { useAnswerHistoryList } from "@/hooks/queries/use-answer-history";
 import { useProblemsList } from "@/hooks/queries/use-problems";
 import { useProblemDialogs } from "@/hooks/use-problem-dialogs";
 import { useStatsScope, useUpdateStatsScope, useArchiveStatsScope, useStatsScopeRevisions } from "@/hooks/queries/use-stats-scopes";
@@ -60,7 +60,7 @@ export default function StatsDetailPage() {
   }, [scopeQuery.data]);
 
   // scope_id 指定で server-side member filter 適用 (cross-field)
-  const { data: rawRows = [] } = useThroughputList(undefined, null, scopeId);
+  const { data: rawRows = [] } = useAnswerHistoryList(undefined, null, scopeId);
   const { data: allProblems = [] } = useProblemsList(scopeFieldId ?? undefined);
   const hasLocalFilter = !!(localFilter.fieldIds?.length || localFilter.subjectIds?.length || localFilter.levelIds?.length);
   const rows = useMemo(() => {

@@ -16,7 +16,7 @@ import reviewTags from "@/routes/review-tags";
 import problemFiles from "@/routes/problem-files";
 import problemsList from "@/routes/problems-list";
 import review from "@/routes/review";
-import throughput from "@/routes/throughput";
+import answerHistory from "@/routes/answer-history";
 import pdfExport from "@/routes/pdf-export";
 import filterPrefs from "@/routes/filter-prefs";
 import googleAuth from "@/routes/google-auth";
@@ -70,7 +70,7 @@ const v1 = new Hono<Env>()
   .route("/problem-files", problemFiles)
   .route("/problems-list", problemsList)
   .route("/review", review)
-  .route("/throughput", throughput)
+  .route("/answer-history", answerHistory)
   .route("/pdf-export", pdfExport)
   .route("/filter-prefs", filterPrefs)
   .route("/toggl", toggl)

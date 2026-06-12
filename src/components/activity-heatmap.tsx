@@ -7,10 +7,10 @@
  * - 上に 現在ストリーク / 最長 / 総日数 を表示
  */
 import { useMemo } from "react";
-import type { ThroughputRow } from "@/hooks/queries/use-throughput";
+import type { AnswerHistoryRow } from "@/hooks/queries/use-answer-history";
 
 type Props = {
-  rows: ThroughputRow[];
+  rows: AnswerHistoryRow[];
   /** 表示日数 (default 90) */
   days?: number;
 };

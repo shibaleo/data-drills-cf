@@ -7,10 +7,10 @@
  * 短い bar = 速い = 冴えている。難しい問題は冴えてる時間帯に。
  */
 import { useMemo } from "react";
-import type { ThroughputRow } from "@/hooks/queries/use-throughput";
+import type { AnswerHistoryRow } from "@/hooks/queries/use-answer-history";
 
 type Props = {
-  rows: ThroughputRow[];
+  rows: AnswerHistoryRow[];
 };
 
 const JST_OFFSET_MS = 9 * 60 * 60 * 1000;

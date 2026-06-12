@@ -2,7 +2,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import { rpc, unwrap } from "@/lib/rpc-client";
 import { problemsKeys } from "@/hooks/queries/use-problems";
 import { reviewKeys } from "@/hooks/queries/use-review";
-import { throughputKeys } from "@/hooks/queries/use-throughput";
+import { answerHistoryKeys } from "@/hooks/queries/use-answer-history";
 import { fieldKeys } from "@/hooks/queries/use-field-data";
 
 /**
@@ -29,9 +29,9 @@ export function prefetchScopeFieldResources(qc: QueryClient, fieldId: string) {
       staleTime: 5 * 60_000,
     }),
     qc.prefetchQuery({
-      queryKey: throughputKeys.list(fieldId, null),
+      queryKey: answerHistoryKeys.list(fieldId, null),
       queryFn: async () => {
-        const json = await unwrap(rpc.api.v1.throughput.$get({ query: { field_id: fieldId } }));
+        const json = await unwrap(rpc.api.v1["answer-history"].$get({ query: { field_id: fieldId } }));
         return json.data;
       },
       staleTime: 5 * 60_000,

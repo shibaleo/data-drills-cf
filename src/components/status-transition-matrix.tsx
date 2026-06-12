@@ -8,7 +8,7 @@
  *  - 左下 (Done → Miss など) = decay = stability_days を伸ばしすぎ
  */
 import { useMemo } from "react";
-import type { ThroughputRow } from "@/hooks/queries/use-throughput";
+import type { AnswerHistoryRow } from "@/hooks/queries/use-answer-history";
 import { COLOR_FIRST_ATTEMPT } from "@/lib/block-color";
 
 type Status = { id: string; name: string; color: string | null; sortOrder: number };
@@ -16,7 +16,7 @@ type Status = { id: string; name: string; color: string | null; sortOrder: numbe
 type Period = "7d" | "30d" | "all";
 
 type Props = {
-  rows: ThroughputRow[];      // throughput の filtered rows (date 順)
+  rows: AnswerHistoryRow[];   // answer-history の filtered rows (date 順)
   statuses: Status[];          // answer_status (sortOrder 順)
   period: Period;
   setPeriod: (p: Period) => void;

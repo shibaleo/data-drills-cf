@@ -222,7 +222,7 @@ const SECTORS: SectorDef[] = [
   { startDeg: -90, endDeg: -30, label: "Review", view: "review", color: "#846ce5" },        // rich lavender (First)
   { startDeg: -30, endDeg: 30, label: "Stats", view: "stats", color: "#da5865" },           // vibrant coral (Miss)
   { startDeg: 30, endDeg: 90, label: "Plan", view: "plan", color: "#e1662d" },              // vivid terracotta (Rough)
-  { startDeg: 90, endDeg: 150, label: "Throughput", view: "throughput", color: "#38ad58" }, // forest green (Fluent)
+  { startDeg: 90, endDeg: 150, label: "Output", view: "throughput", color: "#38ad58" }, // forest green (Fluent)
   { startDeg: 150, endDeg: 210, label: "Digest", view: "digest", color: "#5197e1" },        // denim blue (Done)
 ];
 
@@ -464,9 +464,8 @@ export default function ScopesHubPage() {
                 key={i}
                 d={hexPath(px, py, SMALL_SIDE - 1.6, 1.6)}
                 fill="none"
-                stroke="currentColor"
-                strokeOpacity={0.32}
-                strokeWidth={1.4}
+                stroke="hsl(var(--border))"
+                strokeWidth={0.5}
                 strokeLinejoin="round"
                 vectorEffect="non-scaling-stroke"
               />
@@ -716,22 +715,13 @@ export default function ScopesHubPage() {
                       adjEnd,
                       5,
                     );
-                    // 全 sector で中心 arc に統一 (innerR と outerR の中点)。
-                    // 上半円 (Edit/Review/Stats/Digest) は時計回り baseline (sweep=1)、
-                    // 下半円 (Plan/Throughput) は反時計回り (sweep=0) でテキスト上向き。
+                    // ラベルは水平固定 (textPath をやめてラベル長差による環の歪みを解消)。
+                    // sector の幾何中点 (midDeg, textArcR) に配置。
                     const textArcR = (MENU_INNER_R + outerR) / 2;
                     const midDeg = (adjStart + adjEnd) / 2;
-                    const isBottomHalf = midDeg > 0 && midDeg < 180;
-                    const aStart = (adjStart * Math.PI) / 180;
-                    const aEnd = (adjEnd * Math.PI) / 180;
-                    const p1x = cx + textArcR * Math.cos(aStart);
-                    const p1y = cy + textArcR * Math.sin(aStart);
-                    const p2x = cx + textArcR * Math.cos(aEnd);
-                    const p2y = cy + textArcR * Math.sin(aEnd);
-                    const textArcPath = isBottomHalf
-                      ? `M ${p2x} ${p2y} A ${textArcR} ${textArcR} 0 0 0 ${p1x} ${p1y}`
-                      : `M ${p1x} ${p1y} A ${textArcR} ${textArcR} 0 0 1 ${p2x} ${p2y}`;
-                    const arcId = `arc-${scope.id}-${sec.label}`;
+                    const midRad = (midDeg * Math.PI) / 180;
+                    const labelX = cx + textArcR * Math.cos(midRad);
+                    const labelY = cy + textArcR * Math.sin(midRad);
                     // 他 sector が hover 中ならこの sector はスモーク (dim)
                     const anySecHovered = hoveredSec !== null;
                     const dim = anySecHovered && !isSecHover;
@@ -775,24 +765,19 @@ export default function ScopesHubPage() {
                                 : "none",
                             }}
                           />
-                          {/* hidden path for textPath */}
-                          <path id={arcId} d={textArcPath} fill="none" stroke="none" />
                           <text
+                            x={labelX}
+                            y={labelY}
                             fontSize={16}
                             fontWeight={900}
                             fill={isSecHover ? sec.color : "white"}
                             letterSpacing={0.6}
+                            textAnchor="middle"
                             dominantBaseline="central"
                             style={{ transition: "fill 160ms ease-out" }}
                             className="pointer-events-none select-none"
                           >
-                            <textPath
-                              href={`#${arcId}`}
-                              startOffset="50%"
-                              textAnchor="middle"
-                            >
-                              {sec.label}
-                            </textPath>
+                            {sec.label}
                           </text>
                         </g>
                       </g>

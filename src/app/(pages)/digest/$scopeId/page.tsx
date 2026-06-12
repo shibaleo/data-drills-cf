@@ -7,7 +7,7 @@ import { Link, useParams } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useField } from "@/hooks/use-field";
 import { useSubjects, useLevels } from "@/hooks/queries/use-field-data";
-import { useThroughputList } from "@/hooks/queries/use-throughput";
+import { useAnswerHistoryList } from "@/hooks/queries/use-answer-history";
 import { useProblemsList } from "@/hooks/queries/use-problems";
 import { useReviewList } from "@/hooks/queries/use-review";
 import { useScopes, type ScopeDetail } from "@/hooks/queries/use-scopes";
@@ -59,7 +59,7 @@ export default function DigestPage() {
   useEffect(() => { setCurrentScopeId(scopeId); }, [scopeId, setCurrentScopeId]);
 
   // scope_id 指定で server-side filter (cross-field 対応)
-  const { data: rowsAll = [] } = useThroughputList(undefined, null, scopeId);
+  const { data: rowsAll = [] } = useAnswerHistoryList(undefined, null, scopeId);
   const { data: allProblemsAll = [] } = useProblemsList(scopeFieldId ?? undefined);
 
   // scope.filter で scope 配下の problem set を確定 → allProblems を絞り込む
