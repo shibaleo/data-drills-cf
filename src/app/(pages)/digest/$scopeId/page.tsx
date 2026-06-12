@@ -322,6 +322,37 @@ export default function DigestPage() {
     [dayRows],
   );
 
+  // 「当日以前にやるべきだったこと」の "今の状態" を集計。
+  //   - 完了した item は今日の結果 status で着色 (= grade 上がった/下がった効果が即色に反映)
+  //   - 未完了 item は prior status (= 昨日と同じ状態のまま)
+  //   - 色 1 つに意味を絞れる: "今、このタイプ (status) の item は何個あるか"
+  const dueCurrentStatusCounts = useMemo(() => {
+    const m = new Map<string, number>();
+    // problemId → 今日の結果 status (dayRows の最後の entry)
+    const todayStatusByProblem = new Map<string, string>();
+    for (const r of dayRows) {
+      if (r.statusName) todayStatusByProblem.set(r.problemId, r.statusName);
+    }
+    const bump = (problemId: string, prior: string) => {
+      const cur = todayStatusByProblem.get(problemId) ?? prior;
+      m.set(cur, (m.get(cur) ?? 0) + 1);
+    };
+    for (const r of reviewPlanToday) bump(r.problemId, r.lastStatus ?? "Unrated");
+    for (const r of reviewOverdue) bump(r.problemId, r.lastStatus ?? "Unrated");
+    for (const b of backlogPlanToday) bump(b.problemId, "Unrated");
+    return m;
+  }, [reviewPlanToday, reviewOverdue, backlogPlanToday, dayRows]);
+  const plannedTotalDue = reviewPlanToday.length + reviewOverdue.length + backlogPlanToday.length;
+  const plannedDoneCount = (() => {
+    const due = new Set<string>();
+    for (const r of reviewPlanToday) due.add(r.problemId);
+    for (const r of reviewOverdue) due.add(r.problemId);
+    for (const b of backlogPlanToday) due.add(b.problemId);
+    let n = 0;
+    for (const id of due) if (actualProblemIds.has(id)) n++;
+    return n;
+  })();
+
   const reviewTodayDone = reviewPlanToday.filter((r) => actualProblemIds.has(r.problemId));
   const reviewTodayMissed = reviewPlanToday.filter((r) => !actualProblemIds.has(r.problemId));
   const backlogTodayDone = backlogPlanToday.filter((b) => actualProblemIds.has(b.problemId));
@@ -409,37 +440,6 @@ export default function DigestPage() {
     }
     return [...map.values()].sort((a, b) => b.sec - a.sec);
   }, [togglEntries, date]);
-
-  // 当日 dayRows の subject / level 別 breakdown
-  type BreakdownRow = { id: string | null; name: string; color: string | null; count: number; sec: number };
-  const breakdown = useMemo(() => {
-    const bySubject = new Map<string | null, BreakdownRow>();
-    const byLevel = new Map<string | null, BreakdownRow>();
-    function bump(
-      map: Map<string | null, BreakdownRow>,
-      id: string | null,
-      name: string,
-      color: string | null,
-      sec: number,
-    ) {
-      const cur = map.get(id) ?? { id, name, color, count: 0, sec: 0 };
-      cur.count += 1;
-      cur.sec += sec;
-      map.set(id, cur);
-    }
-    for (const r of dayRows) {
-      const sec = r.duration ?? 0;
-      const sub = r.subjectId ? subjectMap.get(r.subjectId) : null;
-      const lvl = r.levelId ? levelMap.get(r.levelId) : null;
-      bump(bySubject, sub?.id ?? null, sub?.name ?? "(unset)", sub?.color ?? null, sec);
-      bump(byLevel, lvl?.id ?? null, lvl?.name ?? "(unset)", lvl?.color ?? null, sec);
-    }
-    const sortDesc = (a: BreakdownRow, b: BreakdownRow) => b.count - a.count;
-    return {
-      subject: [...bySubject.values()].sort(sortDesc),
-      level: [...byLevel.values()].sort(sortDesc),
-    };
-  }, [dayRows, subjectMap, levelMap]);
 
   const formatDelta = (curr: number, avg: number) => {
     if (avg <= 0) return null;
@@ -538,9 +538,18 @@ export default function DigestPage() {
 
       {/* サマリ */}
       <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
-        <SummaryCard label="Attempts" value={dayRows.length.toString()}
-          sub={`${summary.uniqueProblems} problems`}
-          trend={formatDelta(dayRows.length, trend.attemptsAvg)}/>
+        <DueCurrentStateCard
+          statuses={sortedStatuses}
+          counts={dueCurrentStatusCounts}
+          doneCount={plannedDoneCount}
+          totalDue={plannedTotalDue}
+        />
+        <ThroughputCard
+          statuses={sortedStatuses}
+          counts={summary.byStatus}
+          totalAttempts={dayRows.length}
+          totalDue={plannedTotalDue}
+        />
         <SummaryCard label="Problem time"
           value={summary.totalSec > 0 ? fmtSec(summary.totalSec) : "—"}
           sub={dayRows.length > 0 ? `Avg ${fmtSec(summary.totalSec / Math.max(1, dayRows.filter((r) => r.duration).length))}` : ""}
@@ -611,17 +620,11 @@ export default function DigestPage() {
         <SummaryCard label="Up / Same / Down"
           value={`${summary.up} / ${summary.same} / ${summary.down}`}
           sub={summary.first > 0 ? `First ${summary.first}` : ""}/>
-        <StatusMixCard
-          statuses={sortedStatuses}
-          counts={summary.byStatus}
-        />
       </div>
 
-      {/* 分野別 breakdown (subject / level / Toggl Education project) */}
-      {(dayRows.length > 0 || togglEducationByProject.length > 0) && (
-        <div className="rounded-md border p-3 grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
-          <BreakdownColumn title="Subject" rows={breakdown.subject} totalSec={summary.totalSec}/>
-          <BreakdownColumn title="Level" rows={breakdown.level} totalSec={summary.totalSec}/>
+      {/* Toggl project 別 breakdown — どの project (簿記/財表 等) に時間を割いたか */}
+      {togglEducationByProject.length > 0 && (
+        <div className="rounded-md border p-3 text-xs">
           <TogglProjectColumn rows={togglEducationByProject}/>
         </div>
       )}
@@ -1078,56 +1081,6 @@ function PlanSection({
 }
 
 /**
- * 1 軸 (subject / level / topic) のカウント + 時間の breakdown 列。
- * row.color あれば色ドットを表示。バーは時間ベース (sec / totalSec)。
- */
-function BreakdownColumn({
-  title, rows, totalSec,
-}: {
-  title: string;
-  rows: { id: string | null; name: string; color: string | null; count: number; sec: number }[];
-  totalSec: number;
-}) {
-  if (rows.length === 0) {
-    return (
-      <div className="space-y-1.5">
-        <div className="text-[10px] text-muted-foreground uppercase tracking-wide">{title}</div>
-        <div className="text-[10px] text-muted-foreground italic">None</div>
-      </div>
-    );
-  }
-  const maxCount = rows.reduce((m, r) => Math.max(m, r.count), 1);
-  return (
-    <div className="space-y-1.5">
-      <div className="text-[10px] text-muted-foreground uppercase tracking-wide">{title}</div>
-      <ul className="space-y-1">
-        {rows.map((r) => {
-          const pct = (r.count / maxCount) * 100;
-          const secPct = totalSec > 0 ? Math.round((r.sec / totalSec) * 100) : 0;
-          return (
-            <li key={r.id ?? "_"} className="space-y-0.5">
-              <div className="flex items-baseline gap-1.5 text-[11px]">
-                {r.color && (
-                  <span className="inline-block size-2 rounded-full shrink-0" style={{ backgroundColor: r.color }}/>
-                )}
-                <span className="flex-1 truncate">{r.name}</span>
-                <span className="tabular-nums text-muted-foreground shrink-0">{r.count}</span>
-                {totalSec > 0 && (
-                  <span className="tabular-nums text-[9px] text-muted-foreground shrink-0">({secPct}%)</span>
-                )}
-              </div>
-              <div className="h-1 rounded-full bg-muted overflow-hidden">
-                <div className="h-full bg-foreground/40" style={{ width: `${pct}%` }}/>
-              </div>
-            </li>
-          );
-        })}
-      </ul>
-    </div>
-  );
-}
-
-/**
  * Toggl Education category の project_name 別時間 breakdown 列。
  * 「読みっぱなし vs 解いてる」の分野別比較に Subject 列と並べて使う。
  */
@@ -1195,48 +1148,123 @@ function SummaryCard({ label, value, sub, trend, chart }: {
  * Status mix を比率バーで表示。各 status の color を反映、ホバーで数字。
  * 数字羅列より一瞬で偏り (Miss 多い / Fluent 多い 等) が見える。
  */
-function StatusMixCard({
-  statuses, counts,
+const UNRATED_COLOR = "#c084fc"; // = COLOR_PLANNED (block-color.ts と同じ)
+
+function statusOrderWithUnrated(
+  statuses: { id: string; name: string; color?: string | null; sortOrder: number }[],
+): { id: string; name: string; color: string }[] {
+  return [
+    { id: "_unrated", name: "Unrated", color: UNRATED_COLOR },
+    ...statuses.map((s) => ({ id: s.id, name: s.name, color: s.color ?? "hsl(var(--muted-foreground))" })),
+  ];
+}
+
+type DonutEntry = { id: string; name: string; color: string; n: number };
+
+function StatusDonut({
+  entries, total, label, centerTop, centerBottom,
+}: {
+  entries: DonutEntry[];
+  total: number;
+  label: string;
+  centerTop: string | number;
+  centerBottom?: string | number;
+}) {
+  const SIZE = 64;
+  const R = 24;
+  const STROKE = 8;
+  const CIRC = 2 * Math.PI * R;
+  let acc = 0;
+  return (
+    <div className="rounded-md border p-3 flex flex-col gap-1 min-h-[88px]">
+      <div className="text-[10px] text-muted-foreground uppercase tracking-wide">{label}</div>
+      <div className="flex items-center gap-3">
+        <svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`} className="shrink-0">
+          <circle cx={SIZE/2} cy={SIZE/2} r={R} fill="none" stroke="hsl(var(--muted))" strokeWidth={STROKE}/>
+          <g transform={`rotate(-90 ${SIZE/2} ${SIZE/2})`}>
+            {total > 0 && entries.map(({ id, name, color, n }) => {
+              if (n === 0) return null;
+              const len = (n / total) * CIRC;
+              const dasharray = `${len} ${CIRC - len}`;
+              const dashoffset = -acc;
+              acc += len;
+              return (
+                <circle key={id} cx={SIZE/2} cy={SIZE/2} r={R} fill="none"
+                  stroke={color} strokeWidth={STROKE}
+                  strokeDasharray={dasharray}
+                  strokeDashoffset={dashoffset}>
+                  <title>{`${name}: ${n} (${Math.round((n/total)*100)}%)`}</title>
+                </circle>
+              );
+            })}
+          </g>
+          <text x={SIZE/2} y={centerBottom != null ? SIZE/2 - 4 : SIZE/2} textAnchor="middle" dominantBaseline="central"
+            className="fill-foreground" fontSize={13} fontWeight={700}
+            style={{ fontVariantNumeric: "tabular-nums" }}>
+            {centerTop}
+          </text>
+          {centerBottom != null && (
+            <text x={SIZE/2} y={SIZE/2 + 8} textAnchor="middle" dominantBaseline="central"
+              className="fill-muted-foreground" fontSize={8}
+              style={{ fontVariantNumeric: "tabular-nums" }}>
+              {centerBottom}
+            </text>
+          )}
+        </svg>
+        <div className="flex flex-wrap gap-x-1.5 gap-y-0.5 text-[9px] tabular-nums leading-none">
+          {entries.filter((e) => e.n > 0).map((e) => (
+            <span key={e.id} className="inline-flex items-center gap-0.5 whitespace-nowrap" title={`${e.name}: ${e.n}`}>
+              <span className="inline-block size-1.5 rounded-full" style={{ backgroundColor: e.color }}/>
+              <span className="text-foreground">{e.n}</span>
+            </span>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * 「当日以前にやるべきだったこと」の "今の状態" を単一 donut で。
+ * 完了 item は今日の status、未完了は prior status で着色 → 色 1 つの意味が一意。
+ */
+function DueCurrentStateCard({
+  statuses, counts, doneCount, totalDue,
 }: {
   statuses: { id: string; name: string; color?: string | null; sortOrder: number }[];
   counts: Map<string, number>;
+  doneCount: number;
+  totalDue: number;
 }) {
-  const entries = statuses.map((s) => ({ s, n: counts.get(s.name) ?? 0 }));
-  const total = entries.reduce((sum, e) => sum + e.n, 0);
+  const entries: DonutEntry[] = statusOrderWithUnrated(statuses).map((e) => ({
+    ...e, n: counts.get(e.name) ?? 0,
+  }));
   return (
-    <div className="rounded-md border p-3 flex flex-col gap-1.5 min-h-[88px]">
-      <div className="flex items-baseline justify-between gap-1">
-        <div className="text-[10px] text-muted-foreground uppercase tracking-wide">Status mix</div>
-        <div className="text-[10px] text-muted-foreground tabular-nums">{total}</div>
-      </div>
-      {total === 0 ? (
-        <div className="text-base font-semibold tabular-nums text-muted-foreground">—</div>
-      ) : (
-        <>
-          <div className="flex h-3 w-full rounded-sm overflow-hidden bg-muted">
-            {entries.map(({ s, n }) => {
-              if (n === 0) return null;
-              const pct = (n / total) * 100;
-              return (
-                <div key={s.id}
-                  style={{ width: `${pct}%`, backgroundColor: s.color ?? "hsl(var(--muted-foreground))" }}
-                  title={`${s.name}: ${n} (${Math.round(pct)}%)`}/>
-              );
-            })}
-          </div>
-          <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-[9px] tabular-nums">
-            {entries.map(({ s, n }) => (
-              <span key={s.id} className="inline-flex items-center gap-1">
-                <span className="inline-block size-1.5 rounded-full"
-                  style={{ backgroundColor: s.color ?? "hsl(var(--muted-foreground))" }}/>
-                <span className={n === 0 ? "text-muted-foreground" : "text-foreground"}>
-                  {s.name.slice(0, 1)}:{n}
-                </span>
-              </span>
-            ))}
-          </div>
-        </>
-      )}
-    </div>
+    <StatusDonut entries={entries} total={totalDue}
+      label="Backlog"
+      centerTop={doneCount} centerBottom={`/ ${totalDue}`}/>
+  );
+}
+
+/**
+ * 今日の attempts の output status 分布。Due カードと同じ分母 (= totalDue) を中央に
+ * 出して、両者の進捗を同スケールで読めるようにする。
+ * 中央 = attempts / due (extra 学習で attempts > due の場合は ring が full + overflow 表示)。
+ */
+function ThroughputCard({
+  statuses, counts, totalAttempts, totalDue,
+}: {
+  statuses: { id: string; name: string; color?: string | null; sortOrder: number }[];
+  counts: Map<string, number>;
+  totalAttempts: number;
+  totalDue: number;
+}) {
+  const entries: DonutEntry[] = statusOrderWithUnrated(statuses).map((e) => ({
+    ...e, n: counts.get(e.name) ?? 0,
+  }));
+  return (
+    <StatusDonut entries={entries} total={totalAttempts}
+      label="Throughput"
+      centerTop={totalAttempts} centerBottom={`/ ${totalDue}`}/>
   );
 }
