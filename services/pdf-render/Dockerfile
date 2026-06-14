@@ -1,6 +1,6 @@
 # Build context: monorepo root (so we can copy pdf-core too).
 # Render dashboard: rootDir = "" (repo root), Dockerfile path = "services/pdf-render/Dockerfile"
-FROM node:20-slim
+FROM node:22-slim
 
 WORKDIR /app
 
