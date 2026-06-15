@@ -1,30 +1,17 @@
 /**
- * habit feature の mock データ + OverlayBlock 変換。
+ * habit feature の mock cell generator + OverlayBlock 変換。
  *
  * 本実装の意図:
- *   - /habits ページの UI shell を mock で先に動かして UX を確定する
- *   - schema / API / Worker on-demand sync が決まったら、この mock を
- *     useQuery 経由の real data 取得に置き換える
+ *   - habit 定義そのものは ④ で API 経由に切り替え済 (`useHabits()` → `HabitRow[]`)
+ *   - cell (done/planned/future-slot) はまだ ⑤ Worker on-demand sync + warehouse
+ *     JOIN を実装していないので、当面は mock 生成
  *   - UI 側 (HabitsPage / TetrisChart) は data の出所を知らず、
- *     `HabitOverlayInput[]` → `OverlayBlock[]` の adapter だけ参照する
+ *     `HabitDoneCell[]` → `OverlayBlock[]` の adapter だけ参照する
+ *   - ⑥ で `useHabitCells` hook に置き換え、本ファイルの `buildMockCells` は削除
  */
 
 import type { OverlayBlock } from "@/components/tetris";
-
-export type HabitCadence = "daily" | "weekly";
-
-export type HabitDef = {
-  id: string;
-  name: string;
-  cadence: HabitCadence;
-  /** OverlayBlock.color にそのまま流す (Tailwind 色を hex 化) */
-  categoryColor: string;
-  /** Toggl 上の (project_name, description) 完全一致タプル */
-  togglProject: string;
-  togglDescription: string;
-  minutesEstimate: number;
-  active: boolean;
-};
+import type { HabitRow } from "@/hooks/queries/use-habits";
 
 /**
  * tetris 上での habit cell の意味分類。既存 Plan の overlay 規約に揃える:
@@ -42,81 +29,6 @@ export type HabitDoneCell = {
   kind: HabitCellKind;
 };
 
-/* ── Mock catalog ──────────────────────────────────────────────── */
-
-export const MOCK_HABITS: HabitDef[] = [
-  {
-    id: "h_brush",
-    name: "Brush teeth",
-    cadence: "daily",
-    categoryColor: "#06b6d4",  // cyan-500 (Hygiene)
-    togglProject: "Hygiene",
-    togglDescription: "brush teeth",
-    minutesEstimate: 5,
-    active: true,
-  },
-  {
-    id: "h_wash_face",
-    name: "Wash face",
-    cadence: "daily",
-    categoryColor: "#06b6d4",
-    togglProject: "Hygiene",
-    togglDescription: "wash the face",
-    minutesEstimate: 3,
-    active: true,
-  },
-  {
-    id: "h_shower",
-    name: "Shower",
-    cadence: "daily",
-    categoryColor: "#06b6d4",
-    togglProject: "Hygiene",
-    togglDescription: "shower",
-    minutesEstimate: 15,
-    active: true,
-  },
-  {
-    id: "h_skincare",
-    name: "Skincare",
-    cadence: "daily",
-    categoryColor: "#06b6d4",
-    togglProject: "Hygiene",
-    togglDescription: "skincare",
-    minutesEstimate: 10,
-    active: true,
-  },
-  {
-    id: "h_laundry",
-    name: "Laundry",
-    cadence: "weekly",
-    categoryColor: "#f59e0b",  // amber-500 (Chores)
-    togglProject: "Chores",
-    togglDescription: "laundry",
-    minutesEstimate: 30,
-    active: true,
-  },
-  {
-    id: "h_cooking",
-    name: "Cooking",
-    cadence: "weekly",
-    categoryColor: "#f59e0b",
-    togglProject: "Chores",
-    togglDescription: "cooking",
-    minutesEstimate: 60,
-    active: true,
-  },
-  {
-    id: "h_dishes",
-    name: "Wash dishes",
-    cadence: "daily",
-    categoryColor: "#f59e0b",
-    togglProject: "Chores",
-    togglDescription: "wash the dishes",
-    minutesEstimate: 15,
-    active: true,
-  },
-];
-
 /* ── Date helpers (UTC ベース、tetris と揃える) ──────────────── */
 
 function addDays(s: string, n: number): string {
@@ -127,7 +39,7 @@ function addDays(s: string, n: number): string {
 
 /**
  * 今日基準で過去 pastDays + 未来 futureDays のセルを生成する mock。
- * 実装時はここを「warehouse JOIN + Worker delta union」に差し替える。
+ * ⑤⑥ で warehouse JOIN + Worker delta union に差し替える。
  *
  * mock の振る舞い:
  *   - past: cadence に応じた確率で done を散布
@@ -135,14 +47,14 @@ function addDays(s: string, n: number): string {
  *   - future: future-slot を cadence に応じて配置
  */
 export function buildMockCells(
-  habits: HabitDef[],
+  habits: HabitRow[],
   today: string,
   pastDays = 30,
   futureDays = 7,
 ): HabitDoneCell[] {
   const cells: HabitDoneCell[] = [];
   for (const h of habits) {
-    if (!h.active) continue;
+    if (!h.isActive) continue;
 
     // past: done だけ throughput として表示 (missed は absence で表現)
     for (let i = pastDays; i >= 1; i--) {
@@ -185,7 +97,7 @@ function hashHit(seed: string, p: number): boolean {
 
 export function toOverlayBlocks(
   cells: HabitDoneCell[],
-  habitsById: Map<string, HabitDef>,
+  habitsById: Map<string, HabitRow>,
 ): OverlayBlock[] {
   const out: OverlayBlock[] = [];
   for (const c of cells) {

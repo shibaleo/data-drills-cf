@@ -1,10 +1,10 @@
 import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import type { HabitDef } from "@/lib/habit-mock";
+import type { HabitRow } from "@/hooks/queries/use-habits";
 
 type Props = {
-  habits: HabitDef[];
+  habits: HabitRow[];
   onAdd?: () => void;
   onEdit?: (id: string) => void;
 };
