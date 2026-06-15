@@ -62,12 +62,17 @@ const app = new Hono<Env>()
     const userId = c.get("authResult").userId;
 
     // 1. 論理今日 = 最新の main sleep の sleep_date。
-    //    fallback: JST 暦日。
+    //    ただし、その sleep の end_at が 24h 以上前なら "今日分が未 sync" と
+    //    判断して JST 暦日にフォールバック (Fitbit/Google Health の sync が
+    //    daily 1 回しか走らないため、起きた直後〜夕方は warehouse 未反映の
+    //    可能性が高い)。24h cutoff は「20h 連続起床」までの夜更かしには
+    //    対応しつつ、24h 以上 wake-up が記録されない場合 = 未 sync と判定。
     const [todayRow] = await neonSql<TodayRow[]>`
       SELECT sleep_date::text AS d
       FROM data_presentation.fct_health_sleep
       WHERE sleep_type = 'stages'
         AND end_at <= NOW()
+        AND end_at > NOW() - INTERVAL '24 hours'
       ORDER BY end_at DESC
       LIMIT 1
     `;
