@@ -26,10 +26,20 @@ export type HabitDef = {
   active: boolean;
 };
 
+/**
+ * tetris 上での habit cell の意味分類。既存 Plan の overlay 規約に揃える:
+ *   - throughput: 過去実績 (done された past day)。opacity 0.5 で薄く沈める
+ *   - next-step:  今日の未消化 slot (= 今やるべき habit)。default opacity (0.85)
+ *   - forecast:   未来の予定 slot。default opacity (0.85)
+ *
+ * 「今日の done 済」は throughput 扱い (= past 実績と同じ semantics)。
+ */
+export type HabitCellKind = "throughput" | "next-step" | "forecast";
+
 export type HabitDoneCell = {
   habitId: string;
   date: string;            // YYYY-MM-DD
-  state: "done" | "planned" | "future-slot";
+  kind: HabitCellKind;
 };
 
 /* ── Mock catalog ──────────────────────────────────────────────── */
@@ -134,27 +144,28 @@ export function buildMockCells(
   for (const h of habits) {
     if (!h.active) continue;
 
-    // past
+    // past: done だけ throughput として表示 (missed は absence で表現)
     for (let i = pastDays; i >= 1; i--) {
       const date = addDays(today, -i);
       const dow = new Date(`${date}T00:00:00Z`).getUTCDay();
       const hit = h.cadence === "daily"
         ? hashHit(`${h.id}:${date}`, 0.92)              // 92% 到達
         : (dow === (idHash(h.id) % 7));                 // 週 1 固定曜日
-      if (hit) cells.push({ habitId: h.id, date, state: "done" });
+      if (hit) cells.push({ habitId: h.id, date, kind: "throughput" });
     }
 
-    // today: planned
-    cells.push({ habitId: h.id, date: today, state: "planned" });
+    // today: 朝の "未消化" を next-step として表示
+    // (real data では Toggl entry 有無で throughput / next-step を分ける)
+    cells.push({ habitId: h.id, date: today, kind: "next-step" });
 
-    // future
+    // future: planned slot → forecast
     for (let i = 1; i <= futureDays; i++) {
       const date = addDays(today, i);
       const dow = new Date(`${date}T00:00:00Z`).getUTCDay();
       const slot = h.cadence === "daily"
         ? true
         : (dow === (idHash(h.id) % 7));
-      if (slot) cells.push({ habitId: h.id, date, state: "future-slot" });
+      if (slot) cells.push({ habitId: h.id, date, kind: "forecast" });
     }
   }
   return cells;
@@ -186,11 +197,11 @@ export function toOverlayBlocks(
       name: null,
       date: c.date,
       color: h.categoryColor,
-      statusName: c.state,
-      opacity:
-        c.state === "done" ? 0.85 :
-        c.state === "planned" ? 0.5 :
-        0.25,
+      statusName: c.kind,
+      // throughput のみ 0.5 で薄く沈める (Plan の答案 history overlay と同じ規約)。
+      // next-step / forecast は未指定 → chart 既定の 0.85 が効く。
+      opacity: c.kind === "throughput" ? 0.5 : undefined,
+      kind: c.kind,
     });
   }
   return out;
