@@ -26,6 +26,7 @@ import toggl from "@/routes/toggl";
 import fields from "@/routes/fields";
 import reviewTypes from "@/routes/review-types";
 import scopes from "@/routes/scopes";
+import habits from "@/routes/habits";
 
 /* ── V1 API sub-app ──
  *
@@ -78,6 +79,7 @@ const v1 = new Hono<Env>()
   .route("/fields", fields)
   .route("/review-types", reviewTypes)
   .route("/scopes", scopes)
+  .route("/habits", habits)
   // /me endpoint — return authenticated user info
   .get("/me", (c) => {
     const authResult = c.get("authResult");
