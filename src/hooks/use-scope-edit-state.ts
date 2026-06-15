@@ -177,7 +177,7 @@ export function useScopeEditState(args: {
     return allocate(members, localMilestones, dailyMinutes, today, multPct, weekdayWeights);
   }, [data, effectiveMembers, localMilestones, dailyMinutes, multPct, weekdayWeights, today]);
 
-  // ── milestone / layer 編集 callbacks (BacklogChart が要求する形) ───────────
+  // ── milestone / layer 編集 callbacks (TetrisChart が要求する形) ───────────
   const onMilestoneDateDraft = useCallback((id: string, newDate: string) =>
     setLocalMilestones((prev) => prev.map((m) => (m.id === id ? { ...m, date: newDate } : m))), []);
   const onMilestoneDateChange = onMilestoneDateDraft;
@@ -300,7 +300,7 @@ export function useScopeEditState(args: {
     multPct, effectiveMembers, allocated,
     // ops
     reset, save, isSaving: batchSave.isPending,
-    // edit callbacks (BacklogChart 互換)
+    // edit callbacks (TetrisChart 互換)
     handlers: {
       onMilestoneDateDraft, onMilestoneDateChange,
       onMilestoneLayerDraft, onMilestoneLayerChange,

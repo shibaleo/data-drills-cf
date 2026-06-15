@@ -8,7 +8,7 @@
  *   - past-throughput: 過去 re-answer (= 初回でない過去解答)
  */
 import type { AllocatedProblem } from "@/lib/backlog-allocate";
-import type { OverlayBlock } from "@/components/backlog-chart";
+import type { OverlayBlock } from "@/components/tetris";
 import type { ReviewRow } from "@/hooks/queries/use-review";
 import type { AnswerHistoryRow } from "@/hooks/queries/use-answer-history";
 import { computeNextReview } from "@/lib/review-scoring";

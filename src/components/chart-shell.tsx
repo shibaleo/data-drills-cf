@@ -13,7 +13,7 @@
  * the main SVG, on top of the cursor line so blocks are drawn over the line).
  *
  * Geometry constants (cell size, step, axes heights) follow `chart-constants.ts`.
- * For BacklogChart and the like with rich overlays, just pass complex children.
+ * For TetrisChart and the like with rich overlays, just pass complex children.
  */
 import { useEffect, useImperativeHandle, useRef, useState, forwardRef } from "react";
 import { CELL, STEP, Y_AXIS_W } from "@/lib/chart-constants";
@@ -41,15 +41,15 @@ export type ChartShellProps = {
   bottomAxisH?: number;
   /** Y 軸数値ティック (省略するか leftSlot を渡す) */
   yAxisLabels?: number[];
-  /** Y 軸の代わりに HTML 要素を左側に置く (BacklogChart の layer rows 用) */
+  /** Y 軸の代わりに HTML 要素を左側に置く (TetrisChart の layer rows 用) */
   leftSlot?: React.ReactNode;
-  /** 右側 HTML パネル (BacklogChart の params 用) */
+  /** 右側 HTML パネル (TetrisChart の params 用) */
   rightSlot?: React.ReactNode;
   /** cursor 線 ドラッグで新 date を返す。未指定なら drag 無効 */
   onCursorDrag?: (newDate: string) => void;
   /** main SVG の中身 (cursor の後ろ、上に重ねて描画される) */
   children?: React.ReactNode;
-  /** scrollable コンテナの外側に置く要素 (例: BacklogChart で svg 外の overlay) */
+  /** scrollable コンテナの外側に置く要素 (例: TetrisChart で svg 外の overlay) */
   scrollableExtra?: (geom: { chartWidth: number; chartHeight: number }) => React.ReactNode;
 };
 

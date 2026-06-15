@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 /**
- * BacklogChart の rightPanelExtra にはめ込む scope 設定パネル。
+ * TetrisChart の rightPanelExtra にはめ込む scope 設定パネル。
  * daily_minutes / time_multiplier / weekday_weights / deadline ラベルをまとめて表示。
  *
  * Weekday は SMTWTFS 並びの縦スライダ 7 本。max=1 で固定して高さを安定化。

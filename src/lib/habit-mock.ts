@@ -5,11 +5,11 @@
  *   - /habits ページの UI shell を mock で先に動かして UX を確定する
  *   - schema / API / Worker on-demand sync が決まったら、この mock を
  *     useQuery 経由の real data 取得に置き換える
- *   - UI 側 (HabitsPage / BacklogChart) は data の出所を知らず、
+ *   - UI 側 (HabitsPage / TetrisChart) は data の出所を知らず、
  *     `HabitOverlayInput[]` → `OverlayBlock[]` の adapter だけ参照する
  */
 
-import type { OverlayBlock } from "@/components/backlog-chart";
+import type { OverlayBlock } from "@/components/tetris";
 
 export type HabitCadence = "daily" | "weekly";
 

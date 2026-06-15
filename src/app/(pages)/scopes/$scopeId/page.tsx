@@ -13,7 +13,7 @@ import { useProblemsList } from "@/hooks/queries/use-problems";
 import { useProblemDialogs } from "@/hooks/use-problem-dialogs";
 import { useQueryClient } from "@tanstack/react-query";
 import { problemsKeys } from "@/hooks/queries/use-problems";
-import { BacklogChart, type BacklogChartHandle } from "@/components/backlog-chart";
+import { TetrisChart, type TetrisChartHandle } from "@/components/tetris";
 import { useScopeEditState } from "@/hooks/use-scope-edit-state";
 import { COLOR_PLANNED, COLOR_FIRST_ATTEMPT } from "@/lib/block-color";
 import { formatRelDay } from "@/lib/relative-day";
@@ -164,7 +164,7 @@ export default function ScopeDetailPage() {
   const qc = useQueryClient();
   const allProblems = useProblemsList(scopeFieldId ?? undefined).data ?? [];
   const tableRef = useRef<HTMLDivElement>(null);
-  const chartRef = useRef<BacklogChartHandle>(null);
+  const chartRef = useRef<TetrisChartHandle>(null);
   const handleDataChanged = useCallback(() => {
     if (scopeFieldId) {
       qc.invalidateQueries({ queryKey: scopesKeys.fullDetail(scopeId) });
@@ -458,9 +458,9 @@ export default function ScopeDetailPage() {
         </div>
       )}
 
-      <div className="rounded-md border p-3 space-y-2">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
+      <TetrisChart
+        toolbar={
+          <>
             <Popover>
               <PopoverTrigger asChild>
                 <Button size="sm" variant="outline" className="h-6 px-2 relative" title="Filter">
@@ -514,17 +514,15 @@ export default function ScopeDetailPage() {
               onClick={handleExport}
             />
             <span className="text-xs text-muted-foreground tabular-nums">{visibleMembers.length} / {memberCount}</span>
-          </div>
-          <div className="flex items-center gap-2">
             <button type="button"
               title="Toggle milestone pins / FSRS slider" aria-pressed={milestonePinsVisible}
-              className={`inline-flex items-center justify-center size-[26px] rounded-md border transition-colors ${milestonePinsVisible ? "bg-accent text-accent-foreground border-accent-foreground/20" : "text-muted-foreground hover:bg-muted"}`}
+              className={`ml-auto inline-flex items-center justify-center size-[26px] rounded-md border transition-colors ${milestonePinsVisible ? "bg-accent text-accent-foreground border-accent-foreground/20" : "text-muted-foreground hover:bg-muted"}`}
               onClick={() => setShowMilestonePins((p) => !p)}>
               <SlidersHorizontal className="size-3"/>
             </button>
-          </div>
-        </div>
-        {milestonePinsVisible && scopeAtAsOf && (
+          </>
+        }
+        aboveChart={milestonePinsVisible && scopeAtAsOf && (
           <div className="px-3 pb-2 -mt-1">
             <ScopeFSRSOverridePanel
               key={`${scopeAtAsOf.revision}-${asOf ?? "live"}`}
@@ -537,7 +535,6 @@ export default function ScopeDetailPage() {
             />
           </div>
         )}
-        <BacklogChart
           ref={chartRef}
           realToday={todayJST()}
           onTodayDrag={(d) => setAsOf(d === todayJST() ? null : d)}
@@ -631,8 +628,7 @@ export default function ScopeDetailPage() {
             onAddLayer: editHandlers.onAddLayer,
             onReorderLayers: editHandlers.onReorderLayers,
           })}
-        />
-      </div>
+      />
 
       {visibleMembers.length === 0 ? (
         <div className="text-sm text-muted-foreground py-8 text-center rounded-md border">No data</div>

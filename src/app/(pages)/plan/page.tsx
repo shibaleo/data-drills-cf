@@ -10,9 +10,6 @@ import {
   History,
   Download,
   Filter,
-  Waypoints,
-  ListTodo,
-  Telescope,
 } from "lucide-react";
 import {
   useReactTable,
@@ -28,7 +25,7 @@ import { useScopes, useScope, useScopeDetail, useScopeTimeline, useUpdateScope, 
 import { useProblemDialogs } from "@/hooks/use-problem-dialogs";
 import { usePageTitle, usePageBack } from "@/lib/page-context";
 import { todayJST } from "@/lib/date-utils";
-import { BacklogChart, type BacklogChartHandle, type OverlayBlock } from "@/components/backlog-chart";
+import { TetrisChart, KindToggles, type TetrisChartHandle, type OverlayBlock } from "@/components/tetris";
 import { assembleOverlay } from "@/lib/answer-history-overlay";
 import { ScopePlanRightPanel } from "@/components/scope-plan-right-panel";
 import { ScopeFSRSOverridePanel } from "@/components/scope-fsrs-override-panel";
@@ -213,7 +210,7 @@ export default function PlanPage() {
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterSubjects, filterLevels, hiddenLastStatuses, hiddenAllocKinds, hiddenAllocFlags, hiddenLayerIds, chartMaxRows, hideThroughput, hideNextStep, hideForecast]);
-  const chartRef = useRef<BacklogChartHandle>(null);
+  const chartRef = useRef<TetrisChartHandle>(null);
   const tableRef = useRef<HTMLDivElement>(null);
 
   const handleSelect = useCallback((id: string) => {
@@ -463,132 +460,123 @@ export default function PlanPage() {
 
   return (
     <div className="p-3 md:p-4 flex flex-col gap-2">
-      <div className="rounded-md border p-3 space-y-2">
-        <div className="flex items-center gap-2">
-          <Popover>
-            <PopoverTrigger asChild>
-              <button type="button" title="Filter"
-                className="relative inline-flex items-center justify-center size-6 rounded-md border shrink-0 transition-colors text-foreground hover:bg-muted">
-                <Filter className="size-3"/>
-                {activeFilterCount > 0 && (
-                  <span className="absolute -top-1.5 -right-1.5 size-4 rounded-full bg-primary text-primary-foreground text-[9px] flex items-center justify-center">
-                    {activeFilterCount}
-                  </span>
+      <TetrisChart
+        toolbar={
+          <>
+            <Popover>
+              <PopoverTrigger asChild>
+                <button type="button" title="Filter"
+                  className="relative inline-flex items-center justify-center size-6 rounded-md border shrink-0 transition-colors text-foreground hover:bg-muted">
+                  <Filter className="size-3"/>
+                  {activeFilterCount > 0 && (
+                    <span className="absolute -top-1.5 -right-1.5 size-4 rounded-full bg-primary text-primary-foreground text-[9px] flex items-center justify-center">
+                      {activeFilterCount}
+                    </span>
+                  )}
+                </button>
+              </PopoverTrigger>
+              <PopoverContent className="w-52 p-3 space-y-3" align="start">
+                {(detail.subjects?.length ?? 0) > 0 && (
+                  <FilterSection
+                    label="Subject"
+                    items={detail.subjects.map((s) => ({ value: s.id, label: s.name }))}
+                    selected={filterSubjects}
+                    onChange={setFilterSubjects}
+                  />
                 )}
-              </button>
-            </PopoverTrigger>
-            <PopoverContent className="w-52 p-3 space-y-3" align="start">
-              {(detail.subjects?.length ?? 0) > 0 && (
-                <FilterSection
-                  label="Subject"
-                  items={detail.subjects.map((s) => ({ value: s.id, label: s.name }))}
-                  selected={filterSubjects}
-                  onChange={setFilterSubjects}
-                />
-              )}
-              {(detail.levels?.length ?? 0) > 0 && (
-                <FilterSection
-                  label="Level"
-                  items={detail.levels.map((l) => ({ value: l.id, label: l.name }))}
-                  selected={filterLevels}
-                  onChange={setFilterLevels}
-                />
-              )}
-              {availableStatuses.length > 1 && (
-                <FilterSection
-                  label="Status"
-                  items={availableStatuses.map((s) => ({ value: s, label: s }))}
-                  selected={hiddenLastStatuses}
-                  onChange={setHiddenLastStatuses}
-                />
-              )}
-              {activeFilterCount > 0 && (
-                <button type="button"
-                  className="text-[10px] text-muted-foreground hover:text-foreground w-full text-center pt-1"
-                  onClick={() => {
-                    setFilterSubjects(new Set()); setFilterLevels(new Set());
-                    setHiddenLastStatuses(new Set()); setHiddenAllocKinds(new Set()); setHiddenAllocFlags(new Set());
-                  }}>
-                  Clear filters
-                </button>
-              )}
-            </PopoverContent>
-          </Popover>
-          {/* Throughput / Review / Forecast 3 カテゴリ独立 toggle。
-              明るい = 表示中、暗い = 非表示中。 */}
-          {[
-            { hidden: hideThroughput, setH: setHideThroughput, Icon: Waypoints, label: "throughput (past actuals)" },
-            { hidden: hideNextStep,   setH: setHideNextStep,   Icon: ListTodo,  label: "next step (1 immediate entry per problem)" },
-            { hidden: hideForecast,   setH: setHideForecast,   Icon: Telescope, label: "forecast (cascade after next step)" },
-          ].map(({ hidden, setH, Icon, label }) => (
-            <button key={label} type="button"
-              onClick={() => setH((v) => !v)}
-              title={hidden ? `Show ${label}` : `Hide ${label}`}
-              aria-pressed={!hidden}
-              className={`inline-flex items-center justify-center size-6 rounded-md border transition-colors shrink-0 ${
-                hidden
-                  ? "text-muted-foreground/40 hover:text-muted-foreground"
-                  : "text-foreground hover:bg-muted"
-              }`}>
-              <Icon className="size-3"/>
-            </button>
-          ))}
-          {(historyPanelOpen || asOf != null) && (
-            <div className="flex-1 min-w-0 h-[26px] rounded-md border px-2 flex items-center text-xs">
-              <AsOfControls
-                asOf={asOf}
-                setAsOf={setAsOf}
-                latest={realToday}
-                onClose={() => setHistoryPanelOpen(false)}
-              />
-            </div>
-          )}
-          <div className="flex items-center gap-2 shrink-0 ml-auto">
-            <PdfExportButton
-              selectedCount={pdfExport.selected.size}
-              exporting={pdfExport.exporting}
-              phase={pdfExport.phase}
-              upstream={pdfExport.upstream}
-              onClick={() => pdfExport.exportPdf(today)}
+                {(detail.levels?.length ?? 0) > 0 && (
+                  <FilterSection
+                    label="Level"
+                    items={detail.levels.map((l) => ({ value: l.id, label: l.name }))}
+                    selected={filterLevels}
+                    onChange={setFilterLevels}
+                  />
+                )}
+                {availableStatuses.length > 1 && (
+                  <FilterSection
+                    label="Status"
+                    items={availableStatuses.map((s) => ({ value: s, label: s }))}
+                    selected={hiddenLastStatuses}
+                    onChange={setHiddenLastStatuses}
+                  />
+                )}
+                {activeFilterCount > 0 && (
+                  <button type="button"
+                    className="text-[10px] text-muted-foreground hover:text-foreground w-full text-center pt-1"
+                    onClick={() => {
+                      setFilterSubjects(new Set()); setFilterLevels(new Set());
+                      setHiddenLastStatuses(new Set()); setHiddenAllocKinds(new Set()); setHiddenAllocFlags(new Set());
+                    }}>
+                    Clear filters
+                  </button>
+                )}
+              </PopoverContent>
+            </Popover>
+            <KindToggles
+              hideThroughput={hideThroughput}
+              hideNextStep={hideNextStep}
+              hideForecast={hideForecast}
+              setHideThroughput={setHideThroughput}
+              setHideNextStep={setHideNextStep}
+              setHideForecast={setHideForecast}
             />
-
-            {edit.dirty && !readOnly && (
-              <>
-                <button type="button"
-                  onClick={edit.reset}
-                  disabled={edit.isSaving}
-                  className="inline-flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground disabled:opacity-50"
-                  title="Discard changes">
-                  <RotateCcw className="size-3"/>Reset
-                </button>
-                <Button size="sm" onClick={handleSave} disabled={edit.isSaving}
-                  className="h-7 text-xs">
-                  {edit.isSaving ? <Loader2 className="size-3 mr-1 animate-spin"/> : <Save className="size-3 mr-1"/>}
-                  {edit.isSaving ? "Saving..." : "Save"}
-                </Button>
-              </>
+            {(historyPanelOpen || asOf != null) && (
+              <div className="flex-1 min-w-0 h-[26px] rounded-md border px-2 flex items-center text-xs">
+                <AsOfControls
+                  asOf={asOf}
+                  setAsOf={setAsOf}
+                  latest={realToday}
+                  onClose={() => setHistoryPanelOpen(false)}
+                />
+              </div>
             )}
-            <button type="button"
-              title="As-of view / replay" aria-pressed={historyPanelOpen || asOf != null}
-              className={`inline-flex items-center justify-center size-[26px] rounded-md border transition-colors ${
-                asOf != null
-                  ? "border-primary/50 text-primary"
-                  : historyPanelOpen
-                    ? "bg-accent text-accent-foreground border-accent-foreground/20"
-                    : "text-muted-foreground hover:bg-muted"
-              }`}
-              onClick={() => setHistoryPanelOpen((p) => !p)}>
-              <History className="size-3"/>
-            </button>
-            <button type="button"
-              title="Toggle milestone pins / FSRS slider" aria-pressed={showMilestonePins}
-              className={`inline-flex items-center justify-center size-[26px] rounded-md border transition-colors ${showMilestonePins ? "bg-accent text-accent-foreground border-accent-foreground/20" : "text-muted-foreground hover:bg-muted"}`}
-              onClick={() => setShowMilestonePins((p) => !p)}>
-              <SlidersHorizontal className="size-3"/>
-            </button>
-          </div>
-        </div>
-        {showMilestonePins && scopeQuery.data && (
+            <div className="flex items-center gap-2 shrink-0 ml-auto">
+              <PdfExportButton
+                selectedCount={pdfExport.selected.size}
+                exporting={pdfExport.exporting}
+                phase={pdfExport.phase}
+                upstream={pdfExport.upstream}
+                onClick={() => pdfExport.exportPdf(today)}
+              />
+
+              {edit.dirty && !readOnly && (
+                <>
+                  <button type="button"
+                    onClick={edit.reset}
+                    disabled={edit.isSaving}
+                    className="inline-flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground disabled:opacity-50"
+                    title="Discard changes">
+                    <RotateCcw className="size-3"/>Reset
+                  </button>
+                  <Button size="sm" onClick={handleSave} disabled={edit.isSaving}
+                    className="h-7 text-xs">
+                    {edit.isSaving ? <Loader2 className="size-3 mr-1 animate-spin"/> : <Save className="size-3 mr-1"/>}
+                    {edit.isSaving ? "Saving..." : "Save"}
+                  </Button>
+                </>
+              )}
+              <button type="button"
+                title="As-of view / replay" aria-pressed={historyPanelOpen || asOf != null}
+                className={`inline-flex items-center justify-center size-[26px] rounded-md border transition-colors ${
+                  asOf != null
+                    ? "border-primary/50 text-primary"
+                    : historyPanelOpen
+                      ? "bg-accent text-accent-foreground border-accent-foreground/20"
+                      : "text-muted-foreground hover:bg-muted"
+                }`}
+                onClick={() => setHistoryPanelOpen((p) => !p)}>
+                <History className="size-3"/>
+              </button>
+              <button type="button"
+                title="Toggle milestone pins / FSRS slider" aria-pressed={showMilestonePins}
+                className={`inline-flex items-center justify-center size-[26px] rounded-md border transition-colors ${showMilestonePins ? "bg-accent text-accent-foreground border-accent-foreground/20" : "text-muted-foreground hover:bg-muted"}`}
+                onClick={() => setShowMilestonePins((p) => !p)}>
+                <SlidersHorizontal className="size-3"/>
+              </button>
+            </div>
+          </>
+        }
+        aboveChart={showMilestonePins && scopeQuery.data && (
           <div className="-mt-1 -mb-1 flex items-center gap-2">
             <div className="flex-1 min-w-0">
               <ScopeFSRSOverridePanel
@@ -605,7 +593,11 @@ export default function PlanPage() {
             <ChartHeightPicker value={chartMaxRows} onChange={setChartMaxRows}/>
           </div>
         )}
-        <BacklogChart
+        belowChart={
+          <div className="flex items-center gap-2 flex-wrap pt-1">
+            <BlockLegend entries={legendEntries} />
+          </div>
+        }
           ref={chartRef}
           realToday={realToday}
           onTodayDrag={(d) => setAsOf(d === realToday ? null : d)}
@@ -655,11 +647,7 @@ export default function PlanPage() {
             onAddLayer: edit.handlers.onAddLayer,
             onReorderLayers: edit.handlers.onReorderLayers,
           })}
-        />
-        <div className="flex items-center gap-2 flex-wrap pt-1">
-          <BlockLegend entries={legendEntries} />
-        </div>
-      </div>
+      />
 
       {scheduleRows.length > 0 && (
         <ResizableTableShell ref={tableRef}>

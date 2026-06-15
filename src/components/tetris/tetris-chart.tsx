@@ -1,8 +1,17 @@
 /**
- * Backlog Tetris chart.
+ * TetrisChart — scope-allocated study blocks + overlay (FSRS projection / habit done) を
+ * 単一 tetris 列に積み上げる SVG コンポーネント。
+ *
  * Receives layers (horizontal tracks) and milestones (pins on layers) as separate entities.
+ *
+ * このファイルでは:
+ *   - TetrisChartCore: 内部 SVG 描画 (forwardRef、ハンドル)
+ *   - TetrisChart:    Core を card + top-row (filter slots) で包む公開コンポーネント
+ *
+ * 旧称: BacklogChart (2026-06-15 改名)。BacklogChart は domain 概念としての
+ * "backlog" を表していたが、UI の本質は tetris 視覚化なので rename した。
  */
-import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState, type ReactNode } from "react";
 import { Hash, CalendarDays, Trash2, Eye, EyeOff, GripVertical } from "lucide-react";
 import {
   DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent,
@@ -17,7 +26,7 @@ import { blockColor, blockBorder } from "@/lib/block-color";
 import { formatRelDay } from "@/lib/relative-day";
 import { CELL, STEP, Y_AXIS_W, MIN_ROWS } from "@/lib/chart-constants";
 
-export type BacklogChartHandle = {
+export type TetrisChartHandle = {
   getCenterDate(): string;
 };
 
@@ -39,7 +48,7 @@ export type MilestoneView = {
 };
 
 /**
- * BacklogChart のスタック上に「allocated 由来ではない overlay ブロック」を追加する用。
+ * TetrisChart のスタック上に「allocated 由来ではない overlay ブロック」を追加する用。
  * /plan の FSRS-projected smooth-future の描画に使う。色は呼び出し側で指定 (status color など)。
  * 過去/未来分類や overflow/over-budget の計算はしない。
  */
@@ -63,7 +72,7 @@ export type OverlayBlock = {
   kind?: "throughput" | "next-step" | "forecast";
 };
 
-type BacklogChartProps = {
+type TetrisChartProps = {
   items: AllocatedProblem[];
   /** allocated と同じ tetris カラムに積む overlay ブロック (smooth-future projection 等)。 */
   overlayItems?: OverlayBlock[];
@@ -134,7 +143,7 @@ function addDays(dateStr: string, days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-export const BacklogChart = forwardRef<BacklogChartHandle, BacklogChartProps>(function BacklogChartImpl({
+export const TetrisChartCore = forwardRef<TetrisChartHandle, TetrisChartProps>(function TetrisChartCoreImpl({
   items,
   overlayItems,
   layers,
@@ -164,7 +173,7 @@ export const BacklogChart = forwardRef<BacklogChartHandle, BacklogChartProps>(fu
   onHiddenLayersChange,
   onTodayDrag,
   realToday,
-}: BacklogChartProps, ref) {
+}: TetrisChartProps, ref) {
   const axisToday = realToday ?? today;
   const _showPins = showMilestonePins ?? true;
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -955,3 +964,42 @@ function LayerStylePopover({
     </Popover>
   );
 }
+
+
+/* ── 公開ラッパー: card + toolbar slot で TetrisChartCore を包む ── */
+
+export type TetrisChartProps2 = TetrisChartProps & {
+  /**
+   * card 上端の filter row。caller が flex container 内容を自由に組む。
+   * 既定の row container は `flex items-center gap-2`。
+   * 右寄せしたい要素は内部で `<div className="ml-auto ...">` を使う。
+   */
+  toolbar?: ReactNode;
+  /**
+   * toolbar と chart の間に挟む追加 row (Plan の FSRS slider 等)。任意。
+   */
+  aboveChart?: ReactNode;
+  /**
+   * chart の下に置く要素 (Plan の BlockLegend 等)。card 内に留めたい時に使う。任意。
+   */
+  belowChart?: ReactNode;
+};
+
+/**
+ * TetrisChart: caller 視点の標準コンポーネント。
+ *   - 既存 caller は外側に rounded-md border の card と top-row を自前で書いていたが、
+ *     重複を排除し toolbar slot に集約。
+ *   - card に入れたくない preview/dialog 用途が出てきたら TetrisChartCore を直接使う。
+ */
+export const TetrisChart = forwardRef<TetrisChartHandle, TetrisChartProps2>(
+  function TetrisChartImpl({ toolbar, aboveChart, belowChart, ...coreProps }, ref) {
+    return (
+      <div className="rounded-md border p-3 space-y-2">
+        {toolbar && <div className="flex items-center gap-2">{toolbar}</div>}
+        {aboveChart}
+        <TetrisChartCore ref={ref} {...coreProps} />
+        {belowChart}
+      </div>
+    );
+  },
+);
