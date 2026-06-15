@@ -6,6 +6,7 @@ import { SITE_NAME } from "@/lib/site";
 import {
   BarChart3,
   CalendarRange,
+  CheckCircle2,
   Info,
   LayoutGrid,
   Layers,
@@ -26,12 +27,14 @@ interface NavItem {
   label: string;
   icon: typeof PenLine;
   dividerAfter?: boolean;
+  badge?: string;
 }
 
 const navItems: NavItem[] = [
   // Scope = 「何を演習対象とするか」の入口。一番上。
   { href: "/scopes", label: "Scopes", icon: Target },
   { href: "/plan", label: "Plan", icon: CalendarRange },
+  { href: "/habits", label: "Habits", icon: CheckCircle2, badge: "beta" },
   { href: "/stats", label: "Stats", icon: BarChart3 },
   { href: "/digest", label: "Digest", icon: Newspaper, dividerAfter: true },
   { href: "/flashcards", label: "Flashcards", icon: Layers },
@@ -88,6 +91,11 @@ export function SidebarNav({
                   >
                     {item.label}
                   </span>
+                  {item.badge && !collapsed && (
+                    <span className="ml-2 rounded-sm bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400">
+                      {item.badge}
+                    </span>
+                  )}
                 </Link>
                 {item.dividerAfter && <div className="border-t border-sidebar-border/50" />}
               </div>

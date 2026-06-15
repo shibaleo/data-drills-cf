@@ -30,6 +30,7 @@ const ScopesPage = lazy(() => import("./app/(pages)/scopes/page"));
 const ScopesNewPage = lazy(() => import("./app/(pages)/scopes/new/page"));
 const ScopesDetailPage = lazy(() => import("./app/(pages)/scopes/$scopeId/page"));
 const PlanPage = lazy(() => import("./app/(pages)/plan/page"));
+const HabitsPage = lazy(() => import("./app/(pages)/habits/page"));
 
 /* ── Route tree ── */
 
@@ -121,6 +122,7 @@ const planRoute = createRoute({
   ),
 });
 const scopesNewRoute = lazyRoute("/scopes/new", ScopesNewPage);
+const habitsRoute = lazyRoute("/habits", HabitsPage);
 const scopesDetailRoute = createRoute({
   getParentRoute: () => authLayout,
   path: "/scopes/$scope_id",
@@ -161,6 +163,7 @@ const routeTree = rootRoute.addChildren([
     scopesNewRoute,
     scopesDetailRoute,
     planRoute,
+    habitsRoute,
     statsRoute,
     statsDetailRoute,
     digestRoute,
