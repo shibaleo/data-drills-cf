@@ -123,13 +123,14 @@ export function HabitGrid({
   );
 
   function handleDragEnd(e: DragEndEvent) {
+    if (!onReorder) return;
     const { active, over } = e;
     if (!over || active.id === over.id) return;
-    const oldIdx = habits.findIndex((h) => h.id === active.id);
-    const newIdx = habits.findIndex((h) => h.id === over.id);
-    if (oldIdx === -1 || newIdx === -1) return;
-    const reordered = arrayMove(habits, oldIdx, newIdx);
-    onReorder?.(reordered.map((h) => h.id));
+    const ids = habits.map((h) => h.id);
+    const fromIdx = ids.indexOf(String(active.id));
+    const toIdx = ids.indexOf(String(over.id));
+    if (fromIdx < 0 || toIdx < 0) return;
+    onReorder(arrayMove(ids, fromIdx, toIdx));
   }
 
   return (
@@ -207,7 +208,11 @@ function DateHeader({
 }) {
   return (
     <div className="flex items-end h-[18px] mb-1">
-      <div style={{ width: HEADER_LEFT_PAD }} />
+      {/* sticky 左スペーサ: 横スクロール時に row 側 sticky label の真上を bg で覆う */}
+      <div
+        className="sticky left-0 z-10 bg-card h-full"
+        style={{ width: HEADER_LEFT_PAD }}
+      />
       <svg width={gridWidth} height={14} className="block">
         {dates.map((date, i) => {
           const x = i * STEP;
@@ -233,7 +238,9 @@ function DateHeader({
 
 /* ── Sortable row ─────────────────────────────────────────────────── */
 
-const HEADER_LEFT_PAD = 20 + 14 + 4 + 140 + 8;  // grip(20) + colorDot(14) + gap + label(140) + gap
+// sticky 左カラム幅の合計 (= grip 20 + gap 8 + color 12 + gap 8 + label 140 + pr-2 = 8) = 196px
+// DateHeader の左スペーサと完全に揃え、date label と cell が縦に整列するようにする
+const HEADER_LEFT_PAD = 20 + 8 + 12 + 8 + 140 + 8;
 
 function SortableHabitRow({
   id,
@@ -271,31 +278,37 @@ function SortableHabitRow({
     <div
       ref={setNodeRef}
       style={style}
-      className="flex items-center gap-2 select-none"
+      className="flex items-center group select-none"
     >
-      <button
-        type="button"
-        {...attributes}
-        {...listeners}
-        title="Drag to reorder"
-        className="size-5 -ml-0.5 flex items-center justify-center text-muted-foreground/50 hover:text-foreground cursor-grab active:cursor-grabbing"
+      {/* sticky 左カラム: 横スクロールしても label / handle が常に見える */}
+      <div
+        className="sticky left-0 z-10 flex items-center gap-2 bg-card pr-2"
+        style={{ height: ROW_H }}
       >
-        <GripVertical className="size-3.5" />
-      </button>
-      <span
-        className="inline-block size-3 rounded-sm shrink-0"
-        style={{ backgroundColor: color }}
-        aria-hidden
-      />
-      <button
-        type="button"
-        onClick={onClickLabel}
-        className="text-sm text-left hover:underline truncate"
-        style={{ width: 140 }}
-        title="Edit habit"
-      >
-        {label}
-      </button>
+        <button
+          type="button"
+          {...attributes}
+          {...listeners}
+          title="Drag to reorder"
+          className="size-5 -ml-0.5 flex items-center justify-center text-muted-foreground/40 hover:text-foreground cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-opacity"
+        >
+          <GripVertical className="size-3.5" />
+        </button>
+        <span
+          className="inline-block size-3 rounded-sm shrink-0"
+          style={{ backgroundColor: color }}
+          aria-hidden
+        />
+        <button
+          type="button"
+          onClick={onClickLabel}
+          className="text-sm text-left hover:underline truncate"
+          style={{ width: 140 }}
+          title="Edit habit"
+        >
+          {label}
+        </button>
+      </div>
 
       <svg width={gridWidth} height={ROW_H} className="block shrink-0">
         {/* Today highlight (この row 分の bg) */}

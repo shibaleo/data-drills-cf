@@ -61,6 +61,23 @@ export function useReorderHabits() {
   return useMutation({
     mutationFn: (ids: string[]) =>
       unwrap(rpc.api.v1.habits.reorder.$patch({ json: { ids } })),
+    // optimistic: 並べ替え直後に local cache を即座に並べ替えて UI 反映
+    onMutate: async (ids) => {
+      await qc.cancelQueries({ queryKey: habitsKeys.list() });
+      const prev = qc.getQueryData<HabitRow[]>(habitsKeys.list());
+      if (prev) {
+        const byId = new Map(prev.map((h) => [h.id, h]));
+        const reordered = ids.map((id, i) => {
+          const h = byId.get(id);
+          return h ? { ...h, sortOrder: i } : null;
+        }).filter((x): x is HabitRow => x !== null);
+        qc.setQueryData<HabitRow[]>(habitsKeys.list(), reordered);
+      }
+      return { prev };
+    },
+    onError: (_err, _ids, ctx) => {
+      if (ctx?.prev) qc.setQueryData(habitsKeys.list(), ctx.prev);
+    },
     onSettled: () => qc.invalidateQueries({ queryKey: habitsKeys.list() }),
   });
 }
