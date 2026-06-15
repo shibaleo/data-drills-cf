@@ -1,12 +1,28 @@
 /**
- * HabitGrid: 1 habit = 1 row のヒートマップ表現。
+ * HabitGrid: 1 habit = 1 row のヒートマップ表現 + 並べ替え。
  *
  * Tetris (= 識別不要な原子の集積) と違い、habit は個体識別が本質。
- * row 形式で各 habit の時系列をそのまま見せ、今日列を太線で強調する。
+ * row 形式で各 habit の時系列をそのまま見せ、今日列を accent bg で強調する。
+ * row は @dnd-kit/sortable で並べ替え可能 (drag handle に左端の grip icon)。
  */
 
 import { useMemo } from "react";
-import { Plus } from "lucide-react";
+import { Plus, GripVertical } from "lucide-react";
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+  useSortable,
+  arrayMove,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { Button } from "@/components/ui/button";
 import type { HabitRow } from "@/hooks/queries/use-habits";
 import type { HabitCell } from "@/hooks/queries/use-habit-cells";
@@ -14,11 +30,9 @@ import type { HabitCandidate } from "@/hooks/queries/use-toggl-habit-candidates"
 import { buildCandidateMap, displayFor } from "@/lib/habit-display";
 import { CELL, GAP, STEP } from "@/lib/chart-constants";
 
-// 縦横同じ STEP で揃える (TetrisChart と完全一致)
-const LABEL_W = 140;
-const STREAK_W = 64;
+// row 高さ = STEP で TetrisChart の cell-to-cell 距離と完全一致
 const ROW_H = STEP;
-const CELL_OFFSET_Y = (ROW_H - CELL) / 2;  // = GAP / 2 で対称配置
+const CELL_OFFSET_Y = (ROW_H - CELL) / 2;  // = GAP / 2
 
 type Props = {
   habits: HabitRow[];
@@ -29,6 +43,7 @@ type Props = {
   futureDays?: number;
   onEditHabit?: (id: string) => void;
   onAddHabit?: () => void;
+  onReorder?: (ids: string[]) => void;
 };
 
 function addDays(s: string, n: number): string {
@@ -38,7 +53,6 @@ function addDays(s: string, n: number): string {
 }
 
 function isWeekBoundary(date: string): boolean {
-  // 月曜日に M/D ラベルを置く (JST だが UTC date とずれない: YYYY-MM-DD は naive)
   return new Date(`${date}T00:00:00Z`).getUTCDay() === 1;
 }
 
@@ -47,7 +61,6 @@ function monthDay(date: string): string {
   return `${d.getUTCMonth() + 1}/${d.getUTCDate()}`;
 }
 
-/** habit の cells から日付 → kind の lookup map を作る */
 function indexCells(cells: HabitCell[]): Map<string, Map<string, HabitCell["kind"]>> {
   const byHabit = new Map<string, Map<string, HabitCell["kind"]>>();
   for (const c of cells) {
@@ -58,7 +71,6 @@ function indexCells(cells: HabitCell[]): Map<string, Map<string, HabitCell["kind
   return byHabit;
 }
 
-/** 直近 7 日 (daily) or 4 週 (weekly) の done 率を分子/分母で返す。 */
 function recentRatio(
   cellMap: Map<string, HabitCell["kind"]> | undefined,
   cadence: string,
@@ -66,7 +78,6 @@ function recentRatio(
 ): { hit: number; total: number } {
   if (!cellMap) return { hit: 0, total: cadence === "weekly" ? 4 : 7 };
   if (cadence === "weekly") {
-    // 直近 28 日のうち throughput が立った日 = "週 1 達成" を 4 単位として数える
     let hit = 0;
     for (let i = 0; i < 28; i++) {
       const d = addDays(today, -i);
@@ -91,6 +102,7 @@ export function HabitGrid({
   futureDays = 7,
   onEditHabit,
   onAddHabit,
+  onReorder,
 }: Props) {
   const candidateMap = useMemo(() => buildCandidateMap(candidates), [candidates]);
   const cellMaps = useMemo(() => indexCells(cells), [cells]);
@@ -104,30 +116,108 @@ export function HabitGrid({
   }, [today, pastDays, futureDays]);
 
   const todayIdx = pastDays;
-  const totalCells = dates.length;
-  const gridWidth = totalCells * STEP - GAP;
+  const gridWidth = dates.length * STEP - GAP;
 
-  const headerH = 18;
-  const totalH = headerH + habits.length * ROW_H + 4;
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+  );
+
+  function handleDragEnd(e: DragEndEvent) {
+    const { active, over } = e;
+    if (!over || active.id === over.id) return;
+    const oldIdx = habits.findIndex((h) => h.id === active.id);
+    const newIdx = habits.findIndex((h) => h.id === over.id);
+    if (oldIdx === -1 || newIdx === -1) return;
+    const reordered = arrayMove(habits, oldIdx, newIdx);
+    onReorder?.(reordered.map((h) => h.id));
+  }
 
   return (
     <div className="overflow-x-auto">
-      <svg
-        width={LABEL_W + gridWidth + STREAK_W + 16}
-        height={totalH}
-        className="block"
-        style={{ minWidth: LABEL_W + gridWidth + STREAK_W + 16 }}
-      >
-        {/* ── Header: date labels at week boundaries + Today ── */}
+      <div style={{ minWidth: gridWidth + 200 }}>
+        {/* ── Date header ── */}
+        <DateHeader dates={dates} todayIdx={todayIdx} gridWidth={gridWidth} />
+
+        {/* ── Sortable rows ── */}
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={handleDragEnd}
+        >
+          <SortableContext
+            items={habits.map((h) => h.id)}
+            strategy={verticalListSortingStrategy}
+          >
+            {habits.map((h) => {
+              const d = displayFor(h, candidateMap);
+              const cellMap = cellMaps.get(h.id);
+              const ratio = recentRatio(cellMap, h.cadence, today);
+              return (
+                <SortableHabitRow
+                  key={h.id}
+                  id={h.id}
+                  label={d.label}
+                  color={d.color}
+                  cadence={h.cadence}
+                  ratio={ratio}
+                  dates={dates}
+                  cellMap={cellMap}
+                  todayIdx={todayIdx}
+                  gridWidth={gridWidth}
+                  onClickLabel={() => onEditHabit?.(h.id)}
+                />
+              );
+            })}
+          </SortableContext>
+        </DndContext>
+
+        {habits.length === 0 && (
+          <div className="text-center text-sm text-muted-foreground py-6">
+            No habits yet. Click "Add habit" below to start.
+          </div>
+        )}
+
+        <div className="pt-2 flex">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={onAddHabit}
+            className="gap-1.5 ml-1"
+          >
+            <Plus className="size-3.5" />
+            Add habit
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Date header (HTML + svg overlay for today label) ─────────────── */
+
+function DateHeader({
+  dates,
+  todayIdx,
+  gridWidth,
+}: {
+  dates: string[];
+  todayIdx: number;
+  gridWidth: number;
+}) {
+  return (
+    <div className="flex items-end h-[18px] mb-1">
+      <div style={{ width: HEADER_LEFT_PAD }} />
+      <svg width={gridWidth} height={14} className="block">
         {dates.map((date, i) => {
-          const x = LABEL_W + i * STEP;
+          const x = i * STEP;
           const showLabel = isWeekBoundary(date) || i === todayIdx;
           if (!showLabel) return null;
           return (
             <text
-              key={`hdr-${date}`}
+              key={date}
               x={x + CELL / 2}
-              y={12}
+              y={11}
               textAnchor="middle"
               className={i === todayIdx ? "fill-foreground font-medium" : "fill-muted-foreground"}
               fontSize={10}
@@ -136,126 +226,144 @@ export function HabitGrid({
             </text>
           );
         })}
+      </svg>
+    </div>
+  );
+}
 
-        {/* ── Today column highlight (background) ── */}
+/* ── Sortable row ─────────────────────────────────────────────────── */
+
+const HEADER_LEFT_PAD = 20 + 14 + 4 + 140 + 8;  // grip(20) + colorDot(14) + gap + label(140) + gap
+
+function SortableHabitRow({
+  id,
+  label,
+  color,
+  cadence,
+  ratio,
+  dates,
+  cellMap,
+  todayIdx,
+  gridWidth,
+  onClickLabel,
+}: {
+  id: string;
+  label: string;
+  color: string;
+  cadence: string;
+  ratio: { hit: number; total: number };
+  dates: string[];
+  cellMap: Map<string, HabitCell["kind"]> | undefined;
+  todayIdx: number;
+  gridWidth: number;
+  onClickLabel: () => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id });
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.4 : 1,
+    height: ROW_H,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="flex items-center gap-2 select-none"
+    >
+      <button
+        type="button"
+        {...attributes}
+        {...listeners}
+        title="Drag to reorder"
+        className="size-5 -ml-0.5 flex items-center justify-center text-muted-foreground/50 hover:text-foreground cursor-grab active:cursor-grabbing"
+      >
+        <GripVertical className="size-3.5" />
+      </button>
+      <span
+        className="inline-block size-3 rounded-sm shrink-0"
+        style={{ backgroundColor: color }}
+        aria-hidden
+      />
+      <button
+        type="button"
+        onClick={onClickLabel}
+        className="text-sm text-left hover:underline truncate"
+        style={{ width: 140 }}
+        title="Edit habit"
+      >
+        {label}
+      </button>
+
+      <svg width={gridWidth} height={ROW_H} className="block shrink-0">
+        {/* Today highlight (この row 分の bg) */}
         <rect
-          x={LABEL_W + todayIdx * STEP - GAP / 2}
-          y={headerH - GAP / 2}
+          x={todayIdx * STEP - GAP / 2}
+          y={0}
           width={CELL + GAP}
-          height={habits.length * ROW_H + GAP}
+          height={ROW_H}
           fill="hsl(var(--accent))"
           opacity={0.25}
-          rx={3}
         />
-
-        {/* ── Rows ── */}
-        {habits.map((h, rowIdx) => {
-          const d = displayFor(h, candidateMap);
-          const y = headerH + rowIdx * ROW_H;
-          const cellY = y + CELL_OFFSET_Y;
-          const cy = cellY + CELL / 2;
-          const cellMap = cellMaps.get(h.id);
-          const ratio = recentRatio(cellMap, h.cadence, today);
-
+        {dates.map((date, i) => {
+          const kind = cellMap?.get(date);
+          const x = i * STEP;
+          const isToday = i === todayIdx;
+          if (!kind) {
+            return (
+              <rect
+                key={date}
+                x={x} y={CELL_OFFSET_Y} width={CELL} height={CELL} rx={2}
+                fill="none"
+                stroke="hsl(var(--border))"
+                strokeWidth={0.5}
+              />
+            );
+          }
+          if (kind === "throughput") {
+            return (
+              <rect
+                key={date}
+                x={x} y={CELL_OFFSET_Y} width={CELL} height={CELL} rx={2}
+                fill={color}
+                opacity={isToday ? 1 : 0.85}
+              />
+            );
+          }
+          if (kind === "next-step") {
+            return (
+              <rect
+                key={date}
+                x={x} y={CELL_OFFSET_Y} width={CELL} height={CELL} rx={2}
+                fill="none"
+                stroke={color}
+                strokeWidth={2}
+              />
+            );
+          }
+          // forecast
           return (
-            <g key={h.id}>
-              {/* habit label (clickable to edit) */}
-              <g style={{ cursor: onEditHabit ? "pointer" : undefined }}
-                 onClick={() => onEditHabit?.(h.id)}>
-                <rect
-                  x={0} y={y} width={LABEL_W - 4} height={ROW_H - 2}
-                  fill="transparent"
-                  className="hover:fill-accent/30"
-                />
-                <rect x={6} y={cy - 5} width={10} height={10} rx={2} fill={d.color} />
-                <text x={22} y={cy + 4} className="fill-foreground" fontSize={12}>
-                  {d.label}
-                </text>
-              </g>
-
-              {/* cells */}
-              {dates.map((date, i) => {
-                const kind = cellMap?.get(date);
-                const x = LABEL_W + i * STEP;
-                const isToday = i === todayIdx;
-                if (!kind) {
-                  // 空セル: 薄い枠だけ (絶対 absent = サボった or n/a)
-                  return (
-                    <rect
-                      key={`c-${h.id}-${date}`}
-                      x={x} y={cellY} width={CELL} height={CELL} rx={2}
-                      fill="none"
-                      stroke="hsl(var(--border))"
-                      strokeWidth={0.5}
-                    />
-                  );
-                }
-                if (kind === "throughput") {
-                  // 過去 done / 今日 done: 塗り
-                  return (
-                    <rect
-                      key={`c-${h.id}-${date}`}
-                      x={x} y={cellY} width={CELL} height={CELL} rx={2}
-                      fill={d.color}
-                      opacity={isToday ? 1 : 0.85}
-                    />
-                  );
-                }
-                if (kind === "next-step") {
-                  // 今日の未消化: habit 色の太枠、塗りなし
-                  return (
-                    <rect
-                      key={`c-${h.id}-${date}`}
-                      x={x} y={cellY} width={CELL} height={CELL} rx={2}
-                      fill="none"
-                      stroke={d.color}
-                      strokeWidth={2}
-                    />
-                  );
-                }
-                // forecast (未来 slot): 細い破線枠
-                return (
-                  <rect
-                    key={`c-${h.id}-${date}`}
-                    x={x} y={y + 2} width={CELL} height={CELL} rx={2}
-                    fill="none"
-                    stroke={d.color}
-                    strokeWidth={1}
-                    strokeDasharray="2 2"
-                    opacity={0.5}
-                  />
-                );
-              })}
-
-              {/* streak / ratio */}
-              <text
-                x={LABEL_W + gridWidth + 12}
-                y={cy + 4}
-                className="fill-muted-foreground tabular-nums"
-                fontSize={11}
-              >
-                {ratio.hit}/{ratio.total}
-                <tspan className="fill-muted-foreground/60" fontSize={9} dx={3}>
-                  {h.cadence === "weekly" ? "w" : "d"}
-                </tspan>
-              </text>
-            </g>
+            <rect
+              key={date}
+              x={x} y={CELL_OFFSET_Y} width={CELL} height={CELL} rx={2}
+              fill="none"
+              stroke={color}
+              strokeWidth={1}
+              strokeDasharray="2 2"
+              opacity={0.5}
+            />
           );
         })}
       </svg>
 
-      {/* + Add habit */}
-      {habits.length === 0 && (
-        <div className="text-center text-sm text-muted-foreground py-6">
-          No habits yet. Click "Add habit" below to start.
-        </div>
-      )}
-      <div className="pt-2 flex">
-        <Button type="button" size="sm" variant="outline" onClick={onAddHabit} className="gap-1.5 ml-1">
-          <Plus className="size-3.5" />
-          Add habit
-        </Button>
-      </div>
+      <span className="text-xs text-muted-foreground tabular-nums whitespace-nowrap pl-2">
+        {ratio.hit}/{ratio.total}
+        <span className="text-muted-foreground/60 ml-0.5 text-[10px]">
+          {cadence === "weekly" ? "w" : "d"}
+        </span>
+      </span>
     </div>
   );
 }

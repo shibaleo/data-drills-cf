@@ -9,6 +9,7 @@ import {
   useCreateHabit,
   useUpdateHabit,
   useDeleteHabit,
+  useReorderHabits,
   type HabitRow,
 } from "@/hooks/queries/use-habits";
 import {
@@ -29,6 +30,7 @@ export default function HabitsPage() {
   const createHabit = useCreateHabit();
   const updateHabit = useUpdateHabit();
   const deleteHabit = useDeleteHabit();
+  const reorderHabits = useReorderHabits();
 
   const candidatesQuery = useTogglHabitCandidates();
   const candidates = candidatesQuery.data ?? [];
@@ -67,6 +69,7 @@ export default function HabitsPage() {
             if (item) setDialogState({ item });
           }}
           onAddHabit={() => setDialogState({ item: null })}
+          onReorder={(ids) => reorderHabits.mutate(ids)}
         />
       </div>
 
