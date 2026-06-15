@@ -406,3 +406,33 @@ export const goalMilestone = pgTable("goal_milestone", {
 // Step 5 (drizzle/manual/007_phase7_drop_view_scopes.sql) で drop 済。Phase 4 から
 // canonical scope.id 直結に統一されており、view-scope テーブルは informational のみ
 // だったので落とせる。
+
+// =============================================================================
+// 27. Habit (recurrent habits、Toggl 由来 done 判定で /habits ページに表示)
+// =============================================================================
+//
+// done セルは別 table に materialize せず、warehouse の
+// `neon_warehouse.data_presentation.fct_toggl_time_entries` を Worker が JOIN
+// する。habit 側は「定義」と「Toggl マッチルール」のみ持つ。
+//
+// マッチルール: (toggl_project, toggl_description) の完全一致タプル。Toggl の
+// description は canonical な文字列 (例 "brush teeth") なので regex は不要。
+
+export const habit = pgTable("habit", {
+  id: id(),
+  userId: uuid("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),                          // "Brush teeth" 等
+  cadence: text("cadence").notNull(),                    // 'daily' | 'weekly'
+  togglProject: text("toggl_project").notNull(),         // Toggl project_name
+  togglDescription: text("toggl_description").notNull(), // Toggl description
+  categoryColor: text("category_color").notNull(),       // "#06b6d4" 等
+  minutesEstimate: integer("minutes_estimate").notNull().default(5),
+  sortOrder: integer("sort_order").notNull().default(0),
+  isActive: boolean("is_active").notNull().default(true),
+  ...timestamps(),
+}, (t) => [
+  // 同一マッチルールの重複登録を防ぐ (同一 user 内)
+  uniqueIndex("habit_user_match_key").on(t.userId, t.togglProject, t.togglDescription),
+  // /habits の active 一覧クエリ高速化
+  index("habit_user_active_idx").on(t.userId, t.isActive),
+]);
