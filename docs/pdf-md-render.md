@@ -1,6 +1,6 @@
-# Markdown + KaTeX を SSOT とした PDF レンダリングパイプライン
+# Markdown + KaTeX を SSOT としたブラウザ印刷ベース PDF パイプライン
 
-- 対象: data-drills 問題 PDF 生成 (Tectonic on Lambda、新パイプライン)
+- 対象: data-drills 問題 PDF 生成
 - 作成日: 2026-06-15
 - ステータス: 計画 (実装着手前)
 
@@ -8,241 +8,275 @@
 
 ## 1. 結論
 
-問題の **SSOT (Single Source of Truth)** を **Markdown + KaTeX (math)** とする。
-web と PDF はこの 1 ソースをそれぞれの経路でレンダリングし、author は 1 種類の
-記法だけを書く。
+問題の **SSOT (Single Source of Truth)** を **Markdown + KaTeX (math)** とし、
+PDF 生成は **専用の print 用ルート + ブラウザの `window.print()`** で行う。
 
-- **Web**: 既存 `remark-math` + `rehype-katex` 経路 (= 完成済)
-- **PDF**: `pdf-render-tex` Lambda に MD ソースを送り、内部で
-  **MD → LaTeX 変換 → Tectonic → PDF** を実行
+reveal.js の `?print-pdf` クエリパラメータと同じ手法。サーバ側 Lambda も
+Tectonic も Docker も不要、フロントエンドだけで完結する。
 
-旧案 (LaTeX を SSOT) に対する利点:
+```
+[author] writes MD
+   │
+   ▼
+DB: problem.body_md
+   │
+   ├──► [Web display] remark-math + rehype-katex → HTML + KaTeX (完成済)
+   │
+   └──► [PDF] CF Pages の専用 print route で同 MD を A4 print CSS で renders
+              → window.print() 発火 → ユーザが "Save as PDF" でダウンロード
+```
 
-1. **author の認知負荷が低い** — 数式以外は markdown で書ける、`\section{}` の
-   ような LaTeX 構文を書かなくていい
-2. **既存 web 経路がそのまま使える** — MD 入力 → KaTeX live preview は
-   ライブラリも UI コンポーネントも完成 (`src/components/markdown.tsx`)
-3. **数式は KaTeX = LaTeX 記法**なので MD→LaTeX 変換時に **数式は素通し**できる
-   (= 数式忠実度は LaTeX SSOT と同等)
-4. **TikZ や package 依存も拡張ブロックで吸収可能** (= 後述、fenced code block)
+旧 LaTeX エンジン案 (Tectonic on Lambda) は撤回。理由:
+
+- 想定する問題は**テキスト + KaTeX 数式が中心**で、Tectonic の数式忠実度
+  優位 (vs KaTeX) を活かす場面が想定より少ない
+- TikZ で「LaTeX native な図」を描く必要も基本的にない (= 必要なら画像や SVG で代替できる)
+- インフラ (Lambda function 新設、Docker, SigV4 invoke, S3 staging) が
+  個人スケールの本機能に対して明らかにオーバースペック
+- "ボタン 1 クリックでダウンロード" の代わりに "ボタン → print dialog →
+  Save" の 2 クリックになるトレードオフは個人運用なら誤差
 
 ## 2. SSOT の文法
 
 ````markdown
-# 問題 N: 微分形式
+# 問題 1: parametrization of the parabola
 
-接続 1-形式 $\omega^i_{\ j}$ が以下を満たすとする:
+Is $\gamma(t) = (t^2, t^4)$ a parametrization of the parabola $y = x^2$?
 
-$$
-\omega^i_{\ j} = \Gamma^i_{\ jk}\, dx^k
-$$
+# 問題 2: level curves
 
-このとき曲率 2-形式 $\Omega^i_{\ j}$ を求めよ。
+Find parametrizations of the following level curves:
 
-```tikz
-\begin{tikzpicture}[scale=1.5]
-  \draw[->] (0,0) -- (2,0) node[right] {$x$};
-  \draw[->] (0,0) -- (0,2) node[above] {$y$};
-\end{tikzpicture}
-```
+1. $y^2 - x^2 = 1$
+2. $\frac{x^2}{4} + \frac{y^2}{9} = 1$
 
-ヒント: **構造方程式** を使う。
+# 問題 3: Cartesian equations
+
+Find the Cartesian equations of the following parametrized curves:
+
+1. $\gamma(t) = (\cos^2 t, \sin^2 t)$
+2. $\gamma(t) = (e^t, t^2)$
 ````
 
 - 通常の markdown 構文 (header / list / bold / table / image)
-- インライン数式 `$...$`、ディスプレイ数式 `$$...$$` (KaTeX/LaTeX 共通記法)
-- `tikz` の fenced code block は PDF only (web では placeholder)
-- 将来必要なら `latex-raw` block も追加 (= TikZ と同じ「PDF only エスケープ」)
+- インライン数式 `$...$`、ディスプレイ数式 `$$...$$` (KaTeX 記法)
+- 画像は `![alt](url)` で埋め込み、url は S3 / Drive / プロジェクト内 asset
+- 図が必要なら **事前に作って画像で保存する**、あるいは SVG を直接埋め込む
+  (markdown はインライン HTML を許容するので `<svg>...</svg>` をそのまま書ける)
 
 ## 3. アーキテクチャ
 
-```
-[author] writes MD
-     │
-     ▼
-DB: problem.body_md (text)
-     │
-     ├──► [Web] remark-math + rehype-katex → HTML + KaTeX (完成済)
-     │
-     └──► [PDF] CF Worker → Lambda (pdf-render-tex)
-                 │
-                 ├─ MD parse (remark + AST)
-                 ├─ Math node は LaTeX として素通し
-                 ├─ TikZ fenced block は LaTeX 環境に展開
-                 ├─ structure (heading/list/etc) を LaTeX 構文に emit
-                 ├─ A4 テンプレートにラップ
-                 └─ Tectonic コンパイル → PDF
-                       │
-                       └─ S3 staging → Worker → Client
-```
+### 3.1 print 専用ルート
 
-### 3.1 MD → LaTeX 変換器
+新ルート: `/print/exam?problem_ids=<csv>&title=<title>&header=<header>`
 
-`remark` で MD を AST にして、独自 visitor で LaTeX を emit する。
+このルートは:
 
-| MD node | LaTeX 出力 |
-|---|---|
-| heading (h1/h2/h3) | `\section*{}` / `\subsection*{}` / `\subsubsection*{}` |
-| paragraph | プレーンテキスト + math 素通し |
-| strong | `\textbf{}` |
-| emphasis | `\emph{}` |
-| inlineCode | `\texttt{}` |
-| list (ordered/unordered) | `\begin{enumerate}` / `\begin{itemize}` |
-| table | `\begin{tabular}` (GFM table → align spec 変換) |
-| image | `\includegraphics` (= 画像 URL は事前に gdrive / S3 から取得して埋め込み) |
-| link | `\href{}{}` (hyperref) |
-| inlineMath, math | **素通し** (KaTeX と LaTeX で記法共通) |
-| code (fence) | 言語 `tikz` のみ特別扱い: `\begin{tikzpicture}...\end{tikzpicture}` で囲む |
+1. クエリから対象 problem を fetch (`useProblemsList` 等を流用)
+2. A4 print CSS が適用された static layout で各 problem を順に描画
+3. mount 完了 + KaTeX render 完了後に `window.print()` を発火
+4. ユーザが print dialog で "Save as PDF" を選択
 
-実装: 200-300 行の TS を想定 (pandoc は heavy なので採用しない)。
+```tsx
+// src/app/(pages)/print/exam/page.tsx (sketch)
+function PrintExamPage() {
+  const ids = useSearch().problem_ids?.split(",") ?? [];
+  const problems = useProblemsByIds(ids);
 
-### 3.2 A4 ミニテスト template
+  useEffect(() => {
+    if (!problems.length) return;
+    // KaTeX rendering は同期なので、layout 確定後に発火するため microtask 1 つ待つ
+    queueMicrotask(() => window.print());
+  }, [problems]);
 
-Lambda 側に静的 `.tex` テンプレート (geometry / hyperref / amsmath / tikz /
-graphicx を `\usepackage`)。問題本文を `\input` で流し込む形にする。
-
-```tex
-\documentclass[a4paper,11pt]{article}
-\usepackage[margin=20mm]{geometry}
-\usepackage{amsmath, amssymb, tikz, graphicx, hyperref}
-\begin{document}
-%% Problem 1 (= MD→LaTeX 変換結果)
-\section*{問題 1}
-\input{problem-1.tex}
-\vspace{3cm}  %% 解答スペース
-\newpage
-%% Problem 2 ...
-\end{document}
+  return (
+    <div className="print-exam">
+      <header>{title}</header>
+      {problems.map((p, i) => (
+        <article key={p.id} className="problem">
+          <h2>問題 {i + 1}</h2>
+          <Markdown>{p.body_md}</Markdown>
+          <div className="answer-space" />
+        </article>
+      ))}
+    </div>
+  );
+}
 ```
 
-## 4. 配置
+### 3.2 Print CSS
 
-**Lambda 主戦**、Render は採用見送り (Tectonic + TikZ の memory 要件で
-Render free plan 512MB で OOM 想定)。
+```css
+@page {
+  size: A4;
+  margin: 20mm;
+}
 
-- 既存 `pdf-export` Lambda とは **別 function** (`pdf-render-tex`) として立てる
-- 入力モダリティが本質的に違うため (= PDF page merge vs LaTeX compile)、
-  「単一パイプライン原則」はそれぞれの function 内に閉じる
-- SigV4 invoke + S3 staging の経路は既存 `pdf-export` から再利用 (Worker 側に
-  共通 util を切り出す)
+@media print {
+  body { background: white; }
+  /* 通常画面の sidebar / header を全部隠す */
+  .app-sidebar, .app-header, nav { display: none !important; }
+  .print-exam .problem {
+    break-inside: avoid;       /* 問題が page 跨ぎしないように */
+    margin-bottom: 1.5em;
+  }
+  .print-exam .answer-space {
+    height: 3cm;               /* 解答スペース */
+    border-bottom: 1px solid #ccc;
+  }
+}
 
+/* 通常表示でも preview できるよう、画面サイズでも layout を整える */
+.print-exam {
+  max-width: 210mm;
+  margin: 0 auto;
+  padding: 20mm;
+  background: white;
+  color: black;
+}
 ```
-CF Worker (data-drills-cf)
-  ├── /api/v1/pdf-export       → Lambda: pdf-export       (外部 PDF merge)
-  └── /api/v1/pdf-render-tex   → Lambda: pdf-render-tex   (MD→LaTeX→PDF) ★新規
+
+### 3.3 起動 UX
+
+問題リスト画面に「Generate PDF」ボタンを追加:
+
+```tsx
+<Button onClick={() => {
+  const ids = selectedProblems.map(p => p.id).join(",");
+  window.open(`/print/exam?problem_ids=${ids}`, "_blank");
+}}>
+  Generate PDF
+</Button>
 ```
 
-## 5. スキーマ
+新タブで print 用ページが開き、自動で print dialog が出る。
+"Save as PDF" でローカル保存、または「印刷」で物理プリンタへ。
 
-`problem` table に nullable な 1 列を追加 (旧案の 2 列 tex_source/tex_answer は撤回):
+## 4. スキーマ
+
+`problem` table に nullable な 1 列を追加:
 
 ```sql
 ALTER TABLE data_drills.problem ADD COLUMN body_md text;
 ```
 
-- `body_md`: 問題本文 + 解答を含む markdown ソース。解答は MD の構造で
-  分節 (例: `## 解答` heading 以下、または `<!-- answer -->` のような sentinel)
-- 解答を別列にしない理由: 問題と解答を同じ source で書く方が author 体験が自然、
-  かつ rendering 側で sentinel に応じて出し分けできる
+- `body_md`: 問題本文の markdown ソース
+- 解答は問題と同じ MD 内 (`## 解答` 以下) か別列に分けるかは運用しながら決める
+- どちらも null なら従来通り問題ファイル (problem_file) 経由の問題
 
-別案: `body_md` + `answer_md` の 2 列に分ける構成も可。最初は 1 列で始めて、
-書きづらさを感じたら分割する。
+旧案で検討した 2 列構成 (tex_source/tex_answer) は撤回。記法は markdown
+1 種類に統一。
 
-## 6. オーサリング (= 問題入力 UX)
+## 5. オーサリング (= 問題入力 UX)
 
 既存資産:
-- [src/components/codemirror-editor.tsx](../src/components/codemirror-editor.tsx) — markdown 編集 (CodeMirror)
-- [src/components/markdown.tsx](../src/components/markdown.tsx) — remark-math + rehype-katex で render
+
+- [src/components/codemirror-editor.tsx](../src/components/codemirror-editor.tsx) — CodeMirror による markdown 編集
+- [src/components/markdown.tsx](../src/components/markdown.tsx) — `remark-math` + `rehype-katex` で render
 - `katex` / `remark-math` / `remark-gfm` package 全て導入済
 
 実装:
-- 問題編集 dialog に `body_md` テキストエリア (CodeMirror) を追加
-- 横分割で markdown preview を出す (既存 `<Markdown>` コンポーネント)
-- `tikz` code block は preview pane で「🖼 TikZ figure (PDF only)」placeholder
 
-## 7. KaTeX ↔ Tectonic compat
+- 問題編集 dialog に `body_md` 用の CodeMirror エディタを追加
+- 横分割で markdown preview を出す (= 既存 `<Markdown>` コンポーネント)
+- print プレビューは `/print/exam?problem_ids=<id>` で別タブで確認できる
+  (= print CSS 込みの実物プレビュー)
 
-両対応の subset:
+## 6. 図の扱い
 
-- KaTeX が解釈する数式記法 → web / PDF どちらでも一致
-- markdown の structure (heading / list / table / image / link) → 両対応
+3 つの選択肢、すべて MD ベースで表現可能:
 
-**PDF only (web preview 不可)**:
+1. **事前に作って画像で保存** (推奨デフォルト)
+   - 任意ツール (Blender / Inkscape / Geogebra / iPad ペン書き) で作成
+   - S3 や Drive に置いて `![alt](url)` で埋め込み
+2. **インライン SVG**
+   - markdown は HTML を許容するので `<svg>...</svg>` をそのまま MD に書く
+   - 軽量な 2D 図 (座標軸 + 矢印程度) に向く
+3. **JS で生成**
+   - 必要なら markdown 拡張 (例: ` ```plot ` fenced block) を作って
+     React コンポーネント (D3 / Recharts / 独自 SVG generator) で描く
+   - 現状は不要。本格化したら拡張機能として追加
 
-- `tikz` fenced block
-- (将来) `latex-raw` fenced block (任意の LaTeX エスケープ)
+print CSS で画像 / SVG が A4 内に収まれば、KaTeX 数式と同じ品質でブラウザが PDF 化する。
 
-author への visual feedback: web preview 側で PDF only block を灰色の
-placeholder + ラベル付きで表示し、subset を意識させる。
+## 7. 採用しなかった代替案
 
-## 8. 採用しなかった代替案
+### 7.1 Tectonic on Lambda (旧案)
 
-### 8.1 LaTeX 直接 SSOT (旧案)
+- 数式忠実度は KaTeX より上だが、本機能の対象 (テキスト + 数式の短い演習問題)
+  では KaTeX で十分
+- TikZ で図を組む LaTeX 流の workflow が無くても、画像 / SVG / JS で代替可能
+- インフラ (Lambda function 新設 + Docker + SigV4 + S3 staging) が
+  個人スケールに対して過剰
 
-- 数式忠実度は同じ、author が `\section{}` 等を書く負担が出る
-- 既存 markdown 経路を捨てる → 教科書本文を MD で書いている既存運用と
-  乖離する (CodeMirror editor / Markdown renderer はすでに本格運用)
-- KaTeX live preview は LaTeX → KaTeX で動かないこともなく動くが、
-  記法的に MD ラッピングしている方が author 体験が良い
+→ 将来 KaTeX で表現できない数式や、TikZ でないと書けない図が常態化した
+場合のみ再評価する (= §10 将来の分岐条件)。
 
-→ 採用しない。SSOT は MD + math、PDF 経路で MD→LaTeX 変換を挟む。
+### 7.2 サーバ側で Puppeteer / Playwright で PDF 化
 
-### 8.2 Puppeteer / Playwright で HTML→PDF
+- 「ボタン 1 クリックで完了」自動化のために考えうるが、Chromium image が
+  Lambda 上でも数百 MB
+- cold start が長い、複雑度が上がる
+- 個人用なら print dialog の 1 ステップ余分は誤差
 
-- web の HTML 出力をそのまま PDF にする → SSOT は markdown のまま
-- 数式は KaTeX 由来 (Tectonic native より忠実度低下)
-- TikZ は使えない (= 数学作図ができない)
-- Chromium Lambda は重い (memory / cold start)
+### 7.3 html2pdf.js などのフロント PDF ライブラリ
 
-→ 採用しない。数式・図の品質で TeX 経路に劣後。
+- DOM → canvas → PDF の経路で、複雑な KaTeX の SVG/MathML レイアウトが
+  崩れることがある
+- ブラウザ native の print to PDF (Chromium のもの) のほうが品質が高く、
+  実装も window.print() 1 行
 
-### 8.3 pandoc で MD → LaTeX 変換
+## 8. 既存 pdf-export との関係
 
-- 機能網羅性は最高だが Haskell runtime 同梱で +150MB
-- Lambda image 肥大化、cold start 悪化
-- 数式・TikZ の handling もカスタマイズしたい
+両機能は併存:
 
-→ 採用しない。remark AST から手書き emitter の方が軽量で制御可能。
+| 機能 | 入力 | 出力経路 |
+|---|---|---|
+| `pdf-export` (既存) | 外部 PDF + ページ番号 | Lambda で merge → S3 → ダウンロード |
+| **`/print/exam` (新)** | `problem.body_md` (markdown) | ブラウザの print 機能 |
+
+UI は問題リストで 2 つのボタンを出す:
+
+- "Export PDF" — 既存 problem_file を持つ問題 (CPA 簿財等)
+- "Generate Exam PDF" — `body_md` を持つ問題 (微分幾何等)
+
+両方持っていればどちらも選択可、片方のみならその機能だけ表示。
 
 ## 9. 実装ロードマップ
 
 | Phase | 内容 | 状態 |
 |---|---|---|
-| 0 | 設計 (本ドキュメント) | done |
-| 1 | schema: `problem.body_md` 追加 | 着手前 (本ドキュメント確定後) |
-| 2 | MD → LaTeX 変換ライブラリ (`src/lib/md-to-latex.ts`) | 着手前 |
-| 3 | Tectonic Lambda (Dockerfile + handler) | 着手前 |
-| 4 | A4 テンプレート (`pdf-render-tex/templates/a4-mini-test.tex`) | 着手前 |
-| 5 | Worker route `/api/v1/pdf-render-tex` + SigV4/S3 共通 util | 着手前 |
-| 6 | 問題編集 dialog に `body_md` フィールド + KaTeX preview | 着手前 |
-| 7 | "Generate test PDF" ボタン (問題リストから N 問選択 → PDF 生成) | 着手前 |
+| 0 | 計画書 (本ドキュメント) | done |
+| 1 | schema: `problem.body_md` 追加 (drizzle/manual/011) | 着手前 |
+| 2 | `/print/exam` ルート + print CSS + window.print() | 着手前 |
+| 3 | 問題リストに "Generate Exam PDF" ボタン | 着手前 |
+| 4 | 問題編集 dialog に `body_md` フィールド + Markdown preview | 着手前 |
+| 5 | 解答スペース調整 (`<div className="answer-space" />` の高さ等) | 着手前 |
+| 6 | (発生したら) インライン SVG・画像埋め込みの実例追加 | 必要時 |
 
-優先度: 2-5 (パイプラインを動かす) を先に着手し、6-7 (オーサリング UX) は
-最初は素朴な textarea で済ませ、パイプラインが動いてから改善する。
+工数感: Phase 1-3 で MVP 動作、合計 1-2 日程度。Phase 4 はオーサリング UX
+の磨き込みで別途 1 日。
 
-## 10. リスクと留保
+## 10. 将来の分岐条件
 
-- **Tectonic + TikZ で Lambda memory が足りない可能性** → 2GB から始め、
-  必要なら 4-10GB (ARM64 max) に上げる
-- **MD → LaTeX 変換の網羅性** → 最初は最小 subset、author が必要としたものから
-  順次対応 (表組み、画像 path、特殊記号エスケープ等)
-- **画像 URL の取得** → Drive 上の画像を Lambda が pull、または S3 に事前
-  staging する経路を決める (= problem_file の gdrive_file_id を使うのが筋)
-- **TikZ コンパイル時間** → 重い図は事前に外部レンダして画像埋め込みに退避
-- **shell-escape 制限** → Tectonic は外部呼び出し制限あり、Asymptote / gnuplot
-  連携はしない方針
+本決定は「対象問題が KaTeX で十分に表現できる」前提で最適。前提が崩れた場合のみ再評価:
 
-## 11. 既存 pdf-export との共存
+1. **複雑な作図が日常化した場合**: TikZ や Asymptote のような native LaTeX 描画
+   が必要になったら Tectonic on Lambda 案を再開
+2. **出版品質の数式組版が必要になった場合**: KaTeX → LaTeX へ
+3. **第三者公開 / 自動配信化**: ボタン 1 クリックで自動ダウンロード化したい
+   場合、サーバ側 Puppeteer Lambda を検討
 
-両 function が並走する:
+いずれも当面は不要、必要になった時点で migration する設計。
 
-| function | 入力 | 出力 |
-|---|---|---|
-| `pdf-export` (既存) | `{problem_id, gdrive_file_id, pages}[]` | 外部 PDF を merge |
-| `pdf-render-tex` (新) | `{problem_id, body_md}[]` | MD→LaTeX→Tectonic で組版 |
+## 11. リスクと留保
 
-UI 上は 2 つのボタンを出す:
-- "Export PDF" — 既存問題ファイルから抜粋 (CPA/簿財等)
-- "Generate test PDF" — body_md ベースで新規生成 (微分幾何等)
-
-problem が `body_md` を持っていればどちらも選択可能、なければ "Export" のみ。
+- **window.print() の発火タイミング**: KaTeX render が同期完了する前に
+  print() するとレイアウトが崩れる。`requestAnimationFrame` を 2 段噛ませる
+  か、`document.fonts.ready` を待つ等の保険を入れる
+- **page break の挙動**: `break-inside: avoid` で 1 問が page 跨ぎしないよう
+  にするが、長い問題は page 跨ぎ必要。実機で要調整
+- **ブラウザ依存**: Chromium 系 (Chrome / Edge) と Firefox / Safari で
+  print CSS の挙動に細かい差。動作確認は Chromium 系を主とする
+- **画像の絶対 URL**: `<img src>` は print 時もブラウザがネットワーク fetch する。
+  CDN / S3 経由を前提に CORS / アクセス制御を確認
