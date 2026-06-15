@@ -7,8 +7,12 @@ import { fieldKeys } from "@/hooks/queries/use-field-data";
 
 /**
  * Scope 選択時に呼ぶ。当該 field の重い list/lookup を並列 prefetch して、
- * 5 view (review/throughput/stats/digest/scopes detail) のどれに遷移しても
- * cache hit になるようにする。staleTime 5 分以内なら no-op。
+ * Plan / stats / digest / scopes detail のどれに遷移しても cache hit に
+ * なるようにする。staleTime 5 分以内なら no-op。
+ *
+ * 注: 旧 review/throughput ページは 2026-06-12 に Plan に吸収されたが、
+ * `/api/v1/review` endpoint は Plan の FSRS schedule overlay (= next
+ * review の描画) に使われ続けるため prefetch 対象に含める。
  */
 export function prefetchScopeFieldResources(qc: QueryClient, fieldId: string) {
   return Promise.all([
