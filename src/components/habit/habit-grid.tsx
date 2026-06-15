@@ -7,7 +7,7 @@
  */
 
 import { useMemo } from "react";
-import { Plus, GripVertical } from "lucide-react";
+import { GripVertical } from "lucide-react";
 import {
   DndContext,
   closestCenter,
@@ -23,7 +23,6 @@ import {
   arrayMove,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Button } from "@/components/ui/button";
 import type { HabitRow } from "@/hooks/queries/use-habits";
 import type { HabitCell } from "@/hooks/queries/use-habit-cells";
 import type { HabitCandidate } from "@/hooks/queries/use-toggl-habit-candidates";
@@ -42,7 +41,6 @@ type Props = {
   pastDays?: number;
   futureDays?: number;
   onEditHabit?: (id: string) => void;
-  onAddHabit?: () => void;
   onReorder?: (ids: string[]) => void;
 };
 
@@ -101,7 +99,6 @@ export function HabitGrid({
   pastDays = 30,
   futureDays = 7,
   onEditHabit,
-  onAddHabit,
   onReorder,
 }: Props) {
   const candidateMap = useMemo(() => buildCandidateMap(candidates), [candidates]);
@@ -174,22 +171,9 @@ export function HabitGrid({
 
         {habits.length === 0 && (
           <div className="text-center text-sm text-muted-foreground py-6">
-            No habits yet. Click "Add habit" below to start.
+            No habits yet. Click "Add habit" above to start.
           </div>
         )}
-
-        <div className="pt-2 flex">
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            onClick={onAddHabit}
-            className="gap-1.5 ml-1"
-          >
-            <Plus className="size-3.5" />
-            Add habit
-          </Button>
-        </div>
       </div>
     </div>
   );

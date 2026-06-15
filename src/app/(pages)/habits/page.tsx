@@ -1,5 +1,7 @@
 import { useState } from "react";
+import { Plus } from "lucide-react";
 import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
 import { HabitGrid } from "@/components/habit/habit-grid";
 import { HabitDialog } from "@/components/habit/habit-dialog";
 import { ManualSyncButton } from "@/components/habit/manual-sync-button";
@@ -51,6 +53,16 @@ export default function HabitsPage() {
     <div className="p-3 md:p-4 flex flex-col gap-2">
       <div className="rounded-md border p-3 space-y-2">
         <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => setDialogState({ item: null })}
+            className="gap-1.5 h-7"
+          >
+            <Plus className="size-3.5" />
+            Add habit
+          </Button>
           <div className="ml-auto">
             <ManualSyncButton
               lastSyncedAt={syncedAtSec}
@@ -68,7 +80,6 @@ export default function HabitsPage() {
             const item = habits.find((h) => h.id === id) ?? null;
             if (item) setDialogState({ item });
           }}
-          onAddHabit={() => setDialogState({ item: null })}
           onReorder={(ids) => reorderHabits.mutate(ids)}
         />
       </div>
