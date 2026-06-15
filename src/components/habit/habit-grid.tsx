@@ -12,13 +12,13 @@ import type { HabitRow } from "@/hooks/queries/use-habits";
 import type { HabitCell } from "@/hooks/queries/use-habit-cells";
 import type { HabitCandidate } from "@/hooks/queries/use-toggl-habit-candidates";
 import { buildCandidateMap, displayFor } from "@/lib/habit-display";
+import { CELL, GAP, STEP } from "@/lib/chart-constants";
 
-const CELL = 14;
-const GAP = 2;
-const STEP = CELL + GAP;
+// 縦横同じ STEP で揃える (TetrisChart と完全一致)
 const LABEL_W = 140;
 const STREAK_W = 64;
-const ROW_H = CELL + 6;
+const ROW_H = STEP;
+const CELL_OFFSET_Y = (ROW_H - CELL) / 2;  // = GAP / 2 で対称配置
 
 type Props = {
   habits: HabitRow[];
@@ -108,7 +108,7 @@ export function HabitGrid({
   const gridWidth = totalCells * STEP - GAP;
 
   const headerH = 18;
-  const totalH = headerH + habits.length * ROW_H + 8;
+  const totalH = headerH + habits.length * ROW_H + 4;
 
   return (
     <div className="overflow-x-auto">
@@ -139,10 +139,10 @@ export function HabitGrid({
 
         {/* ── Today column highlight (background) ── */}
         <rect
-          x={LABEL_W + todayIdx * STEP - 1}
-          y={headerH - 2}
-          width={CELL + 2}
-          height={habits.length * ROW_H + 4}
+          x={LABEL_W + todayIdx * STEP - GAP / 2}
+          y={headerH - GAP / 2}
+          width={CELL + GAP}
+          height={habits.length * ROW_H + GAP}
           fill="hsl(var(--accent))"
           opacity={0.25}
           rx={3}
@@ -152,7 +152,8 @@ export function HabitGrid({
         {habits.map((h, rowIdx) => {
           const d = displayFor(h, candidateMap);
           const y = headerH + rowIdx * ROW_H;
-          const cy = y + CELL / 2 + 2;
+          const cellY = y + CELL_OFFSET_Y;
+          const cy = cellY + CELL / 2;
           const cellMap = cellMaps.get(h.id);
           const ratio = recentRatio(cellMap, h.cadence, today);
 
@@ -182,7 +183,7 @@ export function HabitGrid({
                   return (
                     <rect
                       key={`c-${h.id}-${date}`}
-                      x={x} y={y + 2} width={CELL} height={CELL} rx={2}
+                      x={x} y={cellY} width={CELL} height={CELL} rx={2}
                       fill="none"
                       stroke="hsl(var(--border))"
                       strokeWidth={0.5}
@@ -194,7 +195,7 @@ export function HabitGrid({
                   return (
                     <rect
                       key={`c-${h.id}-${date}`}
-                      x={x} y={y + 2} width={CELL} height={CELL} rx={2}
+                      x={x} y={cellY} width={CELL} height={CELL} rx={2}
                       fill={d.color}
                       opacity={isToday ? 1 : 0.85}
                     />
@@ -205,7 +206,7 @@ export function HabitGrid({
                   return (
                     <rect
                       key={`c-${h.id}-${date}`}
-                      x={x} y={y + 2} width={CELL} height={CELL} rx={2}
+                      x={x} y={cellY} width={CELL} height={CELL} rx={2}
                       fill="none"
                       stroke={d.color}
                       strokeWidth={2}
