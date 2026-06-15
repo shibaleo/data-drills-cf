@@ -418,21 +418,20 @@ export const goalMilestone = pgTable("goal_milestone", {
 // マッチルール: (toggl_project, toggl_description) の完全一致タプル。Toggl の
 // description は canonical な文字列 (例 "brush teeth") なので regex は不要。
 
+// Pure form (2026-06-15): name / category_color / minutes_estimate は drop。
+// 表示用の name / color / 所要時間は warehouse の fct_toggl_time_entries から
+// 都度 lookup する。habit は「ユーザ意図 = どの Toggl pair を追跡するか + cadence」
+// のみ保持する。
 export const habit = pgTable("habit", {
   id: id(),
   userId: uuid("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
-  name: text("name").notNull(),                          // "Brush teeth" 等
   cadence: text("cadence").notNull(),                    // 'daily' | 'weekly'
-  togglProject: text("toggl_project").notNull(),         // Toggl project_name
-  togglDescription: text("toggl_description").notNull(), // Toggl description
-  categoryColor: text("category_color").notNull(),       // "#06b6d4" 等
-  minutesEstimate: integer("minutes_estimate").notNull().default(5),
+  togglProject: text("toggl_project").notNull(),         // Toggl project_name (match key)
+  togglDescription: text("toggl_description").notNull(), // Toggl description (match key)
   sortOrder: integer("sort_order").notNull().default(0),
   isActive: boolean("is_active").notNull().default(true),
   ...timestamps(),
 }, (t) => [
-  // 同一マッチルールの重複登録を防ぐ (同一 user 内)
   uniqueIndex("habit_user_match_key").on(t.userId, t.togglProject, t.togglDescription),
-  // /habits の active 一覧クエリ高速化
   index("habit_user_active_idx").on(t.userId, t.isActive),
 ]);

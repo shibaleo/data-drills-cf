@@ -4,12 +4,9 @@ import { rpc, unwrap, type RpcData } from "@/lib/rpc-client";
 export type HabitRow = RpcData<typeof rpc.api.v1.habits["$get"]>["data"][number];
 
 type HabitCreatePayload = {
-  name: string;
   cadence: "daily" | "weekly";
   toggl_project: string;
   toggl_description: string;
-  category_color: string;
-  minutes_estimate?: number;
   sort_order?: number;
   is_active?: boolean;
 };

@@ -17,34 +17,11 @@ import {
   useInvalidateHabitCells,
   type HabitCell,
 } from "@/hooks/queries/use-habit-cells";
+import { useTogglHabitCandidates } from "@/hooks/queries/use-toggl-habit-candidates";
+import { buildCandidateMap, displayFor } from "@/lib/habit-display";
 
 function todayISO(): string {
   return new Date().toISOString().slice(0, 10);
-}
-
-/** HabitCell[] → OverlayBlock[]。habit カテゴリ色 + kind 別 opacity を適用。 */
-function toOverlayBlocks(
-  cells: HabitCell[],
-  habitsById: Map<string, HabitRow>,
-): OverlayBlock[] {
-  const out: OverlayBlock[] = [];
-  for (const c of cells) {
-    const h = habitsById.get(c.habitId);
-    if (!h) continue;
-    out.push({
-      problemId: `habit:${c.habitId}:${c.date}`,
-      code: h.name,
-      name: null,
-      date: c.date,
-      color: h.categoryColor,
-      statusName: c.kind,
-      // throughput のみ 0.5 で薄く沈める (Plan の overlay 規約と同じ)。
-      // next-step / forecast は未指定 → chart 既定の 0.85 が効く。
-      opacity: c.kind === "throughput" ? 0.5 : undefined,
-      kind: c.kind,
-    });
-  }
-  return out;
 }
 
 export default function HabitsPage() {
@@ -56,6 +33,10 @@ export default function HabitsPage() {
   const updateHabit = useUpdateHabit();
   const deleteHabit = useDeleteHabit();
 
+  const candidatesQuery = useTogglHabitCandidates();
+  const candidates = useMemo(() => candidatesQuery.data ?? [], [candidatesQuery.data]);
+  const candidateMap = useMemo(() => buildCandidateMap(candidates), [candidates]);
+
   const cellsQuery = useHabitCells();
   const invalidateCells = useInvalidateHabitCells();
   const today = cellsQuery.data?.today ?? todayISO();
@@ -65,7 +46,6 @@ export default function HabitsPage() {
   const [dialogState, setDialogState] = useState<{ item: HabitRow | null } | null>(null);
 
   // throughput / next-step / forecast の独立表示 toggle。
-  // 既定: throughput OFF (= 過去実績を隠す)、next-step / forecast ON。
   const [hideThroughput, setHideThroughput] = useState(true);
   const [hideNextStep, setHideNextStep] = useState(false);
   const [hideForecast, setHideForecast] = useState(false);
@@ -74,10 +54,29 @@ export default function HabitsPage() {
     () => new Map(habits.map((h) => [h.id, h])),
     [habits],
   );
-  const allOverlay = useMemo(
-    () => toOverlayBlocks(cells, habitsById),
-    [cells, habitsById],
-  );
+
+  // cells → OverlayBlock. 色とラベルは candidateMap 経由で warehouse 由来。
+  const allOverlay = useMemo<OverlayBlock[]>(() => {
+    const out: OverlayBlock[] = [];
+    for (const c of cells as HabitCell[]) {
+      const h = habitsById.get(c.habitId);
+      if (!h) continue;
+      const d = displayFor(h, candidateMap);
+      out.push({
+        problemId: `habit:${c.habitId}:${c.date}`,
+        code: d.label,
+        name: null,
+        date: c.date,
+        color: d.color,
+        statusName: c.kind,
+        // throughput のみ 0.5 で薄く沈める (Plan の overlay 規約と同じ)。
+        opacity: c.kind === "throughput" ? 0.5 : undefined,
+        kind: c.kind,
+      });
+    }
+    return out;
+  }, [cells, habitsById, candidateMap]);
+
   const overlayItems = useMemo(
     () => allOverlay.filter((o) => {
       if (hideThroughput && o.kind === "throughput") return false;
@@ -88,7 +87,6 @@ export default function HabitsPage() {
     [allOverlay, hideThroughput, hideNextStep, hideForecast],
   );
 
-  // sync 時刻: warehouse 由来。manual button で refetch する。
   const syncedAtSec = useMemo(() => {
     const iso = cellsQuery.data?.synced_at;
     return iso ? Math.floor(new Date(iso).getTime() / 1000) : undefined;
@@ -134,6 +132,7 @@ export default function HabitsPage() {
 
       <HabitMastersPanel
         habits={habits}
+        candidates={candidates}
         onAdd={() => setDialogState({ item: null })}
         onEdit={(id) => {
           const item = habits.find((h) => h.id === id) ?? null;
@@ -153,11 +152,11 @@ export default function HabitsPage() {
             await createHabit.mutateAsync(payload);
             toast.success("Habit created");
           }
-          await invalidateCells();  // cells も再取得
+          await invalidateCells();
           setDialogState(null);
         }}
         onDelete={dialogState?.item ? async () => {
-          if (!confirm(`Delete habit "${dialogState.item?.name}"?`)) return;
+          if (!confirm(`Delete habit "${dialogState.item?.togglDescription}"?`)) return;
           await deleteHabit.mutateAsync(dialogState.item!.id);
           toast.success("Habit deleted");
           await invalidateCells();

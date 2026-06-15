@@ -1,9 +1,9 @@
 /**
  * /api/v1/habits — recurrent habits CRUD。
  *
- * habit テーブルは「定義 + Toggl マッチルール」のみを持つ。done セルは別 table
- * に materialize せず、warehouse の data_presentation.fct_toggl_time_entries を
- * Worker 側で JOIN して構成する。
+ * Pure form (2026-06-15): habit は (toggl_project, toggl_description) + cadence +
+ * sort_order + is_active のみを持つ。表示用の name / color / 所要時間は warehouse
+ * の fct_toggl_time_entries から都度 lookup する。
  */
 
 import { Hono } from "hono";
@@ -29,12 +29,9 @@ const app = new Hono<Env>()
     const body = c.req.valid("json");
     const values = {
       userId,
-      name: body.name,
       cadence: body.cadence,
       togglProject: body.toggl_project,
       togglDescription: body.toggl_description,
-      categoryColor: body.category_color,
-      minutesEstimate: body.minutes_estimate ?? 5,
       sortOrder: body.sort_order ?? 0,
       isActive: body.is_active ?? true,
       ...(body.id ? { id: body.id } : {}),
@@ -57,12 +54,9 @@ const app = new Hono<Env>()
     const userId = c.get("authResult").userId;
     const body = c.req.valid("json");
     const updates: Record<string, unknown> = { updatedAt: new Date() };
-    if (body.name !== undefined) updates.name = body.name;
     if (body.cadence !== undefined) updates.cadence = body.cadence;
     if (body.toggl_project !== undefined) updates.togglProject = body.toggl_project;
     if (body.toggl_description !== undefined) updates.togglDescription = body.toggl_description;
-    if (body.category_color !== undefined) updates.categoryColor = body.category_color;
-    if (body.minutes_estimate !== undefined) updates.minutesEstimate = body.minutes_estimate;
     if (body.sort_order !== undefined) updates.sortOrder = body.sort_order;
     if (body.is_active !== undefined) updates.isActive = body.is_active;
     const [row] = await db.update(habit).set(updates)
