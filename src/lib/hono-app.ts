@@ -15,7 +15,7 @@ import statuses from "@/routes/statuses";
 import reviewTags from "@/routes/review-tags";
 import problemFiles from "@/routes/problem-files";
 import problemsList from "@/routes/problems-list";
-import reviewSchedule from "@/routes/review-schedule";
+import srs from "@/routes/srs";
 import answerHistory from "@/routes/answer-history";
 import pdfExport from "@/routes/pdf-export";
 import filterPrefs from "@/routes/filter-prefs";
@@ -71,7 +71,7 @@ const v1 = new Hono<Env>()
   .route("/review-tags", reviewTags)
   .route("/problem-files", problemFiles)
   .route("/problems-list", problemsList)
-  .route("/review-schedule", reviewSchedule)
+  .route("/srs", srs)
   .route("/answer-history", answerHistory)
   .route("/pdf-export", pdfExport)
   .route("/filter-prefs", filterPrefs)

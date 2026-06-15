@@ -9,7 +9,7 @@ import { useField } from "@/hooks/use-field";
 import { useSubjects, useLevels } from "@/hooks/queries/use-field-data";
 import { useAnswerHistoryList } from "@/hooks/queries/use-answer-history";
 import { useProblemsList } from "@/hooks/queries/use-problems";
-import { computeNextReview } from "@/lib/review-scoring";
+import { computeNextReview } from "@/lib/srs-scoring";
 import { hmsToSeconds } from "@/lib/duration";
 import { useFlashcardsData } from "@/hooks/queries/use-flashcards";
 import { useTogglEntries, type TogglEntry } from "@/hooks/queries/use-toggl";

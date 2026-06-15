@@ -1,7 +1,7 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { rpc, unwrap } from "@/lib/rpc-client";
 import { problemsKeys } from "@/hooks/queries/use-problems";
-import { reviewScheduleKeys } from "@/hooks/queries/use-review-schedule";
+import { srsKeys } from "@/hooks/queries/use-srs";
 import { answerHistoryKeys } from "@/hooks/queries/use-answer-history";
 import { fieldKeys } from "@/hooks/queries/use-field-data";
 
@@ -11,7 +11,7 @@ import { fieldKeys } from "@/hooks/queries/use-field-data";
  * なるようにする。staleTime 5 分以内なら no-op。
  *
  * 注: 旧 review/throughput ページは 2026-06-12 に Plan に吸収されたが、
- * `/api/v1/review-schedule` endpoint は Plan の FSRS schedule overlay
+ * `/api/v1/srs` endpoint は Plan の FSRS schedule overlay
  * (= next review の描画) に使われ続けるため prefetch 対象に含める。
  */
 export function prefetchScopeFieldResources(qc: QueryClient, fieldId: string) {
@@ -25,9 +25,9 @@ export function prefetchScopeFieldResources(qc: QueryClient, fieldId: string) {
       staleTime: 5 * 60_000,
     }),
     qc.prefetchQuery({
-      queryKey: reviewScheduleKeys.list(fieldId, null, null),
+      queryKey: srsKeys.list(fieldId, null, null),
       queryFn: async () => {
-        const json = await unwrap(rpc.api.v1["review-schedule"].$get({ query: { field_id: fieldId } }));
+        const json = await unwrap(rpc.api.v1.srs.$get({ query: { field_id: fieldId } }));
         return json.data;
       },
       staleTime: 5 * 60_000,

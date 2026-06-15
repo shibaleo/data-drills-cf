@@ -5,15 +5,15 @@ import { SortHeader } from "@/components/sort-header";
 import { StatusTag } from "@/components/color-tags";
 import { OpaqueTag } from "@/components/problem-card";
 import { formatRelDay } from "@/lib/relative-day";
-import type { ReviewRow as ReviewApiRow } from "@/hooks/queries/use-review-schedule";
+import type { SrsRow } from "@/hooks/queries/use-srs";
 
-/** /review と /plan で共有する row 形 (answerCount → reviewCount に rename)。 */
-export interface ScheduleRow extends Omit<ReviewApiRow, "answerCount"> {
+/** Plan の Schedule テーブル row 形 (SrsRow の answerCount → reviewCount に rename)。 */
+export interface ScheduleRow extends Omit<SrsRow, "answerCount"> {
   reviewCount: number;
   standardTime: number | null;
 }
 
-export const reviewTableColumns: ColumnDef<ScheduleRow>[] = [
+export const planScheduleColumns: ColumnDef<ScheduleRow>[] = [
   {
     accessorKey: "lastStatus",
     header: ({ column }) => <SortHeader column={column}>Status</SortHeader>,
@@ -95,8 +95,8 @@ export const reviewTableColumns: ColumnDef<ScheduleRow>[] = [
   },
 ];
 
-/** ReviewApiRow → ScheduleRow への変換 (answerCount → reviewCount)。 */
-export function toScheduleRow(r: ReviewApiRow): ScheduleRow {
+/** SrsRow → ScheduleRow への変換 (answerCount → reviewCount)。 */
+export function toScheduleRow(r: SrsRow): ScheduleRow {
   return {
     problemId: r.problemId,
     code: r.code,

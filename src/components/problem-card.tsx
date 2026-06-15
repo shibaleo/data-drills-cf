@@ -8,7 +8,7 @@ export type { ProblemWithAnswers, AnswerWithReviews }
 import { parseDuration, fmtDiff, secondsToHms } from '@/lib/duration'
 import { toJSTDate, jstDayDiff, todayJST } from '@/lib/date-utils'
 import { computeForgettingInfo } from '@/lib/forgetting-curve'
-import { computeNextReview } from '@/lib/review-scoring'
+import { computeNextReview } from '@/lib/srs-scoring'
 import { useLookup } from '@/hooks/use-field'
 import { useSubjects, useLevels, useFields } from '@/hooks/queries/use-field-data'
 import { Markdown } from '@/components/markdown'

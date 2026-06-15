@@ -1,11 +1,13 @@
 /**
- * /api/v1/review-schedule — FSRS 由来の "次に復習すべき問題" スケジュールを
- * field 単位で返す read-only endpoint。Plan ページの overlay (next-review /
- * smooth-future projection) が消費する。
+ * /api/v1/srs — Spaced Repetition System の per-problem state を返す
+ * read-only endpoint。Plan ページの overlay (next step / forecast cascade)
+ * が消費する。
  *
- * 旧名 /api/v1/review (2026-06-15 改名)。旧 /review ページが Plan に吸収
- * された後も schedule data は Plan で使うため endpoint としては現役。
- * "review" という単名だと defunct なページとの混同が起きるので rename した。
+ * 各 problem について FSRS 由来の {stability, next due date, last evaluation,
+ * 表示色} を返す。
+ *
+ * 命名史: review (~2026-06-12) → review-schedule (2026-06-15) → srs (2026-06-15)
+ * SRS は FSRS の上位カテゴリで、"review" との多義混同を解消するために採用。
  */
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
@@ -13,7 +15,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { problem, answer, answerStatus, subject, level, scope, field } from "@/lib/db/schema";
 import { and, desc, eq, inArray, isNull, lte, sql } from "drizzle-orm";
-import { computeNextReview, computeDaysOverdue } from "@/lib/review-scoring";
+import { computeNextReview, computeDaysOverdue } from "@/lib/srs-scoring";
 import { toJSTDateString } from "@/lib/date-utils";
 import { problemColor } from "@/lib/problem-color";
 import { ownsField } from "@/lib/ownership";

@@ -1,5 +1,7 @@
 /**
- * Review scoring + next-review-date computation.
+ * SRS (Spaced Repetition System) scoring + next-review-date computation.
+ * FSRS の概念に基づく per-answer 評価 → 次の復習日の計算。
+ * 旧名 review-scoring.ts (2026-06-15 改名)。
  *
  * Next review date:
  *   nextReview = lastAnswerDate + stabilityDays × C_T^k

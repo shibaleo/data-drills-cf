@@ -9,9 +9,9 @@
  */
 import type { AllocatedProblem } from "@/lib/backlog-allocate";
 import type { OverlayBlock } from "@/components/tetris";
-import type { ReviewRow } from "@/hooks/queries/use-review-schedule";
+import type { SrsRow } from "@/hooks/queries/use-srs";
 import type { AnswerHistoryRow } from "@/hooks/queries/use-answer-history";
-import { computeNextReview } from "@/lib/review-scoring";
+import { computeNextReview } from "@/lib/srs-scoring";
 
 /** 順調な status 進行順 (= 各 review を smooth に通した場合の遷移) */
 const SMOOTH_CHAIN = ["Rough", "Fair", "Fluent", "Solid"] as const;
@@ -63,7 +63,7 @@ export type AssembleOverlayInput = {
   /** scope の member 全件 (problemId → standardTime lookup 用) */
   memberStandardTimeById: Map<string, number | null>;
   allocated: AllocatedProblem[];
-  reviews: ReviewRow[];
+  reviews: SrsRow[];
   history: AnswerHistoryRow[];
   statusByName: Map<string, { stabilityDays: number; color: string | null }>;
   horizonDate: string;

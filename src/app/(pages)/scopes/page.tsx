@@ -5,7 +5,7 @@ import { useScopes, useUpdateScope, type ScopeRow } from "@/hooks/queries/use-sc
 import { useField } from "@/hooks/use-field";
 import { useFields } from "@/hooks/queries/use-field-data";
 import { usePageTitle } from "@/lib/page-context";
-import { useReviewSchedule } from "@/hooks/queries/use-review-schedule";
+import { useSrs } from "@/hooks/queries/use-srs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -312,7 +312,7 @@ export default function ScopesHubPage() {
   // user 全 review を 1 度だけ取得して、client-side で scope.filter ごとに絞り込む
   // (review route の scope_id は status_stabilities override 専用で member filter
   //  には使われないため、ここで filter する)
-  const { data: allReviews = [] } = useReviewSchedule(undefined);
+  const { data: allReviews = [] } = useSrs(undefined);
 
   const statsByScope = useMemo(() => {
     const m = new Map<string, ScopeStats>();

@@ -19,7 +19,7 @@ import {
   type SortingState,
 } from "@tanstack/react-table";
 import { useField } from "@/hooks/use-field";
-import { useReviewSchedule } from "@/hooks/queries/use-review-schedule";
+import { useSrs } from "@/hooks/queries/use-srs";
 import { useProblemsList } from "@/hooks/queries/use-problems";
 import { useScopes, useScope, useScopeDetail, useScopeTimeline, useUpdateScope, sliceTimelineAtAsOf } from "@/hooks/queries/use-scopes";
 import { useProblemDialogs } from "@/hooks/use-problem-dialogs";
@@ -38,7 +38,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { ResizableTableShell } from "@/components/resizable-table-shell";
 import { AsOfControls } from "@/components/as-of-controls";
 import { FilterSection } from "@/components/filter-section";
-import { reviewTableColumns, toScheduleRow } from "@/components/review-table-columns";
+import { planScheduleColumns, toScheduleRow } from "@/components/plan-schedule-columns";
 import { useScopeEditState } from "@/hooks/use-scope-edit-state";
 import { usePdfExport } from "@/hooks/use-pdf-export";
 import { PdfExportButton } from "@/components/pdf-export-button";
@@ -83,7 +83,7 @@ export default function PlanPage() {
   const scopeQuery = useScope(scopeId ?? "");
   const updateScope = useUpdateScope();
   const allProblems = useProblemsList(fieldId ?? undefined).data ?? [];
-  const reviewQuery = useReviewSchedule(fieldId ?? undefined, null, scopeId ?? undefined);
+  const reviewQuery = useSrs(fieldId ?? undefined, null, scopeId ?? undefined);
   // Past throughput (= 過去 answer 履歴)。1 answer = 1 ブロックを overlay として今日より前に積む。
   // asOf 再生時は asOf 以前のみ表示するため、client 側 filter で対応。
   const throughputQuery = useAnswerHistoryList(undefined, null, scopeId ?? undefined);
@@ -343,7 +343,7 @@ export default function PlanPage() {
   const activeFilterCount = filterSubjects.size + filterLevels.size + hiddenLastStatuses.size + hiddenAllocKinds.size + hiddenAllocFlags.size;
   const table = useReactTable({
     data: scheduleRows,
-    columns: reviewTableColumns,
+    columns: planScheduleColumns,
     state: { sorting },
     onSortingChange: setSorting,
     getCoreRowModel: getCoreRowModel(),
