@@ -44,12 +44,51 @@ type CategoryRow = {
   sort_order: number | null;
 };
 
+type HabitCandidateRow = {
+  project_name: string | null;
+  description: string | null;
+  project_color: string | null;
+  n: string | number;        // bigint may come as string
+  last_seen: Date | null;
+};
+
 const app = new Hono<Env>()
   /**
    * GET /categories — Toggl personal_category 一覧 (dim_category_time_personal)。
    * digest の生活軸 tab を DWH 駆動で動的描画するための master endpoint。
    * Education/Sleep/Exercise/... を sort_order 昇順で返す。
    */
+  /**
+   * GET /habit-candidates — habit 登録時に Toggl の (project_name, description)
+   * 候補を warehouse から取得する master endpoint。
+   * 過去 90 日のヒット数 (n) と最終出現日 (last_seen) で並べる。
+   */
+  .get("/habit-candidates", async (c) => {
+    const rows = await neonSql<HabitCandidateRow[]>`
+      SELECT
+        project_name,
+        description,
+        MIN(project_color) AS project_color,
+        COUNT(*) AS n,
+        MAX(started_at) AS last_seen
+      FROM data_presentation.fct_toggl_time_entries
+      WHERE started_at >= NOW() - INTERVAL '90 days'
+        AND project_name IS NOT NULL
+        AND description IS NOT NULL
+        AND description <> ''
+      GROUP BY project_name, description
+      ORDER BY project_name ASC, n DESC
+    `;
+    return c.json({
+      data: rows.map((r) => ({
+        project_name: r.project_name,
+        description: r.description,
+        project_color: r.project_color,
+        n: Number(r.n),
+        last_seen: r.last_seen instanceof Date ? r.last_seen.toISOString() : null,
+      })),
+    });
+  })
   .get("/categories", async (c) => {
     // dim は dbt の default schema (= profile target.schema = data_warehouse) に materialize される
     const rows = await neonSql<CategoryRow[]>`
