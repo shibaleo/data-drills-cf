@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { TetrisChart, KindToggles, type OverlayBlock } from "@/components/tetris";
-import { HabitMastersPanel } from "@/components/habit/habit-masters-panel";
+import { HabitMastersPanel, type HabitTodayStatus } from "@/components/habit/habit-masters-panel";
 import { HabitDialog } from "@/components/habit/habit-dialog";
 import { ManualSyncButton } from "@/components/habit/manual-sync-button";
 import { usePageTitle } from "@/lib/page-context";
@@ -54,6 +54,20 @@ export default function HabitsPage() {
     () => new Map(habits.map((h) => [h.id, h])),
     [habits],
   );
+
+  // 今日 (`today` 日付) における各 habit の状態:
+  //   - throughput cell: done 済
+  //   - next-step cell:  未消化 (pending)
+  //   - どちらも無い (= cells に出てこない): n/a (weekly が今日 schedule されない等)
+  const todayStatus = useMemo<Map<string, HabitTodayStatus>>(() => {
+    const m = new Map<string, HabitTodayStatus>();
+    for (const c of cells as HabitCell[]) {
+      if (c.date !== today) continue;
+      if (c.kind === "throughput") m.set(c.habitId, "done");
+      else if (c.kind === "next-step") m.set(c.habitId, "pending");
+    }
+    return m;
+  }, [cells, today]);
 
   // cells → OverlayBlock. 色とラベルは candidateMap 経由で warehouse 由来。
   const allOverlay = useMemo<OverlayBlock[]>(() => {
@@ -133,6 +147,7 @@ export default function HabitsPage() {
       <HabitMastersPanel
         habits={habits}
         candidates={candidates}
+        todayStatus={todayStatus}
         onAdd={() => setDialogState({ item: null })}
         onEdit={(id) => {
           const item = habits.find((h) => h.id === id) ?? null;
