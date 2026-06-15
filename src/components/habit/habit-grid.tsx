@@ -3,7 +3,7 @@
  *
  * Tetris (= 識別不要な原子の集積) と違い、habit は個体識別が本質。
  * row 形式で各 habit の時系列をそのまま見せ、今日列を accent bg で強調する。
- * row は @dnd-kit/sortable で並べ替え可能 (drag handle に左端の grip icon)。
+ * row は @dnd-kit/sortable で並べ替え可能 (drag handle は hover で表示)。
  */
 
 import { useMemo } from "react";
@@ -29,9 +29,17 @@ import type { HabitCandidate } from "@/hooks/queries/use-toggl-habit-candidates"
 import { buildCandidateMap, displayFor } from "@/lib/habit-display";
 import { CELL, GAP, STEP } from "@/lib/chart-constants";
 
-// row 高さ = STEP で TetrisChart の cell-to-cell 距離と完全一致
-const ROW_H = STEP;
-const CELL_OFFSET_Y = (ROW_H - CELL) / 2;  // = GAP / 2
+// row 高さ。横方向 STEP=16 (cell 14 + gap 2) より縦に余裕を持たせて密度を抑える。
+const ROW_H = 22;
+const CELL_OFFSET_Y = (ROW_H - CELL) / 2;
+
+const HEADER_H = 28;
+
+// sticky 左カラム幅 (= grip 20 + gap 8 + color 14 + gap 8 + label 140 + pr 8) = 198px
+const HEADER_LEFT_PAD = 20 + 8 + 14 + 8 + 140 + 8;
+
+// streak 列の固定幅
+const STREAK_W = 64;
 
 type Props = {
   habits: HabitRow[];
@@ -132,11 +140,9 @@ export function HabitGrid({
 
   return (
     <div className="overflow-x-auto">
-      <div style={{ minWidth: gridWidth + 200 }}>
-        {/* ── Date header ── */}
+      <div style={{ minWidth: gridWidth + HEADER_LEFT_PAD + STREAK_W }}>
         <DateHeader dates={dates} todayIdx={todayIdx} gridWidth={gridWidth} />
 
-        {/* ── Sortable rows ── */}
         <DndContext
           sensors={sensors}
           collisionDetection={closestCenter}
@@ -170,7 +176,7 @@ export function HabitGrid({
         </DndContext>
 
         {habits.length === 0 && (
-          <div className="text-center text-sm text-muted-foreground py-6">
+          <div className="text-center text-sm text-muted-foreground py-8">
             No habits yet. Click "Add habit" above to start.
           </div>
         )}
@@ -179,7 +185,7 @@ export function HabitGrid({
   );
 }
 
-/* ── Date header (HTML + svg overlay for today label) ─────────────── */
+/* ── Date header ───────────────────────────────────────────────────── */
 
 function DateHeader({
   dates,
@@ -191,29 +197,60 @@ function DateHeader({
   gridWidth: number;
 }) {
   return (
-    <div className="flex items-end h-[18px] mb-1">
-      {/* sticky 左スペーサ: 横スクロール時に row 側 sticky label の真上を bg で覆う */}
+    <div className="flex items-stretch mb-2" style={{ height: HEADER_H }}>
+      {/* sticky 左スペーサ */}
       <div
-        className="sticky left-0 z-10 bg-card h-full"
+        className="sticky left-0 z-10 bg-card"
         style={{ width: HEADER_LEFT_PAD }}
       />
-      <svg width={gridWidth} height={14} className="block">
+      <svg width={gridWidth} height={HEADER_H} className="block">
+        {/* Today 列の連続ハイライト (header 全高を覆い、下の行と視覚的につながる) */}
+        <rect
+          x={todayIdx * STEP - GAP / 2}
+          y={0}
+          width={CELL + GAP}
+          height={HEADER_H}
+          fill="hsl(var(--accent))"
+          opacity={0.3}
+        />
         {dates.map((date, i) => {
-          const x = i * STEP;
-          const showLabel = isWeekBoundary(date) || i === todayIdx;
-          if (!showLabel) return null;
-          return (
-            <text
-              key={date}
-              x={x + CELL / 2}
-              y={11}
-              textAnchor="middle"
-              className={i === todayIdx ? "fill-foreground font-medium" : "fill-muted-foreground"}
-              fontSize={10}
-            >
-              {i === todayIdx ? "Today" : monthDay(date)}
-            </text>
-          );
+          const x = i * STEP + CELL / 2;
+          if (i === todayIdx) {
+            return (
+              <g key={date}>
+                <text
+                  x={x} y={11}
+                  textAnchor="middle"
+                  className="fill-foreground font-semibold"
+                  fontSize={10}
+                >
+                  Today
+                </text>
+                <text
+                  x={x} y={23}
+                  textAnchor="middle"
+                  className="fill-muted-foreground"
+                  fontSize={9}
+                >
+                  {monthDay(date)}
+                </text>
+              </g>
+            );
+          }
+          if (isWeekBoundary(date)) {
+            return (
+              <text
+                key={date}
+                x={x} y={20}
+                textAnchor="middle"
+                className="fill-muted-foreground"
+                fontSize={10}
+              >
+                {monthDay(date)}
+              </text>
+            );
+          }
+          return null;
         })}
       </svg>
     </div>
@@ -221,10 +258,6 @@ function DateHeader({
 }
 
 /* ── Sortable row ─────────────────────────────────────────────────── */
-
-// sticky 左カラム幅の合計 (= grip 20 + gap 8 + color 12 + gap 8 + label 140 + pr-2 = 8) = 196px
-// DateHeader の左スペーサと完全に揃え、date label と cell が縦に整列するようにする
-const HEADER_LEFT_PAD = 20 + 8 + 12 + 8 + 140 + 8;
 
 function SortableHabitRow({
   id,
@@ -264,7 +297,7 @@ function SortableHabitRow({
       style={style}
       className="flex items-center group select-none"
     >
-      {/* sticky 左カラム: 横スクロールしても label / handle が常に見える */}
+      {/* sticky 左カラム */}
       <div
         className="sticky left-0 z-10 flex items-center gap-2 bg-card pr-2"
         style={{ height: ROW_H }}
@@ -279,14 +312,14 @@ function SortableHabitRow({
           <GripVertical className="size-3.5" />
         </button>
         <span
-          className="inline-block size-3 rounded-sm shrink-0"
+          className="inline-block size-3.5 rounded-[3px] shrink-0 ring-1 ring-inset ring-foreground/10"
           style={{ backgroundColor: color }}
           aria-hidden
         />
         <button
           type="button"
           onClick={onClickLabel}
-          className="text-sm text-left hover:underline truncate"
+          className="text-sm text-left text-foreground/90 hover:text-foreground hover:underline truncate"
           style={{ width: 140 }}
           title="Edit habit"
         >
@@ -295,27 +328,27 @@ function SortableHabitRow({
       </div>
 
       <svg width={gridWidth} height={ROW_H} className="block shrink-0">
-        {/* Today highlight (この row 分の bg) */}
+        {/* Today 列ハイライト */}
         <rect
           x={todayIdx * STEP - GAP / 2}
           y={0}
           width={CELL + GAP}
           height={ROW_H}
           fill="hsl(var(--accent))"
-          opacity={0.25}
+          opacity={0.3}
         />
         {dates.map((date, i) => {
           const kind = cellMap?.get(date);
           const x = i * STEP;
           const isToday = i === todayIdx;
           if (!kind) {
+            // 空きセル: 薄い fill。方眼紙化を避けるため枠なし。
             return (
               <rect
                 key={date}
-                x={x} y={CELL_OFFSET_Y} width={CELL} height={CELL} rx={2}
-                fill="none"
-                stroke="hsl(var(--border))"
-                strokeWidth={0.5}
+                x={x} y={CELL_OFFSET_Y} width={CELL} height={CELL} rx={2.5}
+                fill="hsl(var(--muted-foreground))"
+                fillOpacity={0.08}
               />
             );
           }
@@ -323,44 +356,51 @@ function SortableHabitRow({
             return (
               <rect
                 key={date}
-                x={x} y={CELL_OFFSET_Y} width={CELL} height={CELL} rx={2}
+                x={x} y={CELL_OFFSET_Y} width={CELL} height={CELL} rx={2.5}
                 fill={color}
-                opacity={isToday ? 1 : 0.85}
+                opacity={isToday ? 1 : 0.88}
               />
             );
           }
           if (kind === "next-step") {
+            // 今日の未消化: habit 色の塗り + accent strong outline で目立たせる
             return (
               <rect
                 key={date}
-                x={x} y={CELL_OFFSET_Y} width={CELL} height={CELL} rx={2}
+                x={x + 1} y={CELL_OFFSET_Y + 1} width={CELL - 2} height={CELL - 2} rx={2}
                 fill="none"
                 stroke={color}
-                strokeWidth={2}
+                strokeWidth={1.5}
               />
             );
           }
-          // forecast
+          // forecast: ごく薄い点線 (情報密度を抑える)
           return (
             <rect
               key={date}
-              x={x} y={CELL_OFFSET_Y} width={CELL} height={CELL} rx={2}
+              x={x + 0.5} y={CELL_OFFSET_Y + 0.5} width={CELL - 1} height={CELL - 1} rx={2}
               fill="none"
               stroke={color}
-              strokeWidth={1}
-              strokeDasharray="2 2"
-              opacity={0.5}
+              strokeWidth={0.75}
+              strokeDasharray="1.5 2"
+              opacity={0.45}
             />
           );
         })}
       </svg>
 
-      <span className="text-xs text-muted-foreground tabular-nums whitespace-nowrap pl-2">
-        {ratio.hit}/{ratio.total}
-        <span className="text-muted-foreground/60 ml-0.5 text-[10px]">
+      {/* 直近率 */}
+      <div
+        className="flex items-baseline gap-0.5 pl-4 tabular-nums whitespace-nowrap"
+        style={{ width: STREAK_W }}
+      >
+        <span className="text-foreground/90 text-xs font-medium">{ratio.hit}</span>
+        <span className="text-muted-foreground/40 text-[10px]">/</span>
+        <span className="text-muted-foreground text-[10px]">{ratio.total}</span>
+        <span className="text-muted-foreground/50 text-[10px] ml-0.5">
           {cadence === "weekly" ? "w" : "d"}
         </span>
-      </span>
+      </div>
     </div>
   );
 }

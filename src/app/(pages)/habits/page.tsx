@@ -51,7 +51,7 @@ export default function HabitsPage() {
 
   return (
     <div className="p-3 md:p-4 flex flex-col gap-2">
-      <div className="rounded-md border p-3 space-y-2">
+      <div className="rounded-md border p-4 space-y-4">
         <div className="flex items-center gap-2">
           <Button
             type="button"
