@@ -9,7 +9,7 @@
  */
 import type { AllocatedProblem } from "@/lib/backlog-allocate";
 import type { OverlayBlock } from "@/components/tetris";
-import type { ReviewRow } from "@/hooks/queries/use-review";
+import type { ReviewRow } from "@/hooks/queries/use-review-schedule";
 import type { AnswerHistoryRow } from "@/hooks/queries/use-answer-history";
 import { computeNextReview } from "@/lib/review-scoring";
 

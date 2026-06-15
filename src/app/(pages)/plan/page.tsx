@@ -19,7 +19,7 @@ import {
   type SortingState,
 } from "@tanstack/react-table";
 import { useField } from "@/hooks/use-field";
-import { useReviewList } from "@/hooks/queries/use-review";
+import { useReviewSchedule } from "@/hooks/queries/use-review-schedule";
 import { useProblemsList } from "@/hooks/queries/use-problems";
 import { useScopes, useScope, useScopeDetail, useScopeTimeline, useUpdateScope, sliceTimelineAtAsOf } from "@/hooks/queries/use-scopes";
 import { useProblemDialogs } from "@/hooks/use-problem-dialogs";
@@ -83,7 +83,7 @@ export default function PlanPage() {
   const scopeQuery = useScope(scopeId ?? "");
   const updateScope = useUpdateScope();
   const allProblems = useProblemsList(fieldId ?? undefined).data ?? [];
-  const reviewQuery = useReviewList(fieldId ?? undefined, null, scopeId ?? undefined);
+  const reviewQuery = useReviewSchedule(fieldId ?? undefined, null, scopeId ?? undefined);
   // Past throughput (= 過去 answer 履歴)。1 answer = 1 ブロックを overlay として今日より前に積む。
   // asOf 再生時は asOf 以前のみ表示するため、client 側 filter で対応。
   const throughputQuery = useAnswerHistoryList(undefined, null, scopeId ?? undefined);

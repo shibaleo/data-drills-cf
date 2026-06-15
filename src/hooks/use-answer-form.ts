@@ -5,7 +5,7 @@ import { useForm, useFieldArray, type UseFormReturn, type UseFieldArrayReturn } 
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { answerHistoryKeys } from '@/hooks/queries/use-answer-history'
-import { reviewKeys } from '@/hooks/queries/use-review'
+import { reviewScheduleKeys } from '@/hooks/queries/use-review-schedule'
 import { problemsKeys } from '@/hooks/queries/use-problems'
 import { toast } from 'sonner'
 import { rpc, unwrap } from '@/lib/rpc-client'
@@ -242,7 +242,7 @@ export function useAnswerForm(fieldId: string | null, onSaved: (problemId: strin
 
       // 解答作成で影響を受ける query cache を invalidate
       qc.invalidateQueries({ queryKey: answerHistoryKeys.all })
-      qc.invalidateQueries({ queryKey: reviewKeys.all })
+      qc.invalidateQueries({ queryKey: reviewScheduleKeys.all })
       qc.invalidateQueries({ queryKey: problemsKeys.all })
       toast.success('解答を登録しました')
       setOpen(false)
@@ -404,7 +404,7 @@ export function useEditAnswerForm(fieldId: string | null, onSaved: (problemId: s
       }
 
       qc.invalidateQueries({ queryKey: answerHistoryKeys.all })
-      qc.invalidateQueries({ queryKey: reviewKeys.all })
+      qc.invalidateQueries({ queryKey: reviewScheduleKeys.all })
       qc.invalidateQueries({ queryKey: problemsKeys.all })
       toast.success('解答を更新しました')
       setOpen(false)

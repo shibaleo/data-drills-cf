@@ -1,3 +1,12 @@
+/**
+ * /api/v1/review-schedule — FSRS 由来の "次に復習すべき問題" スケジュールを
+ * field 単位で返す read-only endpoint。Plan ページの overlay (next-review /
+ * smooth-future projection) が消費する。
+ *
+ * 旧名 /api/v1/review (2026-06-15 改名)。旧 /review ページが Plan に吸収
+ * された後も schedule data は Plan で使うため endpoint としては現役。
+ * "review" という単名だと defunct なページとの混同が起きるので rename した。
+ */
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";

@@ -5,7 +5,7 @@ import { SortHeader } from "@/components/sort-header";
 import { StatusTag } from "@/components/color-tags";
 import { OpaqueTag } from "@/components/problem-card";
 import { formatRelDay } from "@/lib/relative-day";
-import type { ReviewRow as ReviewApiRow } from "@/hooks/queries/use-review";
+import type { ReviewRow as ReviewApiRow } from "@/hooks/queries/use-review-schedule";
 
 /** /review と /plan で共有する row 形 (answerCount → reviewCount に rename)。 */
 export interface ScheduleRow extends Omit<ReviewApiRow, "answerCount"> {
