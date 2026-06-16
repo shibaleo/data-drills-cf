@@ -1,282 +1,138 @@
-# Markdown + KaTeX を SSOT としたブラウザ印刷ベース PDF パイプライン
+# Markdown + KaTeX SSOT による問題本文 / PDF パイプライン
 
-- 対象: data-drills 問題 PDF 生成
 - 作成日: 2026-06-15
-- ステータス: 計画 (実装着手前)
+- 更新日: 2026-06-16
+- ステータス: Phase 1-5 完了、Phase 6 以降は計画
 
 ---
 
-## 1. 結論
+## 1. 結論 (確定)
 
-問題の **SSOT (Single Source of Truth)** を **Markdown + KaTeX (math)** とし、
-PDF 生成は **専用の print 用ルート + ブラウザの `window.print()`** で行う。
+- **SSOT** = `problem.body_md` (markdown + `$math$`) + `problem.answer_md` (解答 markdown)
+- **Web 表示** = 既存 `remark-math` + `rehype-katex` + CodeMirror live-markdown
+- **PDF 生成** = `/print/exam` 専用ルートを A4 print CSS で render、ブラウザの
+  `window.print()` で PDF 化 (= reveal.js の `?print-pdf` 方式)
+- **タイポグラフィ** = CMU Serif (Computer Modern Serif) を本文・解答に適用、
+  Web UI 全体は既存の sans-serif を温存
 
-reveal.js の `?print-pdf` クエリパラメータと同じ手法。サーバ側 Lambda も
-Tectonic も Docker も不要、フロントエンドだけで完結する。
+サーバ側 Lambda / Tectonic / Puppeteer はすべて不要。CF Pages 完結。
+将来 digest report PDF が来た時のみ統一 Puppeteer 案を再評価。
+
+## 2. 完了済み Phase
+
+| # | 内容 | commit |
+|---|---|---|
+| 1 | schema: `problem.body_md` (nullable text) 追加 | `85c0547` |
+| 1b | schema: `problem.answer_md` (nullable text) 追加 | `bab46eb` |
+| 2 | `/print/exam?problem_ids=…&title=…&header=…` ルート | `85c0547` |
+| 2 | A4 print CSS + `window.print()` 自動発火 | `85c0547` |
+| 2 | `printLayout` で AppLayout 外に配置 (sidebar 非表示) | `85c0547` |
+| 4 | 問題編集 dialog に `body_md` / `answer_md` の CodeMirror 2 段組 | `bab46eb` |
+| 5 | `/problems` 問題マスタ管理ページ (List / Card view、検索、filter) | `27fcd42` |
+| 5b | Card view を flashcard 形式に (Eye ボタンで body↔answer flip) | `bab46eb` |
+| 5c | List/Card 行 click で編集 dialog 直行 (詳細 dialog をスキップ) | `bab46eb` |
+| 6a | CMU Serif (computer-modern npm package) を本文・解答に適用 | `69afa09` |
+
+## 3. 残タスク (今後の Phase)
+
+### Phase 6b — オーサリングと表示の polish
+
+- [ ] `body_md` / `answer_md` エディタの font-size 微調整 (実機確認後)
+- [ ] /print/exam のレイアウト微調整 (解答スペース、ヘッダ、page break)
+- [ ] /problems Card view の長文 problem の overflow / 折りたたみ
+
+### Phase 7 — PDF 生成の起動 UX
+
+- [ ] /problems で複数選択チェックボックス
+- [ ] "Generate Exam PDF" ボタン → `/print/exam?problem_ids=<csv>` を新タブで開く
+- [ ] (オプション) `?with_answers=true` クエリで解答付き PDF
+- [ ] (オプション) title / header を入力する dialog
+
+### Phase 8 — 復習モード (flashcard 風)
+
+- [ ] /problems の Card view を 1 問ずつ大きく表示する mode 追加
+- [ ] キーボード: ←/→ で前後、Space で flip (body↔answer)
+- [ ] 解答 reveal 後に Solid/Fair/Miss 等の評価を即時記録
+- [ ] 既存 answer / review の経路と統合 (新たな answer レコード作成)
+
+### Phase 9 — 図の扱い
+
+提案書時点では deferred 扱いだが、必要になったら:
+
+- [ ] 画像 (S3 / Drive / project asset) を markdown `![alt](url)` で埋め込み
+- [ ] SVG をインライン HTML で直接 `<svg>...</svg>` 記述
+- [ ] (必要なら) React コンポーネントベースの図 (例: ` ```plot ` fenced block)
+
+### Phase 10 — 将来の分岐
+
+以下の状況が発生したら本パイプラインから乗り換えを検討:
+
+1. **複雑作図が日常化** → Tectonic Lambda 案を再開 (= TikZ on Lambda)
+2. **digest report PDF が来る** → Web UI 全体を PDF 化したいので、統一
+   **Puppeteer Lambda** に升格 (= Chromium で /print/digest を render)
+3. **自動配信 / 第三者公開** → 同上、サーバ側 PDF 化が必要
+4. **出版品質日本語組版** → LuaLaTeX + luatexja
+
+いずれも当面不要。発生時に migration する設計。
+
+## 4. KaTeX ↔ Print PDF compat
+
+両対応:
+
+- KaTeX が解釈する数式記法 (`\frac`, `\int`, `\sum`, `align`, `bmatrix`, ...) → そのまま
+- markdown の structure (heading / list / table / image / link)
+- インライン SVG / 画像
+
+**ブラウザ依存の留意点**:
+
+- print 時はユーザが Chrome の print dialog で「ヘッダーとフッター」「背景の
+  グラフィック」を OFF にする必要あり (初回プリセット保存で以降は OK)
+- 動作確認は Chromium 系を主とする
+
+## 5. アーキテクチャ図
 
 ```
-[author] writes MD
+[author] writes MD in CodeMirror editor (with KaTeX inline render)
    │
    ▼
-DB: problem.body_md
+DB: problem.body_md, problem.answer_md (data_drills.problem)
    │
-   ├──► [Web display] remark-math + rehype-katex → HTML + KaTeX (完成済)
+   ├──► [Web display] /problems Card view (Markdown + KaTeX, CMU Serif)
    │
-   └──► [PDF] CF Pages の専用 print route で同 MD を A4 print CSS で renders
-              → window.print() 発火 → ユーザが "Save as PDF" でダウンロード
+   └──► [PDF] /print/exam?problem_ids=<csv>
+           │
+           ├ printLayout (AuthGate + FieldProvider only、sidebar 非表示)
+           ├ ProblemsList fetch → filter by ids
+           ├ Markdown render with serif prop (CMU Serif)
+           ├ document.fonts.ready + 2 RAF を待って window.print()
+           └ ユーザが "Save as PDF" で download
 ```
 
-旧 LaTeX エンジン案 (Tectonic on Lambda) は撤回。理由:
-
-- 想定する問題は**テキスト + KaTeX 数式が中心**で、Tectonic の数式忠実度
-  優位 (vs KaTeX) を活かす場面が想定より少ない
-- TikZ で「LaTeX native な図」を描く必要も基本的にない (= 必要なら画像や SVG で代替できる)
-- インフラ (Lambda function 新設、Docker, SigV4 invoke, S3 staging) が
-  個人スケールの本機能に対して明らかにオーバースペック
-- "ボタン 1 クリックでダウンロード" の代わりに "ボタン → print dialog →
-  Save" の 2 クリックになるトレードオフは個人運用なら誤差
-
-## 2. SSOT の文法
-
-````markdown
-# 問題 1: parametrization of the parabola
-
-Is $\gamma(t) = (t^2, t^4)$ a parametrization of the parabola $y = x^2$?
-
-# 問題 2: level curves
-
-Find parametrizations of the following level curves:
-
-1. $y^2 - x^2 = 1$
-2. $\frac{x^2}{4} + \frac{y^2}{9} = 1$
-
-# 問題 3: Cartesian equations
-
-Find the Cartesian equations of the following parametrized curves:
-
-1. $\gamma(t) = (\cos^2 t, \sin^2 t)$
-2. $\gamma(t) = (e^t, t^2)$
-````
-
-- 通常の markdown 構文 (header / list / bold / table / image)
-- インライン数式 `$...$`、ディスプレイ数式 `$$...$$` (KaTeX 記法)
-- 画像は `![alt](url)` で埋め込み、url は S3 / Drive / プロジェクト内 asset
-- 図が必要なら **事前に作って画像で保存する**、あるいは SVG を直接埋め込む
-  (markdown はインライン HTML を許容するので `<svg>...</svg>` をそのまま書ける)
-
-## 3. アーキテクチャ
-
-### 3.1 print 専用ルート
-
-新ルート: `/print/exam?problem_ids=<csv>&title=<title>&header=<header>`
-
-このルートは:
-
-1. クエリから対象 problem を fetch (`useProblemsList` 等を流用)
-2. A4 print CSS が適用された static layout で各 problem を順に描画
-3. mount 完了 + KaTeX render 完了後に `window.print()` を発火
-4. ユーザが print dialog で "Save as PDF" を選択
-
-```tsx
-// src/app/(pages)/print/exam/page.tsx (sketch)
-function PrintExamPage() {
-  const ids = useSearch().problem_ids?.split(",") ?? [];
-  const problems = useProblemsByIds(ids);
-
-  useEffect(() => {
-    if (!problems.length) return;
-    // KaTeX rendering は同期なので、layout 確定後に発火するため microtask 1 つ待つ
-    queueMicrotask(() => window.print());
-  }, [problems]);
-
-  return (
-    <div className="print-exam">
-      <header>{title}</header>
-      {problems.map((p, i) => (
-        <article key={p.id} className="problem">
-          <h2>問題 {i + 1}</h2>
-          <Markdown>{p.body_md}</Markdown>
-          <div className="answer-space" />
-        </article>
-      ))}
-    </div>
-  );
-}
-```
-
-### 3.2 Print CSS
-
-```css
-@page {
-  size: A4;
-  margin: 20mm;
-}
-
-@media print {
-  body { background: white; }
-  /* 通常画面の sidebar / header を全部隠す */
-  .app-sidebar, .app-header, nav { display: none !important; }
-  .print-exam .problem {
-    break-inside: avoid;       /* 問題が page 跨ぎしないように */
-    margin-bottom: 1.5em;
-  }
-  .print-exam .answer-space {
-    height: 3cm;               /* 解答スペース */
-    border-bottom: 1px solid #ccc;
-  }
-}
-
-/* 通常表示でも preview できるよう、画面サイズでも layout を整える */
-.print-exam {
-  max-width: 210mm;
-  margin: 0 auto;
-  padding: 20mm;
-  background: white;
-  color: black;
-}
-```
-
-### 3.3 起動 UX
-
-問題リスト画面に「Generate PDF」ボタンを追加:
-
-```tsx
-<Button onClick={() => {
-  const ids = selectedProblems.map(p => p.id).join(",");
-  window.open(`/print/exam?problem_ids=${ids}`, "_blank");
-}}>
-  Generate PDF
-</Button>
-```
-
-新タブで print 用ページが開き、自動で print dialog が出る。
-"Save as PDF" でローカル保存、または「印刷」で物理プリンタへ。
-
-## 4. スキーマ
-
-`problem` table に nullable な 1 列を追加:
-
-```sql
-ALTER TABLE data_drills.problem ADD COLUMN body_md text;
-```
-
-- `body_md`: 問題本文の markdown ソース
-- 解答は問題と同じ MD 内 (`## 解答` 以下) か別列に分けるかは運用しながら決める
-- どちらも null なら従来通り問題ファイル (problem_file) 経由の問題
-
-旧案で検討した 2 列構成 (tex_source/tex_answer) は撤回。記法は markdown
-1 種類に統一。
-
-## 5. オーサリング (= 問題入力 UX)
-
-既存資産:
-
-- [src/components/codemirror-editor.tsx](../src/components/codemirror-editor.tsx) — CodeMirror による markdown 編集
-- [src/components/markdown.tsx](../src/components/markdown.tsx) — `remark-math` + `rehype-katex` で render
-- `katex` / `remark-math` / `remark-gfm` package 全て導入済
-
-実装:
-
-- 問題編集 dialog に `body_md` 用の CodeMirror エディタを追加
-- 横分割で markdown preview を出す (= 既存 `<Markdown>` コンポーネント)
-- print プレビューは `/print/exam?problem_ids=<id>` で別タブで確認できる
-  (= print CSS 込みの実物プレビュー)
-
-## 6. 図の扱い
-
-3 つの選択肢、すべて MD ベースで表現可能:
-
-1. **事前に作って画像で保存** (推奨デフォルト)
-   - 任意ツール (Blender / Inkscape / Geogebra / iPad ペン書き) で作成
-   - S3 や Drive に置いて `![alt](url)` で埋め込み
-2. **インライン SVG**
-   - markdown は HTML を許容するので `<svg>...</svg>` をそのまま MD に書く
-   - 軽量な 2D 図 (座標軸 + 矢印程度) に向く
-3. **JS で生成**
-   - 必要なら markdown 拡張 (例: ` ```plot ` fenced block) を作って
-     React コンポーネント (D3 / Recharts / 独自 SVG generator) で描く
-   - 現状は不要。本格化したら拡張機能として追加
-
-print CSS で画像 / SVG が A4 内に収まれば、KaTeX 数式と同じ品質でブラウザが PDF 化する。
-
-## 7. 採用しなかった代替案
-
-### 7.1 Tectonic on Lambda (旧案)
-
-- 数式忠実度は KaTeX より上だが、本機能の対象 (テキスト + 数式の短い演習問題)
-  では KaTeX で十分
-- TikZ で図を組む LaTeX 流の workflow が無くても、画像 / SVG / JS で代替可能
-- インフラ (Lambda function 新設 + Docker + SigV4 + S3 staging) が
-  個人スケールに対して過剰
-
-→ 将来 KaTeX で表現できない数式や、TikZ でないと書けない図が常態化した
-場合のみ再評価する (= §10 将来の分岐条件)。
-
-### 7.2 サーバ側で Puppeteer / Playwright で PDF 化
-
-- 「ボタン 1 クリックで完了」自動化のために考えうるが、Chromium image が
-  Lambda 上でも数百 MB
-- cold start が長い、複雑度が上がる
-- 個人用なら print dialog の 1 ステップ余分は誤差
-
-### 7.3 html2pdf.js などのフロント PDF ライブラリ
-
-- DOM → canvas → PDF の経路で、複雑な KaTeX の SVG/MathML レイアウトが
-  崩れることがある
-- ブラウザ native の print to PDF (Chromium のもの) のほうが品質が高く、
-  実装も window.print() 1 行
-
-## 8. 既存 pdf-export との関係
-
-両機能は併存:
-
-| 機能 | 入力 | 出力経路 |
-|---|---|---|
-| `pdf-export` (既存) | 外部 PDF + ページ番号 | Lambda で merge → S3 → ダウンロード |
-| **`/print/exam` (新)** | `problem.body_md` (markdown) | ブラウザの print 機能 |
-
-UI は問題リストで 2 つのボタンを出す:
-
-- "Export PDF" — 既存 problem_file を持つ問題 (CPA 簿財等)
-- "Generate Exam PDF" — `body_md` を持つ問題 (微分幾何等)
-
-両方持っていればどちらも選択可、片方のみならその機能だけ表示。
-
-## 9. 実装ロードマップ
-
-| Phase | 内容 | 状態 |
-|---|---|---|
-| 0 | 計画書 (本ドキュメント) | done |
-| 1 | schema: `problem.body_md` 追加 (drizzle/manual/011) | 着手前 |
-| 2 | `/print/exam` ルート + print CSS + window.print() | 着手前 |
-| 3 | 問題リストに "Generate Exam PDF" ボタン | 着手前 |
-| 4 | 問題編集 dialog に `body_md` フィールド + Markdown preview | 着手前 |
-| 5 | 解答スペース調整 (`<div className="answer-space" />` の高さ等) | 着手前 |
-| 6 | (発生したら) インライン SVG・画像埋め込みの実例追加 | 必要時 |
-
-工数感: Phase 1-3 で MVP 動作、合計 1-2 日程度。Phase 4 はオーサリング UX
-の磨き込みで別途 1 日。
-
-## 10. 将来の分岐条件
-
-本決定は「対象問題が KaTeX で十分に表現できる」前提で最適。前提が崩れた場合のみ再評価:
-
-1. **複雑な作図が日常化した場合**: TikZ や Asymptote のような native LaTeX 描画
-   が必要になったら Tectonic on Lambda 案を再開
-2. **出版品質の数式組版が必要になった場合**: KaTeX → LaTeX へ
-3. **第三者公開 / 自動配信化**: ボタン 1 クリックで自動ダウンロード化したい
-   場合、サーバ側 Puppeteer Lambda を検討
-
-いずれも当面は不要、必要になった時点で migration する設計。
-
-## 11. リスクと留保
-
-- **window.print() の発火タイミング**: KaTeX render が同期完了する前に
-  print() するとレイアウトが崩れる。`requestAnimationFrame` を 2 段噛ませる
-  か、`document.fonts.ready` を待つ等の保険を入れる
-- **page break の挙動**: `break-inside: avoid` で 1 問が page 跨ぎしないよう
-  にするが、長い問題は page 跨ぎ必要。実機で要調整
-- **ブラウザ依存**: Chromium 系 (Chrome / Edge) と Firefox / Safari で
-  print CSS の挙動に細かい差。動作確認は Chromium 系を主とする
-- **画像の絶対 URL**: `<img src>` は print 時もブラウザがネットワーク fetch する。
-  CDN / S3 経由を前提に CORS / アクセス制御を確認
+## 6. 関連ファイル
+
+| 役割 | パス |
+|---|---|
+| schema migration (body_md) | [drizzle/manual/011_problem_body_md.sql](../drizzle/manual/011_problem_body_md.sql) |
+| schema migration (answer_md) | [drizzle/manual/012_problem_answer_md.sql](../drizzle/manual/012_problem_answer_md.sql) |
+| drizzle schema | [packages/db-schema/src/index.ts](../packages/db-schema/src/index.ts) (problem table) |
+| API 入出力 schema | [src/lib/schemas/problem.ts](../src/lib/schemas/problem.ts) |
+| API routes | [src/routes/problems.ts](../src/routes/problems.ts), [src/routes/problems-list.ts](../src/routes/problems-list.ts) |
+| 編集 dialog | [src/components/problem-edit-dialog.tsx](../src/components/problem-edit-dialog.tsx) |
+| dialog 経路 hook | [src/hooks/use-problem-dialogs.tsx](../src/hooks/use-problem-dialogs.tsx) (openCreate / openEdit / openDetail) |
+| Markdown render | [src/components/markdown.tsx](../src/components/markdown.tsx) (serif prop) |
+| Problems page | [src/app/(pages)/problems/page.tsx](../src/app/\(pages\)/problems/page.tsx) |
+| Print route | [src/app/(pages)/print/exam/page.tsx](../src/app/\(pages\)/print/exam/page.tsx) |
+| Print CSS + serif | [src/app/globals.css](../src/app/globals.css) (`.md-serif`, `.md-serif-editor`, `.print-exam`) |
+| Computer Modern font | npm `computer-modern` package (cmu-serif.css) |
+
+## 7. リスクと留保
+
+- **window.print() の発火タイミング** — KaTeX render 完了前に発火するとレイアウトが
+  崩れるリスク。現状は `document.fonts.ready` + 2× `requestAnimationFrame` で対応
+- **CMU Serif の x-height** — Sans-serif と比べて視覚的に小さく感じるため、
+  CodeMirror エディタは 17px / line-height 1.6 で補正済
+- **`font-style: roman` の非標準値** — `computer-modern` パッケージの @font-face は
+  `font-style: roman` だが、ブラウザは unknown を `normal` 扱いするので問題なし。
+  italic を明示的に使いたい場合は別 @font-face で `italic` をマップする必要あり
+- **ブラウザ間の print 差異** — Firefox / Safari は Chromium と print CSS の解釈に
+  細かい差。当面 Chromium 系のみサポート
