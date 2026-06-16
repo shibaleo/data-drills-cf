@@ -470,8 +470,19 @@ export const dollarMathPlugin = ViewPlugin.fromClass(
           to,
           enter(node) {
             if (node.name !== "InlineMath" && node.name !== "BlockMath") return;
-            if (isTouched(node.from, node.to)) return;
             const raw = state.doc.sliceString(node.from, node.to);
+            const touched = isTouched(node.from, node.to);
+
+            if (touched) {
+              // raw $...$ を sans-serif で表示する mark (= web UI フォントに揃える)
+              decos.push({
+                from: node.from,
+                to: node.to,
+                deco: Decoration.mark({ class: "cm-math-source" }),
+              });
+              return;
+            }
+
             if (node.name === "InlineMath") {
               const source = raw.slice(1, -1);
               if (!source.trim()) return;

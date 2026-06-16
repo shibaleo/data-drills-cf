@@ -330,3 +330,18 @@
 .md-serif-editor .cm-content code {
   font-family: ui-monospace, "SFMono-Regular", Menlo, monospace !important;
 }
+
+/* KaTeX (rendered math) は本文サイズに対し少し小さく見えるため、
+   CMU Serif との視覚バランスを揃えるため 0.92em に縮小。 */
+.md-serif .katex,
+.md-serif-editor .katex {
+  font-size: 0.92em;
+}
+
+/* 編集中に raw $...$ / $$...$$ が露出している部分は web UI の sans-serif に
+   戻す ($ 記号と中身の両方)。CodeMirror Decoration.mark で .cm-math-source
+   を付与している。 */
+.md-serif-editor .cm-math-source {
+  font-family: system-ui, -apple-system, "Segoe UI", "Hiragino Sans",
+    "Hiragino Kaku Gothic ProN", "Yu Gothic", Meiryo, sans-serif !important;
+}
