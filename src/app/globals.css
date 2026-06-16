@@ -1,5 +1,11 @@
 @import "tailwindcss";
-@import "computer-modern/cmu-serif.css";
+/* 問題本文 / 解答の serif 組版 (Springer 系の publication style)。
+   数式は KaTeX 内蔵の Computer Modern 系のまま、本文だけ Times 系の
+   STIX Two Text に揃える。 */
+@import "@fontsource/stix-two-text/400.css";
+@import "@fontsource/stix-two-text/400-italic.css";
+@import "@fontsource/stix-two-text/700.css";
+@import "@fontsource/stix-two-text/700-italic.css";
 
 /* =============================================================================
    Dark theme (stockflow base)
@@ -226,7 +232,7 @@
   padding: 12mm 8mm;
   color: black;
   background: white;
-  font-family: "CMU Serif", "Latin Modern Roman", Cambria, "STIX Two Text", Georgia, serif;
+  font-family: "STIX Two Text", "Source Serif Pro", "TeX Gyre Termes", "Linux Libertine", Cambria, Georgia, serif;
   font-size: 11pt;
   line-height: 1.55;
 }
@@ -310,18 +316,17 @@
    ============================================================================= */
 
 .md-serif {
-  font-family: "CMU Serif", "Latin Modern Roman", Cambria, "STIX Two Text", Georgia, serif;
+  font-family: "STIX Two Text", "Source Serif Pro", "TeX Gyre Termes", "Linux Libertine", Cambria, Georgia, serif;
   /* CM はベースラインが下がるので行間を少し詰めると締まる */
   line-height: 1.55;
 }
 
-/* CodeMirror の問題本文・解答エディタの中身も serif で揃える。
-   CMU Serif は x-height が低めなので px を高めにとって視覚サイズを揃える。 */
+/* CodeMirror の問題本文・解答エディタの中身も serif で揃える。 */
 .md-serif-editor .cm-content,
 .md-serif-editor .cm-line {
-  font-family: "CMU Serif", "Latin Modern Roman", Cambria, "STIX Two Text", Georgia, serif !important;
-  font-size: 17px;
-  line-height: 1.6;
+  font-family: "STIX Two Text", "Source Serif Pro", "TeX Gyre Termes", "Linux Libertine", Cambria, Georgia, serif !important;
+  font-size: 17.5px;
+  line-height: 1.65;
 }
 
 /* code / pre は等幅で残す */
@@ -331,12 +336,7 @@
   font-family: ui-monospace, "SFMono-Regular", Menlo, monospace !important;
 }
 
-/* KaTeX (rendered math) は本文サイズに対し少し小さく見えるため、
-   CMU Serif との視覚バランスを揃えるため 0.92em に縮小。 */
-.md-serif .katex,
-.md-serif-editor .katex {
-  font-size: 0.92em;
-}
+/* KaTeX のサイズは default (= 1em) のまま。本文との視覚差は serif の選択で調整。 */
 
 /* 編集中に raw $...$ / $$...$$ が露出している部分は web UI の sans-serif に
    戻す ($ 記号と中身の両方)。CodeMirror Decoration.mark で .cm-math-source
