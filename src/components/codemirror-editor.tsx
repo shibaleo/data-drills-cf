@@ -4,7 +4,6 @@ import CodeMirror from "@uiw/react-codemirror";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { dollarMathExtension } from "@/lib/dollar-math-markdown";
 import { dollarAutoPair } from "@/lib/dollar-auto-pair";
-import { mathPreviewTooltip } from "@/lib/math-preview-tooltip";
 import { EditorView, keymap } from "@codemirror/view";
 import {
   defaultKeymap,
@@ -84,7 +83,6 @@ export default function CodemirrorEditor({ defaultValue, onChange, placeholder, 
       horizontalRulePlugin,
       tableMarkdownPlugin,
       dollarMathPlugin,
-      mathPreviewTooltip,  // cursor が `$...$` 内側にいる時の floating preview
       tableDelimiterTrimmer,
       darkThemeOverrides,
 

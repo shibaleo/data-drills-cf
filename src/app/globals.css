@@ -346,6 +346,3 @@
     "Hiragino Kaku Gothic ProN", "Yu Gothic", Meiryo, sans-serif !important;
 }
 
-/* Math preview popover (cm-math-preview-floating) のスタイルは
-   math-preview-tooltip.ts が ViewPlugin で body 直下に挿入し inline で
-   全て当てているので、ここに CSS は不要。 */
