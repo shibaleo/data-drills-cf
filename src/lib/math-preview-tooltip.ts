@@ -59,19 +59,7 @@ function getMathTooltips(state: EditorState): readonly Tooltip[] {
     create() {
       const dom = document.createElement("div");
       dom.className = "cm-math-preview";
-      // CSS 外部依存を避けるため必須スタイルは inline で当てる
-      Object.assign(dom.style, {
-        background: "#faf8f3",
-        color: "#1a1a1a",
-        border: "1px solid #c8b890",
-        borderRadius: "8px",
-        padding: "10px 14px",
-        fontSize: "17px",
-        lineHeight: "1.5",
-        maxWidth: "720px",
-        boxShadow: "0 10px 30px rgba(0,0,0,0.55)",
-        marginBottom: "16px",
-      });
+      let isError = false;
       try {
         dom.innerHTML = katex.renderToString(source, {
           displayMode: math.name === "BlockMath",
@@ -79,23 +67,51 @@ function getMathTooltips(state: EditorState): readonly Tooltip[] {
           strict: "ignore",
           output: "html",
         });
-        // KaTeX 内の文字色も popover 上の dark に統一
-        dom.querySelectorAll<HTMLElement>(".katex, .katex *").forEach((el) => {
-          el.style.color = "#1a1a1a";
-        });
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
-        dom.classList.add("cm-math-preview--error");
-        Object.assign(dom.style, {
-          background: "#fff4f4",
-          color: "#9b1c1c",
-          borderColor: "#f5c6c6",
-          fontFamily: "ui-monospace, Menlo, monospace",
-          fontSize: "12px",
-        });
         dom.textContent = `⚠ ${msg}`;
+        isError = true;
       }
-      return { dom };
+      return {
+        dom,
+        // CodeMirror が dom を挿入した直後、外側 .cm-tooltip コンテナを直接 style 指定
+        mount() {
+          const tooltip = dom.parentElement as HTMLElement | null;
+          if (!tooltip) return;
+          // setProperty + "important" で CodeMirror dark theme を確実に上書き
+          const setImp = (key: string, val: string) => tooltip.style.setProperty(key, val, "important");
+          if (isError) {
+            setImp("background", "#fff4f4");
+            setImp("color", "#9b1c1c");
+            setImp("border", "1px solid #f5c6c6");
+            setImp("border-radius", "8px");
+            setImp("padding", "10px 14px");
+            setImp("font-family", "ui-monospace, Menlo, monospace");
+            setImp("font-size", "12px");
+            setImp("max-width", "480px");
+            setImp("box-shadow", "0 10px 30px rgba(0,0,0,0.55)");
+            setImp("margin-bottom", "16px");
+            setImp("z-index", "9999");
+            setImp("white-space", "pre-wrap");
+          } else {
+            setImp("background", "#ffffff");
+            setImp("color", "#111111");
+            setImp("border", "1px solid #d4c8a8");
+            setImp("border-radius", "8px");
+            setImp("padding", "12px 16px");
+            setImp("font-size", "18px");
+            setImp("line-height", "1.5");
+            setImp("max-width", "720px");
+            setImp("box-shadow", "0 10px 30px rgba(0,0,0,0.55)");
+            setImp("margin-bottom", "16px");
+            setImp("z-index", "9999");
+            // KaTeX 内の文字色も dark に統一
+            tooltip.querySelectorAll<HTMLElement>(".katex, .katex *").forEach((el) => {
+              el.style.setProperty("color", "#111111", "important");
+            });
+          }
+        },
+      };
     },
   }];
 }
