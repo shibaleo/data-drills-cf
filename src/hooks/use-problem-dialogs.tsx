@@ -68,6 +68,15 @@ export function useProblemDialogs({
     setEditDialogOpen(true);
   }, []);
 
+  /** problemId から問題を探して編集 dialog を直接開く (詳細 dialog をスキップ)。 */
+  const openEdit = useCallback((problemId: string) => {
+    const p = allProblems.find((x) => x.id === problemId);
+    if (!p) return;
+    setDetailOpen(false);
+    setEditProblem(p);
+    setEditDialogOpen(true);
+  }, [allProblems]);
+
   const handleDeleteProblem = useCallback(async (id: string) => {
     try {
       await unwrap(rpc.api.v1.problems[":id"].$delete({ param: { id } }));
@@ -113,6 +122,7 @@ export function useProblemDialogs({
             checkpoint: editProblem.checkpoint,
             standardTime: editProblem.standard_time,
             bodyMd: (editProblem as { body_md?: string | null }).body_md ?? null,
+            answerMd: (editProblem as { answer_md?: string | null }).answer_md ?? null,
           } : null}
           fieldId={fieldId}
           subjects={subjects}
@@ -160,5 +170,5 @@ export function useProblemDialogs({
       answerForm, editForm, subjects, levels, handleEditProblem, handleDeleteProblem,
       notifyAndRefresh, openCreate]);
 
-  return { openDetail, openCreate, renderDialogs };
+  return { openDetail, openCreate, openEdit, renderDialogs };
 }

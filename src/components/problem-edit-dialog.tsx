@@ -6,7 +6,6 @@ import { ApiError } from "@/lib/api-client";
 import { rpc, unwrap } from "@/lib/rpc-client";
 import { secondsToHms, hmsToSeconds } from "@/lib/duration";
 import { MarkdownEditor } from "@/components/markdown-editor";
-import { Markdown } from "@/components/markdown";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -31,6 +30,7 @@ interface ProblemRow {
   checkpoint: string | null;
   standardTime: number | null;
   bodyMd?: string | null;
+  answerMd?: string | null;
 }
 
 interface ProblemEditDialogProps {
@@ -55,6 +55,7 @@ export function ProblemEditDialog({
   const [formCheckpoint, setFormCheckpoint] = useState("");
   const [formStandardTime, setFormStandardTime] = useState("");
   const [formBodyMd, setFormBodyMd] = useState("");
+  const [formAnswerMd, setFormAnswerMd] = useState("");
 
   useEffect(() => {
     if (!open) return;
@@ -66,6 +67,7 @@ export function ProblemEditDialog({
       setFormCheckpoint(problem.checkpoint ?? "");
       setFormStandardTime(problem.standardTime != null ? secondsToHms(problem.standardTime) : "");
       setFormBodyMd(problem.bodyMd ?? "");
+      setFormAnswerMd(problem.answerMd ?? "");
     } else {
       setFormCode("");
       setFormName("");
@@ -74,6 +76,7 @@ export function ProblemEditDialog({
       setFormCheckpoint("");
       setFormStandardTime("");
       setFormBodyMd("");
+      setFormAnswerMd("");
     }
   }, [open, problem, subjects, levels]);
 
@@ -93,6 +96,7 @@ export function ProblemEditDialog({
       checkpoint: formCheckpoint.trim() || null,
       standard_time: formStandardTime.trim() ? hmsToSeconds(formStandardTime.trim()) : null,
       body_md: formBodyMd.trim() || null,
+      answer_md: formAnswerMd.trim() || null,
       field_id: fieldId,
     };
 
@@ -120,7 +124,7 @@ export function ProblemEditDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[85vh] flex flex-col overflow-hidden">
+      <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle>{problem ? "問題を編集" : "問題を登録"}</DialogTitle>
           <DialogDescription className="sr-only">
@@ -193,20 +197,19 @@ export function ProblemEditDialog({
           </div>
           <div className="grid gap-2">
             <Label>問題本文 (Markdown + KaTeX)</Label>
-            <div className="grid sm:grid-cols-2 gap-3">
-              <MarkdownEditor
-                defaultValue={formBodyMd}
-                onChange={setFormBodyMd}
-                placeholder={"# 問題\n\n$\\gamma(t) = (t^2, t^4)$ は放物線 $y = x^2$ のパラメータ表示か?"}
-              />
-              <div className="rounded-md border bg-card p-3 min-h-[300px] overflow-y-auto text-sm prose prose-sm dark:prose-invert max-w-none">
-                {formBodyMd.trim() ? (
-                  <Markdown>{formBodyMd}</Markdown>
-                ) : (
-                  <p className="text-muted-foreground italic">プレビューはここに表示されます</p>
-                )}
-              </div>
-            </div>
+            <MarkdownEditor
+              defaultValue={formBodyMd}
+              onChange={setFormBodyMd}
+              placeholder={"問題文を入力\n\n例: $\\gamma(t) = (t^2, t^4)$ は放物線 $y = x^2$ のパラメータ表示か?"}
+            />
+          </div>
+          <div className="grid gap-2">
+            <Label>解答 (Markdown + KaTeX)</Label>
+            <MarkdownEditor
+              defaultValue={formAnswerMd}
+              onChange={setFormAnswerMd}
+              placeholder={"解答を入力 (flashcard view の裏面 / 解答付き PDF で使用)"}
+            />
           </div>
         </div>
         <div className="flex gap-2">

@@ -24,6 +24,7 @@ export const problemCreateInputSchema = z.object({
   checkpoint: z.string().nullish(),
   standard_time: z.number().int().nonnegative().nullish(),
   body_md: z.string().nullish(),
+  answer_md: z.string().nullish(),
 });
 export type ProblemCreateInput = z.infer<typeof problemCreateInputSchema>;
 
@@ -36,6 +37,7 @@ export const problemUpdateInputSchema = z.object({
   topic_id: z.string().uuid().nullish(),
   standard_time: z.number().int().nonnegative().nullish(),
   body_md: z.string().nullish(),
+  answer_md: z.string().nullish(),
 });
 export type ProblemUpdateInput = z.infer<typeof problemUpdateInputSchema>;
 

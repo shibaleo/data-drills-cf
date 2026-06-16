@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Plus, Search, LayoutGrid, List as ListIcon } from "lucide-react";
+import { Plus, Search, LayoutGrid, List as ListIcon, Eye, EyeOff } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -40,14 +40,14 @@ export default function ProblemsPage() {
       if (subjectFilter && p.subject_id !== subjectFilter) return false;
       if (levelFilter && p.level_id !== levelFilter) return false;
       if (q) {
-        const hay = `${p.code} ${p.name ?? ""} ${p.body_md ?? ""}`.toLowerCase();
+        const hay = `${p.code} ${p.name ?? ""} ${p.body_md ?? ""} ${p.answer_md ?? ""}`.toLowerCase();
         if (!hay.includes(q)) return false;
       }
       return true;
     });
   }, [allProblems, query, subjectFilter, levelFilter]);
 
-  const { openCreate, openDetail, renderDialogs } = useProblemDialogs({
+  const { openCreate, openEdit, renderDialogs } = useProblemDialogs({
     fieldId: fieldId ?? "",
     allProblems,
     onDataChanged: () => problemsQuery.refetch(),
@@ -147,9 +147,9 @@ export default function ProblemsPage() {
           )}
         </div>
       ) : viewMode === "list" ? (
-        <ListView problems={filteredProblems} onOpen={openDetail} />
+        <ListView problems={filteredProblems} onOpen={openEdit} />
       ) : (
-        <CardView problems={filteredProblems} onOpen={openDetail} />
+        <CardView problems={filteredProblems} onOpen={openEdit} />
       )}
 
       {renderDialogs()}
@@ -185,6 +185,11 @@ function ListView({ problems, onOpen }: { problems: Problem[]; onOpen: (id: stri
                 MD
               </Badge>
             )}
+            {p.answer_md && (
+              <Badge variant="outline" className="font-normal text-sky-600 dark:text-sky-400">
+                Ans
+              </Badge>
+            )}
             <span className="ml-auto text-xs text-muted-foreground">
               {p.standard_time != null ? `${Math.round(p.standard_time / 60)} min` : ""}
             </span>
@@ -195,39 +200,71 @@ function ListView({ problems, onOpen }: { problems: Problem[]; onOpen: (id: stri
   );
 }
 
-/* ── Card view (flashcard 風) ─────────────────────────────── */
+/* ── Card view (flashcard 風、表 = body_md / 裏 = answer_md) ───── */
 
 function CardView({ problems, onOpen }: { problems: Problem[]; onOpen: (id: string) => void }) {
+  const [revealedIds, setRevealedIds] = useState<Set<string>>(new Set());
+  const toggleReveal = (id: string) => {
+    setRevealedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
   return (
     <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-      {problems.map((p) => (
-        <Card
-          key={p.id}
-          className="cursor-pointer hover:border-primary/40 transition-colors"
-          onClick={() => onOpen(p.id)}
-        >
-          <CardContent className="p-4 space-y-2">
-            <div className="flex items-center gap-2 text-xs">
-              <span
-                className="inline-block size-2.5 rounded-sm shrink-0"
-                style={{ backgroundColor: p.color ?? "#94a3b8" }}
-                aria-hidden
-              />
-              <span className="font-mono text-muted-foreground">{p.code}</span>
-              {p.subjectName && <Badge variant="outline" className="font-normal text-[10px]">{p.subjectName}</Badge>}
-              {p.levelName && <Badge variant="outline" className="font-normal text-[10px]">{p.levelName}</Badge>}
-            </div>
-            {p.name && <div className="text-sm font-medium">{p.name}</div>}
-            <div className="text-sm prose prose-sm dark:prose-invert max-w-none">
-              {p.body_md ? (
-                <Markdown>{p.body_md}</Markdown>
-              ) : (
-                <p className="text-muted-foreground italic">(no body)</p>
+      {problems.map((p) => {
+        const revealed = revealedIds.has(p.id);
+        const hasAnswer = !!p.answer_md;
+        return (
+          <Card
+            key={p.id}
+            className="hover:border-primary/40 transition-colors"
+          >
+            <CardContent className="p-4 space-y-2">
+              <div className="flex items-center gap-2 text-xs">
+                <span
+                  className="inline-block size-2.5 rounded-sm shrink-0"
+                  style={{ backgroundColor: p.color ?? "#94a3b8" }}
+                  aria-hidden
+                />
+                <span
+                  className="font-mono text-muted-foreground cursor-pointer hover:text-foreground"
+                  onClick={() => onOpen(p.id)}
+                  title="Edit"
+                >
+                  {p.code}
+                </span>
+                {p.subjectName && <Badge variant="outline" className="font-normal text-[10px]">{p.subjectName}</Badge>}
+                {p.levelName && <Badge variant="outline" className="font-normal text-[10px]">{p.levelName}</Badge>}
+                {hasAnswer && (
+                  <button
+                    type="button"
+                    onClick={() => toggleReveal(p.id)}
+                    title={revealed ? "問題を表示" : "解答を表示"}
+                    className="ml-auto inline-flex items-center justify-center size-6 rounded text-muted-foreground/60 hover:text-foreground"
+                  >
+                    {revealed ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
+                  </button>
+                )}
+              </div>
+              {p.name && <div className="text-sm font-medium">{p.name}</div>}
+              <div className="text-sm prose prose-sm dark:prose-invert max-w-none min-h-[60px]">
+                {revealed && hasAnswer ? (
+                  <Markdown>{p.answer_md!}</Markdown>
+                ) : p.body_md ? (
+                  <Markdown>{p.body_md}</Markdown>
+                ) : (
+                  <p className="text-muted-foreground italic">(no body)</p>
+                )}
+              </div>
+              {revealed && (
+                <div className="text-[10px] text-muted-foreground border-t pt-1">解答表示中</div>
               )}
-            </div>
-          </CardContent>
-        </Card>
-      ))}
+            </CardContent>
+          </Card>
+        );
+      })}
     </div>
   );
 }

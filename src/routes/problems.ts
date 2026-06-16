@@ -44,6 +44,7 @@ const app = new Hono<Env>()
       checkpoint: body.checkpoint ?? null,
       standardTime: body.standard_time ?? null,
       bodyMd: body.body_md ?? null,
+      answerMd: body.answer_md ?? null,
       ...(body.id ? { id: body.id } : {}),
     };
     const [row] = await db.insert(problem).values(values).returning();
@@ -70,6 +71,7 @@ const app = new Hono<Env>()
     if (body.level_id !== undefined) updates.levelId = body.level_id;
     if (body.standard_time !== undefined) updates.standardTime = body.standard_time;
     if (body.body_md !== undefined) updates.bodyMd = body.body_md;
+    if (body.answer_md !== undefined) updates.answerMd = body.answer_md;
     const [row] = await db.update(problem).set(updates).where(eq(problem.id, id)).returning();
     if (!row) return c.json({ error: "Not found" }, 404);
     return c.json({ data: row });

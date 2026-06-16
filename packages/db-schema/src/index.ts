@@ -99,6 +99,7 @@ export const problem = pgTable("problem", {
   checkpoint: text("checkpoint"),
   standardTime: integer("standard_time"),
   bodyMd: text("body_md"),
+  answerMd: text("answer_md"),
   ...timestamps(),
 }, (t) => [
   uniqueIndex("problem_field_code_key").on(t.fieldId, t.code, t.subjectId, t.levelId),
