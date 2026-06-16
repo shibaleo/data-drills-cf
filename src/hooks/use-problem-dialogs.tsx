@@ -112,6 +112,7 @@ export function useProblemDialogs({
             levelId: editProblem.level_id,
             checkpoint: editProblem.checkpoint,
             standardTime: editProblem.standard_time,
+            bodyMd: (editProblem as { body_md?: string | null }).body_md ?? null,
           } : null}
           fieldId={fieldId}
           subjects={subjects}
