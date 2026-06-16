@@ -95,6 +95,9 @@ importers:
       codemirror-live-markdown:
         specifier: 0.5.1-alpha.1
         version: 0.5.1-alpha.1(@codemirror/lang-markdown@6.5.0)(@codemirror/language@6.12.2)(@codemirror/state@6.6.0)(@codemirror/view@6.40.0)(@lezer/markdown@1.6.3)(katex@0.16.40)
+      computer-modern:
+        specifier: ^0.1.3
+        version: 0.1.3
       drizzle-orm:
         specifier: ^0.44.2
         version: 0.44.7(@cloudflare/workers-types@4.20260421.1)(postgres@3.4.8)
@@ -2583,6 +2586,9 @@ packages:
   compress-commons@6.0.2:
     resolution: {integrity: sha512-6FqVXeETqWPoGcfzrXb37E50NP0LXT8kAMu5ooZayhWWdgEY4lBEEcbQNXtkuKQsGduxiIcI4gOTsxTmuq/bSg==}
     engines: {node: '>= 14'}
+
+  computer-modern@0.1.3:
+    resolution: {integrity: sha512-tJz506hr2RPksqdYs0VJz98gE1TcpYs/L/kk5MTkEbtgCLRJ1xwcL8rXkzsSnyBqNCyrI+1paZE8Jat6d7wN2Q==}
 
   cookie-es@3.1.1:
     resolution: {integrity: sha512-UaXxwISYJPTr9hwQxMFYZ7kNhSXboMXP+Z3TRX6f1/NyaGPfuNUZOWP1pUEb75B2HjfklIYLVRfWiFZJyC6Npg==}
@@ -5941,6 +5947,8 @@ snapshots:
       is-stream: 2.0.1
       normalize-path: 3.0.0
       readable-stream: 4.7.0
+
+  computer-modern@0.1.3: {}
 
   cookie-es@3.1.1: {}
 

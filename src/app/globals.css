@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "computer-modern/cmu-serif.css";
 
 /* =============================================================================
    Dark theme (stockflow base)
@@ -225,7 +226,7 @@
   padding: 12mm 8mm;
   color: black;
   background: white;
-  font-family: ui-serif, Georgia, "Times New Roman", serif;
+  font-family: "CMU Serif", "Latin Modern Roman", Cambria, "STIX Two Text", Georgia, serif;
   font-size: 11pt;
   line-height: 1.55;
 }
@@ -299,4 +300,33 @@
     box-shadow: 0 4px 24px rgba(0,0,0,0.08);
     border-radius: 4px;
   }
+}
+
+/* =============================================================================
+   Computer Modern Serif (LaTeX 互換) — 問題本文 / 解答の組版用。
+   computer-modern npm package が @font-face を提供 (font-style: roman で
+   登録されているが、ブラウザが unknown を normal とみなすため `serif` ファミリで
+   通常使用できる)。
+   ============================================================================= */
+
+.md-serif {
+  font-family: "CMU Serif", "Latin Modern Roman", Cambria, "STIX Two Text", Georgia, serif;
+  /* CM はベースラインが下がるので行間を少し詰めると締まる */
+  line-height: 1.55;
+}
+
+/* CodeMirror の問題本文・解答エディタの中身も serif で揃える。
+   CMU Serif は x-height が低めなので px を高めにとって視覚サイズを揃える。 */
+.md-serif-editor .cm-content,
+.md-serif-editor .cm-line {
+  font-family: "CMU Serif", "Latin Modern Roman", Cambria, "STIX Two Text", Georgia, serif !important;
+  font-size: 17px;
+  line-height: 1.6;
+}
+
+/* code / pre は等幅で残す */
+.md-serif code,
+.md-serif pre,
+.md-serif-editor .cm-content code {
+  font-family: ui-monospace, "SFMono-Regular", Menlo, monospace !important;
 }

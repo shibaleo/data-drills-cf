@@ -6,8 +6,8 @@ import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import "katex/dist/katex.min.css";
 
-export function Markdown({ children }: { children: string }) {
-  return (
+export function Markdown({ children, serif }: { children: string; serif?: boolean }) {
+  const md = (
     <ReactMarkdown
       remarkPlugins={[remarkGfm, remarkMath]}
       rehypePlugins={[[rehypeKatex, { strict: "ignore" }]]}
@@ -47,4 +47,6 @@ export function Markdown({ children }: { children: string }) {
       {children}
     </ReactMarkdown>
   );
+  if (serif) return <div className="md-serif">{md}</div>;
+  return md;
 }

@@ -85,7 +85,7 @@ export default function PrintExamPage() {
           </h2>
           <div className="print-exam__problem-body">
             {p.body_md ? (
-              <Markdown>{p.body_md}</Markdown>
+              <Markdown serif>{p.body_md}</Markdown>
             ) : (
               <p className="print-exam__no-body">(no markdown body)</p>
             )}

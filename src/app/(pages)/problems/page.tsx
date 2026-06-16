@@ -251,9 +251,9 @@ function CardView({ problems, onOpen }: { problems: Problem[]; onOpen: (id: stri
               {p.name && <div className="text-sm font-medium">{p.name}</div>}
               <div className="text-sm prose prose-sm dark:prose-invert max-w-none min-h-[60px]">
                 {revealed && hasAnswer ? (
-                  <Markdown>{p.answer_md!}</Markdown>
+                  <Markdown serif>{p.answer_md!}</Markdown>
                 ) : p.body_md ? (
-                  <Markdown>{p.body_md}</Markdown>
+                  <Markdown serif>{p.body_md}</Markdown>
                 ) : (
                   <p className="text-muted-foreground italic">(no body)</p>
                 )}

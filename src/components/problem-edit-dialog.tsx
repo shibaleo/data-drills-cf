@@ -201,6 +201,7 @@ export function ProblemEditDialog({
               defaultValue={formBodyMd}
               onChange={setFormBodyMd}
               placeholder={"問題文を入力\n\n例: $\\gamma(t) = (t^2, t^4)$ は放物線 $y = x^2$ のパラメータ表示か?"}
+              className="md-serif-editor"
             />
           </div>
           <div className="grid gap-2">
@@ -209,6 +210,7 @@ export function ProblemEditDialog({
               defaultValue={formAnswerMd}
               onChange={setFormAnswerMd}
               placeholder={"解答を入力 (flashcard view の裏面 / 解答付き PDF で使用)"}
+              className="md-serif-editor"
             />
           </div>
         </div>
