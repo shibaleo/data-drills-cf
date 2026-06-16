@@ -207,3 +207,96 @@
   /* ブロック math は中央配置済なので margin 不要 */
   margin: 0;
 }
+
+
+/* =============================================================================
+   Print Exam (/print/exam) — A4 印刷用 layout。
+   ブラウザの window.print() で PDF 化する前提。詳細: docs/pdf-md-render.md
+   ============================================================================= */
+
+@page {
+  size: A4;
+  margin: 18mm 16mm;
+}
+
+.print-exam {
+  max-width: 178mm; /* 210 - 32 (margin) */
+  margin: 0 auto;
+  padding: 12mm 8mm;
+  color: black;
+  background: white;
+  font-family: ui-serif, Georgia, "Times New Roman", serif;
+  font-size: 11pt;
+  line-height: 1.55;
+}
+
+.print-exam__header {
+  margin-bottom: 10mm;
+  border-bottom: 1px solid #888;
+  padding-bottom: 4mm;
+}
+.print-exam__header h1 {
+  font-size: 16pt;
+  font-weight: 600;
+  margin: 0;
+}
+.print-exam__subheader {
+  font-size: 10pt;
+  color: #555;
+  margin-top: 2mm;
+}
+
+.print-exam__problem {
+  break-inside: avoid;
+  margin-bottom: 8mm;
+}
+.print-exam__problem-title {
+  font-size: 12pt;
+  font-weight: 600;
+  margin: 0 0 3mm 0;
+  display: flex;
+  align-items: baseline;
+  gap: 6mm;
+}
+.print-exam__problem-code {
+  font-size: 9pt;
+  font-weight: 400;
+  color: #666;
+  font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+.print-exam__problem-body {
+  margin-bottom: 3mm;
+}
+.print-exam__problem-body p {
+  margin: 0 0 1.5mm 0;
+}
+.print-exam__answer-space {
+  height: 30mm;
+  border-bottom: 1px solid #ccc;
+}
+.print-exam__no-body {
+  color: #999;
+  font-style: italic;
+}
+
+/* 印刷時のみ:
+   - sidebar / nav / appshell の周辺を全部隠す
+   - 背景色を強制的に白にする */
+@media print {
+  body { background: white !important; }
+  aside, nav, .app-sidebar, header[role="banner"] { display: none !important; }
+  .print-screen-only { display: none !important; }
+  .print-exam { padding: 0; }
+  /* page-break 制御 */
+  .print-exam__problem { break-inside: avoid; }
+  .print-exam__problem-title { break-after: avoid; }
+}
+
+/* 画面表示時 (print preview として確認できるよう A4 風に枠を出す) */
+@media screen {
+  .print-exam {
+    margin: 24px auto;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+    border-radius: 4px;
+  }
+}

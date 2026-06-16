@@ -87,6 +87,8 @@ export const answerStatus = pgTable("answer_status", {
 // 7. Problem
 // =============================================================================
 
+// body_md: markdown + KaTeX を SSOT とした問題本文 (新 PDF パイプライン用)。
+// null なら従来通り problem_file 経由の表示。詳細: docs/pdf-md-render.md
 export const problem = pgTable("problem", {
   id: id(),
   code: code(),
@@ -96,6 +98,7 @@ export const problem = pgTable("problem", {
   name: text("name"),
   checkpoint: text("checkpoint"),
   standardTime: integer("standard_time"),
+  bodyMd: text("body_md"),
   ...timestamps(),
 }, (t) => [
   uniqueIndex("problem_field_code_key").on(t.fieldId, t.code, t.subjectId, t.levelId),

@@ -182,6 +182,7 @@ const app = new Hono<Env>()
         topic_id: null as string | null,
         checkpoint: p.checkpoint,
         standard_time: p.standardTime ?? null,
+        body_md: p.bodyMd ?? null,
         field_id: p.fieldId,
         created_at: p.createdAt.toISOString(),
         updated_at: p.updatedAt.toISOString(),

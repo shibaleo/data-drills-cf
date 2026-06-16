@@ -31,6 +31,7 @@ const ScopesNewPage = lazy(() => import("./app/(pages)/scopes/new/page"));
 const ScopesDetailPage = lazy(() => import("./app/(pages)/scopes/$scopeId/page"));
 const PlanPage = lazy(() => import("./app/(pages)/plan/page"));
 const HabitsPage = lazy(() => import("./app/(pages)/habits/page"));
+const PrintExamPage = lazy(() => import("./app/(pages)/print/exam/page"));
 
 /* ── Route tree ── */
 
@@ -53,6 +54,37 @@ const authLayout = createRoute({
       </FieldProvider>
     </AuthGate>
   ),
+});
+
+// Print layout (AuthGate + FieldProvider のみ。AppLayout (sidebar/header) は通さず
+// 純粋な印刷キャンバスを描画する)
+const printLayout = createRoute({
+  getParentRoute: () => rootRoute,
+  id: "print",
+  component: () => (
+    <AuthGate>
+      <FieldProvider>
+        <Suspense>
+          <Outlet />
+        </Suspense>
+      </FieldProvider>
+    </AuthGate>
+  ),
+});
+
+const printExamRoute = createRoute({
+  getParentRoute: () => printLayout,
+  path: "/print/exam",
+  validateSearch: (search: Record<string, unknown>): {
+    problem_ids?: string;
+    title?: string;
+    header?: string;
+  } => ({
+    problem_ids: typeof search.problem_ids === "string" ? search.problem_ids : undefined,
+    title: typeof search.title === "string" ? search.title : undefined,
+    header: typeof search.header === "string" ? search.header : undefined,
+  }),
+  component: () => <PrintExamPage />,
 });
 
 function lazyRoute(
@@ -150,6 +182,7 @@ const ssoCallbackRoute = createRoute({
 });
 
 const routeTree = rootRoute.addChildren([
+  printLayout.addChildren([printExamRoute]),
   authLayout.addChildren([
     flashcardsRoute,
     subjectsRoute,
