@@ -5,6 +5,7 @@ import { Link, usePathname } from "@/lib/router";
 import { SITE_NAME } from "@/lib/site";
 import {
   BarChart3,
+  BookOpen,
   CalendarRange,
   CheckCircle2,
   Info,
@@ -37,6 +38,7 @@ const navItems: NavItem[] = [
   { href: "/habits", label: "Habits", icon: CheckCircle2, badge: "beta" },
   { href: "/stats", label: "Stats", icon: BarChart3 },
   { href: "/digest", label: "Digest", icon: Newspaper, dividerAfter: true },
+  { href: "/problems", label: "Problems", icon: BookOpen },
   { href: "/flashcards", label: "Flashcards", icon: Layers },
   { href: "/masters", label: "Masters", icon: LayoutGrid },
   { href: "/about", label: "About", icon: Info },

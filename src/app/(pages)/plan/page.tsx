@@ -222,7 +222,7 @@ export default function PlanPage() {
   }, []);
 
   const handleDataChanged = useCallback(() => { /* invalidations handled inside mutation hooks */ }, []);
-  const { openDetail, openCreate, renderDialogs } = useProblemDialogs({
+  const { openDetail, renderDialogs } = useProblemDialogs({
     fieldId,
     allProblems,
     onDataChanged: handleDataChanged,
@@ -531,14 +531,6 @@ export default function PlanPage() {
               </div>
             )}
             <div className="flex items-center gap-2 shrink-0 ml-auto">
-              <button type="button"
-                title="Add problem"
-                onClick={openCreate}
-                disabled={!fieldId}
-                className="inline-flex items-center gap-1 h-[26px] px-2 rounded-md border text-xs text-foreground hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed">
-                <span className="text-base leading-none">+</span>
-                <span>Problem</span>
-              </button>
               <PdfExportButton
                 selectedCount={pdfExport.selected.size}
                 exporting={pdfExport.exporting}
