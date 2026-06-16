@@ -124,7 +124,16 @@ export function ProblemEditDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col overflow-hidden">
+      <DialogContent
+        className="max-w-2xl max-h-[85vh] flex flex-col overflow-hidden"
+        onKeyDown={(e) => {
+          // Cmd+Enter / Ctrl+Enter で保存
+          if ((e.metaKey || e.ctrlKey) && e.key === "Enter" && !saving) {
+            e.preventDefault();
+            handleSave();
+          }
+        }}
+      >
         <DialogHeader>
           <DialogTitle>{problem ? "問題を編集" : "問題を登録"}</DialogTitle>
           <DialogDescription className="sr-only">
