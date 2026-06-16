@@ -346,45 +346,6 @@
     "Hiragino Kaku Gothic ProN", "Yu Gothic", Meiryo, sans-serif !important;
 }
 
-/* =============================================================================
-   Math preview tooltip — cursor が $...$ 内側にいる時の floating popover
-   ============================================================================= */
-
-/* CodeMirror が body 直下に作る tooltip コンテナ。dialog より上、bg は中身に任せる。 */
-.cm-tooltip {
-  z-index: 200 !important;
-  background: transparent !important;
-  border: none !important;
-  padding: 0 !important;
-}
-
-/* preview の中身 box — 紙風の cream 背景で dark mode でも常に視認できる */
-.cm-math-preview {
-  background: #faf8f3;
-  color: #1a1a1a;
-  border: 1px solid #d4c8a8;
-  border-radius: 0.5rem;
-  padding: 0.55rem 0.85rem;
-  font-size: 17px;
-  line-height: 1.5;
-  max-width: 720px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
-  text-align: left;
-  /* 編集中の行と被らないよう popover と editor 行の間に隙間を入れる */
-  margin-bottom: 16px;
-}
-
-.cm-math-preview .katex {
-  font-size: 1em;
-  color: #1a1a1a;
-}
-
-.cm-math-preview--error {
-  background: #fff4f4;
-  color: #9b1c1c;
-  border-color: #f5c6c6;
-  font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
-  font-size: 12px;
-  max-width: 480px;
-  white-space: pre-wrap;
-}
+/* Math preview popover (cm-math-preview-floating) のスタイルは
+   math-preview-tooltip.ts が ViewPlugin で body 直下に挿入し inline で
+   全て当てているので、ここに CSS は不要。 */

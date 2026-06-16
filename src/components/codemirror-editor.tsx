@@ -5,7 +5,7 @@ import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { dollarMathExtension } from "@/lib/dollar-math-markdown";
 import { dollarAutoPair } from "@/lib/dollar-auto-pair";
 import { mathPreviewTooltip } from "@/lib/math-preview-tooltip";
-import { EditorView, keymap, tooltips } from "@codemirror/view";
+import { EditorView, keymap } from "@codemirror/view";
 import {
   defaultKeymap,
   history,
@@ -85,8 +85,6 @@ export default function CodemirrorEditor({ defaultValue, onChange, placeholder, 
       tableMarkdownPlugin,
       dollarMathPlugin,
       mathPreviewTooltip,  // cursor が `$...$` 内側にいる時の floating preview
-      // dialog の overflow:hidden を escape して body 直下に出す (fixed positioning)
-      tooltips({ position: "fixed", parent: document.body }),
       tableDelimiterTrimmer,
       darkThemeOverrides,
 

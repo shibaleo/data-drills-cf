@@ -2,127 +2,136 @@
  * cursor が `$...$` または `$$...$$` 内側にいる時に、その完成形を
  * floating popover で表示する CodeMirror 拡張。
  *
- * - レイアウトジャンプを避ける (= ソース自体は raw のまま)
- * - 数式全体を 1 回 KaTeX render するので spacing 規則が正しい
- * - 不完全な expression は KaTeX の error 表示でフォールバック
- *
- * 既存の `dollarMathPlugin` (cursor が外側の時に widget で置換) と併用。
+ * 実装: CodeMirror Tooltip API は CM 自身のスタイルに干渉されるため、
+ * ViewPlugin で `position: fixed` の div を直接 body に挿入して
+ * coordsAtPos() で位置計算する。スタイルは完全に自前。
  */
 
-import { StateField, type EditorState } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
-import { showTooltip, type Tooltip } from "@codemirror/view";
+import type { EditorState } from "@codemirror/state";
+import { EditorView, ViewPlugin, type ViewUpdate } from "@codemirror/view";
 import katex from "katex";
 
 type MathRange = { from: number; to: number; name: "InlineMath" | "BlockMath" };
 
-/** cursor 位置を含む InlineMath / BlockMath ノードを探す */
 function findMathAt(state: EditorState, pos: number): MathRange | null {
-  let node = syntaxTree(state).resolveInner(pos, -1);
-  while (node) {
-    if (node.name === "InlineMath" || node.name === "BlockMath") {
-      return { from: node.from, to: node.to, name: node.name as MathRange["name"] };
+  for (const side of [-1, 1] as const) {
+    let node = syntaxTree(state).resolveInner(pos, side);
+    while (node) {
+      if (node.name === "InlineMath" || node.name === "BlockMath") {
+        return { from: node.from, to: node.to, name: node.name as MathRange["name"] };
+      }
+      if (!node.parent) break;
+      node = node.parent;
     }
-    if (!node.parent) break;
-    node = node.parent;
-  }
-  // pos が node の右端ジャストにある時のフォールバック
-  node = syntaxTree(state).resolveInner(pos, 1);
-  while (node) {
-    if (node.name === "InlineMath" || node.name === "BlockMath") {
-      return { from: node.from, to: node.to, name: node.name as MathRange["name"] };
-    }
-    if (!node.parent) break;
-    node = node.parent;
   }
   return null;
 }
 
-/** 現在の selection 状態から表示する tooltip 配列を計算 */
-function getMathTooltips(state: EditorState): readonly Tooltip[] {
-  const sel = state.selection.main;
-  if (!sel.empty) return [];
-  const math = findMathAt(state, sel.from);
-  if (!math) return [];
+export const mathPreviewTooltip = ViewPlugin.fromClass(
+  class {
+    el: HTMLElement | null = null;
+    constructor(public view: EditorView) {
+      this.refresh();
+    }
+    update(u: ViewUpdate) {
+      if (u.docChanged || u.selectionSet || u.viewportChanged || u.geometryChanged) {
+        this.refresh();
+      }
+    }
+    refresh() {
+      const state = this.view.state;
+      const sel = state.selection.main;
+      if (!sel.empty) return this.hide();
+      const math = findMathAt(state, sel.from);
+      if (!math) return this.hide();
 
-  const raw = state.doc.sliceString(math.from, math.to);
-  const source = math.name === "InlineMath"
-    ? raw.slice(1, -1)
-    : raw.replace(/^\$\$/, "").replace(/\$\$$/, "").trim();
-  if (!source.trim()) return [];
+      const raw = state.doc.sliceString(math.from, math.to);
+      const source = math.name === "InlineMath"
+        ? raw.slice(1, -1)
+        : raw.replace(/^\$\$/, "").replace(/\$\$$/, "").trim();
+      if (!source.trim()) return this.hide();
 
-  return [{
-    pos: math.from,
-    above: true,
-    strictSide: false,
-    arrow: false,
-    create() {
-      const dom = document.createElement("div");
-      dom.className = "cm-math-preview";
+      this.ensureEl();
+      const el = this.el!;
       let isError = false;
       try {
-        dom.innerHTML = katex.renderToString(source, {
+        el.innerHTML = katex.renderToString(source, {
           displayMode: math.name === "BlockMath",
           throwOnError: false,
           strict: "ignore",
           output: "html",
         });
+        el.querySelectorAll<HTMLElement>(".katex, .katex *").forEach((n) => {
+          n.style.color = "#111111";
+        });
       } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        dom.textContent = `⚠ ${msg}`;
         isError = true;
+        el.textContent = `⚠ ${e instanceof Error ? e.message : String(e)}`;
       }
-      return {
-        dom,
-        // CodeMirror が dom を挿入した直後、外側 .cm-tooltip コンテナを直接 style 指定
-        mount() {
-          const tooltip = dom.parentElement as HTMLElement | null;
-          if (!tooltip) return;
-          // setProperty + "important" で CodeMirror dark theme を確実に上書き
-          const setImp = (key: string, val: string) => tooltip.style.setProperty(key, val, "important");
-          if (isError) {
-            setImp("background", "#fff4f4");
-            setImp("color", "#9b1c1c");
-            setImp("border", "1px solid #f5c6c6");
-            setImp("border-radius", "8px");
-            setImp("padding", "10px 14px");
-            setImp("font-family", "ui-monospace, Menlo, monospace");
-            setImp("font-size", "12px");
-            setImp("max-width", "480px");
-            setImp("box-shadow", "0 10px 30px rgba(0,0,0,0.55)");
-            setImp("margin-bottom", "16px");
-            setImp("z-index", "9999");
-            setImp("white-space", "pre-wrap");
-          } else {
-            setImp("background", "#ffffff");
-            setImp("color", "#111111");
-            setImp("border", "1px solid #d4c8a8");
-            setImp("border-radius", "8px");
-            setImp("padding", "12px 16px");
-            setImp("font-size", "18px");
-            setImp("line-height", "1.5");
-            setImp("max-width", "720px");
-            setImp("box-shadow", "0 10px 30px rgba(0,0,0,0.55)");
-            setImp("margin-bottom", "16px");
-            setImp("z-index", "9999");
-            // KaTeX 内の文字色も dark に統一
-            tooltip.querySelectorAll<HTMLElement>(".katex, .katex *").forEach((el) => {
-              el.style.setProperty("color", "#111111", "important");
-            });
-          }
-        },
-      };
-    },
-  }];
-}
-
-const mathPreviewField = StateField.define<readonly Tooltip[]>({
-  create: getMathTooltips,
-  update(tooltips, tr) {
-    if (!tr.docChanged && !tr.selection) return tooltips;
-    return getMathTooltips(tr.state);
+      this.style(el, isError);
+      this.position(math.from);
+    }
+    ensureEl() {
+      if (this.el) return;
+      const el = document.createElement("div");
+      el.className = "cm-math-preview-floating";
+      document.body.appendChild(el);
+      this.el = el;
+    }
+    style(el: HTMLElement, isError: boolean) {
+      el.style.cssText = isError
+        ? [
+            "position:fixed",
+            "background:#fff4f4",
+            "color:#9b1c1c",
+            "border:1px solid #f5c6c6",
+            "border-radius:8px",
+            "padding:10px 14px",
+            "font-family:ui-monospace,Menlo,monospace",
+            "font-size:12px",
+            "max-width:480px",
+            "box-shadow:0 10px 30px rgba(0,0,0,.55)",
+            "z-index:9999",
+            "white-space:pre-wrap",
+            "pointer-events:none",
+          ].join(";")
+        : [
+            "position:fixed",
+            "background:#ffffff",
+            "color:#111111",
+            "border:1px solid #d4c8a8",
+            "border-radius:8px",
+            "padding:12px 18px",
+            "font-size:18px",
+            "line-height:1.5",
+            "max-width:720px",
+            "box-shadow:0 10px 30px rgba(0,0,0,.55)",
+            "z-index:9999",
+            "pointer-events:none",
+          ].join(";");
+    }
+    position(mathFrom: number) {
+      if (!this.el) return;
+      const coords = this.view.coordsAtPos(mathFrom);
+      if (!coords) {
+        this.hide();
+        return;
+      }
+      // editor 行の真上に置く。popover を上に出した上で 12px 隙間を確保。
+      const rect = this.el.getBoundingClientRect();
+      const top = coords.top - rect.height - 12;
+      const left = Math.max(8, coords.left);
+      this.el.style.left = `${left}px`;
+      this.el.style.top = `${Math.max(8, top)}px`;
+    }
+    hide() {
+      if (!this.el) return;
+      this.el.remove();
+      this.el = null;
+    }
+    destroy() {
+      this.hide();
+    }
   },
-  provide: (f) => showTooltip.computeN([f], (state) => state.field(f)),
-});
-
-export const mathPreviewTooltip = [mathPreviewField];
+);
