@@ -66,6 +66,7 @@ const app = new Hono<Env>()
     if (body.name !== undefined) updates.name = body.name;
     if (body.color !== undefined) updates.color = body.color;
     if (body.sort_order !== undefined) updates.sortOrder = body.sort_order;
+    if (body.is_archived !== undefined) updates.isArchived = body.is_archived;
     const [row] = await db.update(field).set(updates)
       .where(and(eq(field.id, c.req.param("id")), eq(field.userId, userId))).returning();
     if (!row) return c.json({ error: "Not found" }, 404);

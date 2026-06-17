@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Pencil, GripVertical } from "lucide-react";
+import { Plus, Pencil, GripVertical, Archive, ArchiveRestore } from "lucide-react";
 import { toast } from "sonner";
 import {
   DndContext,
@@ -152,9 +152,11 @@ function LevelsSection({ fieldId }: { fieldId: string }) {
 function SortableProjectSection({
   project,
   onEditProject,
+  onToggleArchive,
 }: {
   project: Project;
   onEditProject: (p: Project) => void;
+  onToggleArchive: (p: Project) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: project.id });
   const style = {
@@ -173,7 +175,10 @@ function SortableProjectSection({
         >
           <GripVertical className="size-4" />
         </button>
-        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{project.name}</h3>
+        <h3 className={`text-xs font-semibold uppercase tracking-wider ${project.isArchived ? "text-muted-foreground/50 line-through" : "text-muted-foreground"}`}>
+          {project.name}
+          {project.isArchived && <span className="ml-2 not-italic no-underline text-[10px] text-muted-foreground/60">(archived)</span>}
+        </h3>
         <button
           type="button"
           className="inline-flex size-5 items-center justify-center rounded text-muted-foreground/40 hover:text-foreground transition-colors"
@@ -182,11 +187,21 @@ function SortableProjectSection({
         >
           <Pencil className="size-3" />
         </button>
+        <button
+          type="button"
+          className="inline-flex size-5 items-center justify-center rounded text-muted-foreground/40 hover:text-foreground transition-colors"
+          onClick={() => onToggleArchive(project)}
+          title={project.isArchived ? "Unarchive field" : "Archive field"}
+        >
+          {project.isArchived ? <ArchiveRestore className="size-3" /> : <Archive className="size-3" />}
+        </button>
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <SubjectsSection fieldId={project.id} />
-        <LevelsSection fieldId={project.id} />
-      </div>
+      {!project.isArchived && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <SubjectsSection fieldId={project.id} />
+          <LevelsSection fieldId={project.id} />
+        </div>
+      )}
     </div>
   );
 }
@@ -354,6 +369,15 @@ export default function MastersPage() {
                     key={project.id}
                     project={project}
                     onEditProject={(p) => { setProjectDialogItem(p); setProjectDialogOpen(true); }}
+                    onToggleArchive={(p) => {
+                      updateProject.mutate(
+                        { id: p.id, payload: { is_archived: !p.isArchived } },
+                        {
+                          onSuccess: () => toast.success(p.isArchived ? "Field unarchived" : "Field archived"),
+                          onError: (e) => toast.error(e instanceof ApiError ? e.body.error : "Failed to toggle archive"),
+                        },
+                      );
+                    }}
                   />
                 ))}
               </div>

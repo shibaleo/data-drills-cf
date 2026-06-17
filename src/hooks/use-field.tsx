@@ -59,7 +59,9 @@ export function FieldProvider({ children }: { children: ReactNode }) {
   const statusesQuery = useStatuses();
   const invalidate = useInvalidateFieldData();
 
-  const fields = fieldsQuery.data ?? [];
+  // FieldProvider 経由で配る fields は archived を隠す。
+  // /masters は useFields() を直接使って archived 込みで取得し、toggle UI を出す。
+  const fields = (fieldsQuery.data ?? []).filter((f) => !f.isArchived);
 
   // One-time cleanup of legacy localStorage key.
   useEffect(() => {

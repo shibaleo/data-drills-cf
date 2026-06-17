@@ -336,6 +336,7 @@ export const field = pgTable("field", {
   color: text("color"),
   gdriveFolderId: text("gdrive_folder_id"),
   sortOrder: integer("sort_order").notNull().default(0),
+  isArchived: boolean("is_archived").notNull().default(false),
   ...timestamps(),
 }, (t) => [
   uniqueIndex("field_user_code_key").on(t.userId, t.code),

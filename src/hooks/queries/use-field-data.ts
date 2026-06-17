@@ -87,7 +87,7 @@ export function useCreateField() {
 export function useUpdateField() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (vars: { id: string; payload: { code?: string; name?: string; color?: string | null; sort_order?: number } }) =>
+    mutationFn: (vars: { id: string; payload: { code?: string; name?: string; color?: string | null; sort_order?: number; is_archived?: boolean } }) =>
       unwrap(rpc.api.v1.fields[":id"].$put({ param: { id: vars.id }, json: vars.payload })),
     onSuccess: () => qc.invalidateQueries({ queryKey: fieldKeys.fields() }),
   });

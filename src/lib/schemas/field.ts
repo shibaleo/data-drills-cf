@@ -12,6 +12,7 @@ export const fieldUpdateInputSchema = z.object({
   name: z.string().min(1).optional(),
   color: z.string().nullish(),
   sort_order: z.number().int().nonnegative().optional(),
+  is_archived: z.boolean().optional(),
 });
 
 export type FieldCreateInput = z.infer<typeof fieldCreateInputSchema>;
