@@ -1,11 +1,20 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Plus, Search, LayoutGrid, List as ListIcon, Eye, EyeOff } from "lucide-react";
+import { Plus, Search, LayoutGrid, List as ListIcon, Eye, EyeOff, FileText, X } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Markdown } from "@/components/markdown";
 import { MasterFieldPicker } from "@/components/master-field-picker";
 import { useMasterField } from "@/hooks/use-master-field";
@@ -52,6 +61,31 @@ export default function ProblemsPage() {
     allProblems,
     onDataChanged: () => problemsQuery.refetch(),
   });
+
+  // ── 複数選択 (Phase 7) ────────────────────────────────
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const toggleSelect = (id: string) =>
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  const clearSelection = () => setSelectedIds(new Set());
+  const allVisibleSelected =
+    filteredProblems.length > 0 && filteredProblems.every((p) => selectedIds.has(p.id));
+  const toggleSelectAllVisible = () => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (allVisibleSelected) {
+        filteredProblems.forEach((p) => next.delete(p.id));
+      } else {
+        filteredProblems.forEach((p) => next.add(p.id));
+      }
+      return next;
+    });
+  };
+
+  const [pdfDialogOpen, setPdfDialogOpen] = useState(false);
 
   if (!field) {
     return (
@@ -101,6 +135,29 @@ export default function ProblemsPage() {
           </select>
         )}
         <div className="ml-auto flex items-center gap-2">
+          {selectedIds.size > 0 && (
+            <>
+              <span className="text-xs text-muted-foreground">{selectedIds.size} 問選択</span>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={clearSelection}
+                className="h-8 gap-1.5"
+                title="Clear selection"
+              >
+                <X className="size-3.5" />
+                Clear
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => setPdfDialogOpen(true)}
+                className="h-8 gap-1.5"
+              >
+                <FileText className="size-3.5" />
+                Generate Exam PDF
+              </Button>
+            </>
+          )}
           <div className="inline-flex border rounded-md overflow-hidden">
             <button
               type="button"
@@ -131,8 +188,17 @@ export default function ProblemsPage() {
       </div>
 
       {/* Counter */}
-      <div className="text-xs text-muted-foreground">
-        {filteredProblems.length} / {allProblems.length} 問
+      <div className="flex items-center gap-3 text-xs text-muted-foreground">
+        <span>{filteredProblems.length} / {allProblems.length} 問</span>
+        {filteredProblems.length > 0 && (
+          <button
+            type="button"
+            onClick={toggleSelectAllVisible}
+            className="underline-offset-2 hover:underline"
+          >
+            {allVisibleSelected ? "Deselect all visible" : "Select all visible"}
+          </button>
+        )}
       </div>
 
       {/* Content */}
@@ -147,13 +213,99 @@ export default function ProblemsPage() {
           )}
         </div>
       ) : viewMode === "list" ? (
-        <ListView problems={filteredProblems} onOpen={openEdit} />
+        <ListView
+          problems={filteredProblems}
+          onOpen={openEdit}
+          selectedIds={selectedIds}
+          onToggleSelect={toggleSelect}
+        />
       ) : (
-        <CardView problems={filteredProblems} onOpen={openEdit} />
+        <CardView
+          problems={filteredProblems}
+          onOpen={openEdit}
+          selectedIds={selectedIds}
+          onToggleSelect={toggleSelect}
+        />
       )}
+
+      <ExamPdfDialog
+        open={pdfDialogOpen}
+        onOpenChange={setPdfDialogOpen}
+        selectedIds={Array.from(selectedIds)}
+      />
 
       {renderDialogs()}
     </div>
+  );
+}
+
+/* ── Generate Exam PDF dialog ─────────────────────────────── */
+
+function ExamPdfDialog({
+  open,
+  onOpenChange,
+  selectedIds,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  selectedIds: string[];
+}) {
+  const [title, setTitle] = useState("Problem set");
+  const [header, setHeader] = useState("");
+  const [withAnswers, setWithAnswers] = useState(false);
+
+  const handleGenerate = () => {
+    const params = new URLSearchParams();
+    params.set("problem_ids", selectedIds.join(","));
+    if (title.trim()) params.set("title", title.trim());
+    if (header.trim()) params.set("header", header.trim());
+    if (withAnswers) params.set("with_answers", "true");
+    window.open(`/print/exam?${params.toString()}`, "_blank", "noopener,noreferrer");
+    onOpenChange(false);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Generate Exam PDF</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div className="text-xs text-muted-foreground">{selectedIds.length} 問を出力</div>
+          <div className="space-y-1.5">
+            <Label htmlFor="exam-title" className="text-xs">Title</Label>
+            <Input
+              id="exam-title"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Problem set"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="exam-header" className="text-xs">Header (sub-title)</Label>
+            <Input
+              id="exam-header"
+              value={header}
+              onChange={(e) => setHeader(e.target.value)}
+              placeholder="(任意)"
+            />
+          </div>
+          <label className="flex items-center gap-2 text-sm cursor-pointer">
+            <Checkbox
+              checked={withAnswers}
+              onCheckedChange={(v) => setWithAnswers(v === true)}
+            />
+            <span>解答を含める (with answers)</span>
+          </label>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button onClick={handleGenerate} disabled={selectedIds.length === 0}>
+            Open print view
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -161,7 +313,17 @@ export default function ProblemsPage() {
 
 type Problem = ReturnType<typeof useProblemsList>["data"] extends Array<infer T> | undefined ? T : never;
 
-function ListView({ problems, onOpen }: { problems: Problem[]; onOpen: (id: string) => void }) {
+function ListView({
+  problems,
+  onOpen,
+  selectedIds,
+  onToggleSelect,
+}: {
+  problems: Problem[];
+  onOpen: (id: string) => void;
+  selectedIds: Set<string>;
+  onToggleSelect: (id: string) => void;
+}) {
   return (
     <div className="rounded-md border bg-card">
       <ul className="divide-y">
@@ -171,6 +333,16 @@ function ListView({ problems, onOpen }: { problems: Problem[]; onOpen: (id: stri
             className="flex items-center gap-3 px-4 py-2 hover:bg-accent/40 cursor-pointer text-sm"
             onClick={() => onOpen(p.id)}
           >
+            <span
+              onClick={(e) => { e.stopPropagation(); onToggleSelect(p.id); }}
+              className="flex items-center"
+            >
+              <Checkbox
+                checked={selectedIds.has(p.id)}
+                onCheckedChange={() => onToggleSelect(p.id)}
+                onClick={(e) => e.stopPropagation()}
+              />
+            </span>
             <span
               className="inline-block size-3 rounded-sm shrink-0"
               style={{ backgroundColor: p.color ?? "#94a3b8" }}
@@ -202,7 +374,17 @@ function ListView({ problems, onOpen }: { problems: Problem[]; onOpen: (id: stri
 
 /* ── Card view (flashcard 風、表 = body_md / 裏 = answer_md) ───── */
 
-function CardView({ problems, onOpen }: { problems: Problem[]; onOpen: (id: string) => void }) {
+function CardView({
+  problems,
+  onOpen,
+  selectedIds,
+  onToggleSelect,
+}: {
+  problems: Problem[];
+  onOpen: (id: string) => void;
+  selectedIds: Set<string>;
+  onToggleSelect: (id: string) => void;
+}) {
   const [revealedIds, setRevealedIds] = useState<Set<string>>(new Set());
   const toggleReveal = (id: string) => {
     setRevealedIds((prev) => {
@@ -223,6 +405,10 @@ function CardView({ problems, onOpen }: { problems: Problem[]; onOpen: (id: stri
           >
             <CardContent className="p-4 space-y-2">
               <div className="flex items-center gap-2 text-xs">
+                <Checkbox
+                  checked={selectedIds.has(p.id)}
+                  onCheckedChange={() => onToggleSelect(p.id)}
+                />
                 <span
                   className="inline-block size-2.5 rounded-sm shrink-0"
                   style={{ backgroundColor: p.color ?? "#94a3b8" }}

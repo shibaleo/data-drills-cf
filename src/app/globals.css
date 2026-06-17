@@ -281,6 +281,18 @@
   height: 30mm;
   border-bottom: 1px solid #ccc;
 }
+.print-exam__answer {
+  margin-top: 3mm;
+  padding: 3mm 4mm;
+  border-left: 2px solid #999;
+  background: #f7f7f7;
+}
+.print-exam__answer-label {
+  font-size: 9pt;
+  font-weight: bold;
+  color: #555;
+  margin-bottom: 1.5mm;
+}
 .print-exam__no-body {
   color: #999;
   font-style: italic;

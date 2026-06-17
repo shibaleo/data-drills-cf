@@ -494,10 +494,14 @@ export const dollarMathPlugin = ViewPlugin.fromClass(
             } else {
               const inner = raw.replace(/^\$\$/, "").replace(/\$\$$/, "").trim();
               if (!inner) return;
+              // block: true は ViewPlugin から出すと CodeMirror が拒否する
+              // ("Block decorations may not be specified via plugins")。
+              // BlockMathWidget 自体が display:block style を持つので、
+              // block flag なしの replace でも display 数式として描画される。
               decos.push({
                 from: node.from,
                 to: node.to,
-                deco: Decoration.replace({ widget: new BlockMathWidget(inner), block: true }),
+                deco: Decoration.replace({ widget: new BlockMathWidget(inner) }),
               });
             }
           },

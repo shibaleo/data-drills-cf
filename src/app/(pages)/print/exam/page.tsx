@@ -19,6 +19,7 @@ type Search = {
   problem_ids?: string;
   title?: string;
   header?: string;
+  with_answers?: string | boolean;
 };
 
 export default function PrintExamPage() {
@@ -63,6 +64,11 @@ export default function PrintExamPage() {
 
   const title = search.title ?? "Problem set";
   const header = search.header ?? "";
+  // TanStack Router は ?with_answers=true を boolean に auto-coerce するので両対応
+  const withAnswers =
+    search.with_answers === true ||
+    search.with_answers === "true" ||
+    search.with_answers === "1";
 
   if (problemsQuery.isLoading) {
     return <div className="print-screen-only p-8 text-sm text-muted-foreground">Loading…</div>;
@@ -90,7 +96,18 @@ export default function PrintExamPage() {
               <p className="print-exam__no-body">(no markdown body)</p>
             )}
           </div>
-          <div className="print-exam__answer-space" />
+          {withAnswers ? (
+            p.answer_md ? (
+              <div className="print-exam__answer">
+                <div className="print-exam__answer-label">解答</div>
+                <Markdown serif>{p.answer_md}</Markdown>
+              </div>
+            ) : (
+              <div className="print-exam__answer-space" />
+            )
+          ) : (
+            <div className="print-exam__answer-space" />
+          )}
         </article>
       ))}
     </div>
