@@ -527,7 +527,10 @@ function ReviewBlock({
             defaultValue={review.content ?? ''}
             onChange={onDraftChange}
             compact
-            className="border-0 bg-transparent text-sm rounded-none"
+            // 表示モード (text-sm leading-relaxed の static <Markdown>) と
+            // 視覚的に揃える: 枠/背景なし、cm-content の padding/min-height を 0、
+            // line-height は relaxed (1.625) で行間を一致させる。
+            className="border-0 bg-transparent text-sm rounded-none [&_.cm-content]:p-0 [&_.cm-content]:min-h-0 [&_.cm-line]:leading-relaxed"
           />
         </div>
       ) : (
