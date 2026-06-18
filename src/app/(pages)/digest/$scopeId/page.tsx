@@ -983,16 +983,13 @@ function CompactTransitionMatrix({
         const GAP = 1;
         const TOP_PAD = 2; // 列ラベル ↔ grid の垂直余白
         const N = statuses.length;
-        // 最上位 status (= "Solid") の grid 行は「前回 Solid → 次回」の遷移で
-        // 表示価値が低いため drop する。ピル列は凡例兼用で全 status 残す。
-        const gridRowLabels = rowLabels.slice(0, -1);
-        // SVG は列ラベル + grid 部分のみ。行ラベルは HTML pill で外側に並べる。
         const W = N * (CELL + GAP) - GAP;
         const HEADER_H = CELL + TOP_PAD;
-        const H = HEADER_H + gridRowLabels.length * (CELL + GAP) - GAP;
+        // pill 数 = grid 行数 で完全一致させる (全 status を grid にも残す)
+        const H = HEADER_H + rowLabels.length * (CELL + GAP) - GAP;
         return (
-          <div className="flex items-stretch gap-1.5 mt-1">
-            {/* 行ラベル (pill 列) — 全 status 表示 */}
+          <div className="flex items-start gap-1.5 mt-1">
+            {/* 行ラベル (pill 列) */}
             <div className="flex flex-col" style={{ gap: GAP, paddingTop: HEADER_H }}>
               {rowLabels.map((from) => {
                 const fromColor = from === FIRST_LABEL ? COLOR_FIRST_ATTEMPT : colorByName.get(from) ?? "#888";
@@ -1003,16 +1000,16 @@ function CompactTransitionMatrix({
                 );
               })}
             </div>
-            {/* SVG: 列ラベル + grid。w-full で右余白いっぱいまで広げる */}
-            <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet"
-              className="w-full h-auto flex-1">
+            {/* SVG: 列ラベル + grid。pill と高さを揃えるため natural size でレンダ */}
+            <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMinYMin meet"
+              width={W} height={H} className="shrink-0">
               {statuses.map((s, i) => (
                 <text key={s.id} x={i * (CELL + GAP) + CELL / 2} y={CELL / 2}
                   textAnchor="middle" dominantBaseline="central"
                   fontSize={8} fontWeight={500}
                   fill={s.color ?? "currentColor"}>{initial(s.name)}</text>
               ))}
-              {gridRowLabels.map((from, ri) => {
+              {rowLabels.map((from, ri) => {
                 const total = rowTotals[from] ?? 0;
                 const y = HEADER_H + ri * (CELL + GAP);
                 return (
@@ -1128,7 +1125,7 @@ function StatusDonut({
  * 凡例は 1 度のみ表示。
  */
 function DuePlanCard({
-  statuses, rows, output, className, onOpenProblem, rowLinkTo,
+  statuses, rows, output, className, onOpenProblem, rowLinkTo, reviewTypeRows,
 }: {
   statuses: { id: string; name: string; color?: string | null; sortOrder: number }[];
   rows: {
@@ -1142,6 +1139,14 @@ function DuePlanCard({
   onOpenProblem?: (problemId: string) => void;
   /** label を Link 化する場合の遷移先 (= /plan?scope_id=…) */
   rowLinkTo?: string;
+  /** review_type 集計行 (= 当日の review を type 別にまとめた cloud)。
+   *  各 block の色は review の元 answer の status 色。pill は type 色。 */
+  reviewTypeRows?: {
+    id: string;
+    name: string;
+    color: string | null;
+    items: { id: string; color: string; problemId: string }[];
+  }[];
 }) {
   const ordered = statusOrderWithUnrated(statuses);
   const legendKeys = new Set<string>();
@@ -1228,6 +1233,37 @@ function DuePlanCard({
               </div>
             </div>
           ))}
+          {/* Review type cloud — 当日の review を type 別に集計。
+             pill が type、blocks は各 review の元 answer 色。 */}
+          {reviewTypeRows && reviewTypeRows.length > 0 && (
+            <div className="border-t border-border/60 pt-2 mt-1 flex flex-col gap-2">
+              {reviewTypeRows.map((rt) => (
+                <div key={rt.id} className="flex items-center gap-3">
+                  <div className="w-16 shrink-0">
+                    <OpaqueTag name={rt.name} color={rt.color}/>
+                  </div>
+                  <div className="text-xs tabular-nums shrink-0 w-12">
+                    <span className="font-semibold text-foreground">{rt.items.length}</span>
+                  </div>
+                  <div className="flex flex-wrap gap-px">
+                    {rt.items.map((it) => (
+                      onOpenProblem ? (
+                        <button key={it.id} type="button"
+                          onClick={() => onOpenProblem(it.problemId)}
+                          title={rt.name}
+                          className={`${tetrisCellClass} hover:opacity-80 cursor-pointer`}
+                          style={{ width: 14, height: 14, background: it.color }}/>
+                      ) : (
+                        <div key={it.id} title={rt.name}
+                          className={tetrisCellClass}
+                          style={{ width: 14, height: 14, background: it.color }}/>
+                      )
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>

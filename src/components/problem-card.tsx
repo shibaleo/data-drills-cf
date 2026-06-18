@@ -295,7 +295,9 @@ export function ProblemCard({
             </div>
           )
         ) : info ? (
-          <div className="-mt-1 flex items-center gap-2 overflow-visible">
+          // モバイルで sparkline がはみ出さないよう flex-wrap + overflow-hidden で
+          // 折り返し可能にし、sparkline 群は ml-auto で右寄せ。
+          <div className="-mt-1 flex items-center gap-2 flex-wrap overflow-hidden">
             <div className="h-1.5 w-16 shrink-0 rounded-full bg-muted overflow-hidden">
               <div
                 className="h-full rounded-full transition-all"
@@ -308,7 +310,7 @@ export function ProblemCard({
             <span className="text-[10px] font-medium text-foreground/60 whitespace-nowrap">
               {Math.round(info.retention * 100)}%
             </span>
-            <div className="ml-auto flex items-center gap-2">
+            <div className="ml-auto flex items-center gap-2 flex-wrap min-w-0">
               <span className="text-[10px] text-foreground/50 whitespace-nowrap">
                 最終解答 {info.elapsedDays < 1 ? '今日' : `${Math.round(info.elapsedDays)}日前`}
               </span>
@@ -320,7 +322,7 @@ export function ProblemCard({
                   </span>
                 </span>
               )}
-              <div className="leading-[0]">
+              <div className="leading-[0] shrink-0">
                 <DurationSparkline
                   entries={sparklineEntries}
                   highlightDate={highlightDate}
