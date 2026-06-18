@@ -470,7 +470,7 @@ export function ProblemCard({
                     : <span className="inline-block size-2 rounded-full bg-foreground/40" />}
                 </div>
                 <div className="text-[10px] text-foreground/50">
-                  直前 ({prevAnswer.date ? toJSTDate(prevAnswer.date) : '-'})
+                  {prevAnswer.date ? toJSTDate(prevAnswer.date) : '-'}
                 </div>
               </div>
             )}
