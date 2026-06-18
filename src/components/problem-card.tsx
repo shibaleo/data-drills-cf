@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useRef, type RefObject } from 'react'
+import { useEffect, useState, useRef, type RefObject } from 'react'
 import { ArrowUp, ArrowDown, Plus, Pencil, Trash2 } from 'lucide-react'
+import { toast } from 'sonner'
 import type { ProblemWithAnswers, AnswerWithReviews } from '@/hooks/queries/use-problems'
 import type { Problem } from '@/lib/types'
 export type { ProblemWithAnswers, AnswerWithReviews }
@@ -12,10 +13,12 @@ import { computeNextReview } from '@/lib/srs-scoring'
 import { useLookup } from '@/hooks/use-field'
 import { useSubjects, useLevels, useFields } from '@/hooks/queries/use-field-data'
 import { Markdown } from '@/components/markdown'
+import { MarkdownEditor } from '@/components/markdown-editor'
 import { DurationSparkline } from '@/components/duration-sparkline'
 import { ProblemPdfLink } from '@/components/problem-pdf-link'
 import { StatusTag } from '@/components/color-tags'
 import { Card, CardContent } from '@/components/ui/card'
+import { rpc, unwrap } from '@/lib/rpc-client'
 
 
 const TAG_BASE = 'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs'
@@ -108,6 +111,18 @@ interface ProblemCardProps {
   onPdfLinked?: (problemId: string) => void
   /** Render without Card wrapper (for use inside dialogs) */
   bare?: boolean
+  /** answers のうち a.date === dateFilter のものだけ表示する (digest day view 用)。 */
+  dateFilter?: string
+  /** Retention bar / sparkline / next review メタ行を隠す。 */
+  hideHeader?: boolean
+  /** checkpoint markdown を隠す。 */
+  hideCheckpoint?: boolean
+  /** action row (PDF link / delete / +check) を隠す。 */
+  hideActions?: boolean
+  /** review.content を click → MarkdownEditor で in-place 編集できるようにする。 */
+  editableReviews?: boolean
+  /** editableReviews 経由で保存が成功した時の callback。invalidate に使う。 */
+  onReviewSaved?: () => void
 }
 
 export function ProblemCard({
@@ -119,6 +134,12 @@ export function ProblemCard({
   onDelete,
   onPdfLinked,
   bare,
+  dateFilter,
+  hideHeader,
+  hideCheckpoint,
+  hideActions,
+  editableReviews,
+  onReviewSaved,
 }: ProblemCardProps) {
   // problem-card は色付け用に lookup を使う。card は ProblemWithAnswers を
   // 受け取るので、p.field_id を起点に subjects/levels を引く (page-local picker
@@ -128,9 +149,12 @@ export function ProblemCard({
   const { data: fields = [] } = useFields()
   const field = fields.find((f) => f.id === p.field_id) ?? null
   const lookup = useLookup(subjects, levels)
-  const answers = [...p.answers].sort(
+  const answersAll = [...p.answers].sort(
     (a, b) => (b.date ?? '').localeCompare(a.date ?? '') || (b.created_at ?? '').localeCompare(a.created_at ?? ''),
   )
+  const answers = dateFilter
+    ? answersAll.filter((a) => a.date === dateFilter)
+    : answersAll
   const info = computeForgettingInfo(p.answers, now)
   const [highlightDate, setHighlightDate] = useState<string | null>(null)
   const timelineRef = useRef<HTMLDivElement>(null)
@@ -163,7 +187,7 @@ export function ProblemCard({
             type="button"
             onClick={() => onEditProblem(p)}
             title="問題を編集"
-            className="inline-flex size-5 shrink-0 items-center justify-center rounded text-muted-foreground/40 hover:text-foreground transition-colors"
+            className="inline-flex size-5 shrink-0 items-center justify-center rounded text-muted-foreground/40 hover:text-foreground transition-colors print:hidden"
           >
             <Pencil className="size-3" />
           </button>
@@ -179,7 +203,7 @@ export function ProblemCard({
         )}
 
         {/* Retention bar + schedule info + Sparkline */}
-        {info ? (
+        {hideHeader ? null : info ? (
           <div className="-mt-1 flex items-center gap-2 overflow-visible">
             <div className="h-1.5 w-16 shrink-0 rounded-full bg-muted overflow-hidden">
               <div
@@ -225,7 +249,7 @@ export function ProblemCard({
         )}
 
         {/* Checkpoint */}
-        {p.checkpoint && (
+        {!hideCheckpoint && p.checkpoint && (
           <div className="text-xs text-foreground">
             <Markdown>{p.checkpoint}</Markdown>
           </div>
@@ -300,22 +324,16 @@ export function ProblemCard({
                         type="button"
                         onClick={() => onEditAnswer(a, p)}
                         title="編集"
-                        className="inline-flex size-5 items-center justify-center rounded text-muted-foreground/40 hover:text-foreground transition-colors"
+                        className="inline-flex size-5 items-center justify-center rounded text-muted-foreground/40 hover:text-foreground transition-colors print:hidden"
                       >
                         <Pencil className="size-3" />
                       </button>
                     </div>
                     {reviews.map((rv) => (
-                      <div key={rv.id} className="py-1 text-xs">
-                        {rv.review_type && (
-                          <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs -ml-6 bg-muted text-muted-foreground">{rv.review_type}</span>
-                        )}
-                        {rv.content && (
-                          <div className="text-sm text-foreground mt-1 leading-relaxed">
-                            <Markdown>{rv.content}</Markdown>
-                          </div>
-                        )}
-                      </div>
+                      <ReviewBlock key={rv.id}
+                        review={rv}
+                        editable={editableReviews}
+                        onSaved={onReviewSaved}/>
                     ))}
                   </div>
                 </div>
@@ -325,7 +343,7 @@ export function ProblemCard({
         )}
 
         {/* Action row: dustbox, link | pdf, show, + */}
-        {onPdfLinked ? (
+        {hideActions ? null : onPdfLinked ? (
           <ProblemPdfLink
             problemFiles={p.problem_files}
             problemId={p.id}
@@ -386,5 +404,87 @@ export function ProblemCard({
         {content}
       </CardContent>
     </Card>
+  )
+}
+
+/**
+ * Review 1 件分の表示 + (optional) in-place 編集。
+ * editable=true の時に content 部分を click → MarkdownEditor で書き換え、
+ * Save で `PUT /reviews/:id` を投げて表示モードに戻す。
+ */
+function ReviewBlock({
+  review, editable, onSaved,
+}: {
+  review: AnswerWithReviews['reviews'][number]
+  editable?: boolean
+  onSaved?: () => void
+}) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(review.content ?? '')
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => { setDraft(review.content ?? '') }, [review.content])
+
+  const save = async () => {
+    if (saving) return
+    const next = draft.trim()
+    if (next === (review.content ?? '')) { setEditing(false); return }
+    setSaving(true)
+    try {
+      await unwrap(rpc.api.v1.reviews[':id'].$put({
+        param: { id: review.id },
+        json: { content: next },
+      }))
+      onSaved?.()
+      setEditing(false)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Save failed')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="py-1 text-xs">
+      {review.review_type && (
+        <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs -ml-6 bg-muted text-muted-foreground">{review.review_type}</span>
+      )}
+      {editing ? (
+        <div className="mt-1 space-y-1.5 print:hidden">
+          <MarkdownEditor
+            defaultValue={review.content ?? ''}
+            onChange={setDraft}
+            compact
+            className="text-sm"
+          />
+          <div className="flex items-center gap-1.5">
+            <button type="button" onClick={save} disabled={saving}
+              className="text-[10px] text-primary hover:underline disabled:opacity-50">
+              {saving ? 'Saving…' : 'Save'}
+            </button>
+            <button type="button"
+              onClick={() => { setDraft(review.content ?? ''); setEditing(false) }}
+              className="text-[10px] text-muted-foreground hover:text-foreground">
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : editable ? (
+        <button type="button"
+          onClick={() => setEditing(true)}
+          title="クリックで編集"
+          className="block w-full text-left text-sm text-foreground mt-1 leading-relaxed rounded hover:bg-accent/30 px-1 -mx-1 cursor-text print:hover:bg-transparent">
+          {review.content
+            ? <Markdown>{review.content}</Markdown>
+            : <span className="text-muted-foreground italic">(空 — クリックで追記)</span>}
+        </button>
+      ) : (
+        review.content && (
+          <div className="text-sm text-foreground mt-1 leading-relaxed">
+            <Markdown>{review.content}</Markdown>
+          </div>
+        )
+      )}
+    </div>
   )
 }

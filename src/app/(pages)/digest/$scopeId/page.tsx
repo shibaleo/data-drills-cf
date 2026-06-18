@@ -1,10 +1,11 @@
 "use client";
 import { useCallback, useMemo, useState, useEffect, Fragment } from "react";
+import { ProblemCard } from "@/components/problem-card";
 import { COLOR_FIRST_ATTEMPT } from "@/lib/block-color";
 import { STATUS_PHASE } from "@/lib/status-phases";
 import { Markdown } from "@/components/markdown";
 import { tetrisCellClass, tetrisEmptyClass, TETRIS_RX, TETRIS_STROKE, TETRIS_STROKE_OPACITY, TETRIS_STROKE_WIDTH } from "@/components/tetris-cell";
-import { ChevronLeft, ChevronRight, Clock, ChevronDown, ChevronUp, MessageSquareText, Layers, ArrowUpRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Clock, ChevronDown, ChevronUp, Layers, ArrowUpRight } from "lucide-react";
 import { Link, useParams, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useField } from "@/hooks/use-field";
@@ -79,7 +80,9 @@ export default function DigestPage() {
 
   // scope_id 指定で server-side filter (cross-field 対応)
   const { data: rowsAll = [] } = useAnswerHistoryList(undefined, null, scopeId);
-  const { data: allProblemsAll = [] } = useProblemsList(scopeFieldId ?? undefined);
+  const allProblemsQ = useProblemsList(scopeFieldId ?? undefined);
+  const allProblemsAll = allProblemsQ.data ?? [];
+  const refetchAllProblems = useCallback(() => { void allProblemsQ.refetch(); }, [allProblemsQ]);
 
   // scope.filter で scope 配下の problem set を確定 → allProblems を絞り込む
   // (rowsAll は server 側で絞り込み済なので追加 filter 不要)
@@ -114,24 +117,18 @@ export default function DigestPage() {
     [rows, date],
   );
 
-  // answer.id → reviews (= 振り返りコメント) lookup。problems-list の nested から拾う
-  const answerReviewsMap = useMemo(() => {
-    const map = new Map<string, { content: string; review_type: string | null }[]>();
-    for (const p of allProblems) {
-      for (const a of p.answers) {
-        if (a.reviews && a.reviews.length > 0) map.set(a.id, a.reviews);
-      }
+  // 当日 1+ 回回答した問題を初回時刻 ASC で並べる (digest Answer log の表示順)
+  const dayProblems = useMemo(() => {
+    const firstSeenAt = new Map<string, string>();
+    for (const r of dayRows) {
+      if (!firstSeenAt.has(r.problemId)) firstSeenAt.set(r.problemId, r.createdAt);
     }
-    return map;
-  }, [allProblems]);
-  const [expandedAnswerIds, setExpandedAnswerIds] = useState<Set<string>>(new Set());
-  const toggleAnswerExpand = (id: string) => {
-    setExpandedAnswerIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-  };
+    const ids = [...firstSeenAt.keys()].sort((a, b) =>
+      (firstSeenAt.get(a) ?? "").localeCompare(firstSeenAt.get(b) ?? "")
+    );
+    const byId = new Map(allProblems.map((p) => [p.id, p]));
+    return ids.map((id) => byId.get(id)).filter((p): p is NonNullable<typeof p> => !!p);
+  }, [dayRows, allProblems]);
 
   // Flashcard reviews on D
   const { reviews: fcReviews, cards: fcCards } = useFlashcardsData(scopeFieldId ?? undefined);
@@ -685,93 +682,29 @@ export default function DigestPage() {
         />
       </div>
 
-      {/* Answer log (時系列) */}
-      <div className="rounded-md border p-3 space-y-2">
+      {/* Answer log — 問題ごとに ProblemCard を mini 形式で当日 answer のみ表示。
+         click → dialog UX は撤去 (Puppeteer 印刷向け)、review.content は in-place 編集可。 */}
+      <div className="space-y-3">
         <div className="text-xs font-semibold">Answer log ({dayRows.length})</div>
         {dayRows.length === 0 ? (
           <div className="text-[11px] text-muted-foreground py-2">No answers on this date</div>
         ) : (
-          <table className="text-xs w-full">
-            <thead>
-              <tr className="text-[10px] text-muted-foreground border-b">
-                <th className="text-left font-medium pr-2 py-1 w-12">Start</th>
-                <th className="text-left font-medium pr-2 py-1">Code · Name</th>
-                <th className="text-center font-medium px-2 py-1 w-44">prev → next</th>
-                <th className="text-right font-medium pl-2 py-1 w-14">Time</th>
-              </tr>
-            </thead>
-            <tbody>
-              {dayRows.map((r) => {
-                const prevStatus = r.prevStatusName ? statuses.find((s) => s.name === r.prevStatusName) : null;
-                const nextStatus = r.statusName ? statuses.find((s) => s.name === r.statusName) : null;
-                const reviews = answerReviewsMap.get(r.id) ?? [];
-                const expanded = expandedAnswerIds.has(r.id);
-                return (
-                  <Fragment key={r.id}>
-                    <tr className="border-t hover:bg-accent cursor-pointer"
-                      onClick={() => openDetail(r.problemId)}>
-                      <td className="pr-2 py-1 tabular-nums text-[11px] text-muted-foreground align-top">{jstHM(r.createdAt)}</td>
-                      <td className="pr-2 py-1 align-top">
-                        <div className="flex items-baseline gap-1.5">
-                          <span className="font-mono text-[11px]">{r.code}</span>
-                          <span className="text-[11px]">{r.name}</span>
-                          {reviews.length > 0 && (
-                            <button type="button"
-                              onClick={(e) => { e.stopPropagation(); toggleAnswerExpand(r.id); }}
-                              className="inline-flex items-center gap-0.5 text-[9px] text-muted-foreground hover:text-foreground rounded px-1 py-0.5 border"
-                              title={expanded ? "Hide review" : "Show review"}>
-                              <MessageSquareText className="size-2.5"/>
-                              {reviews.length}
-                              {expanded ? <ChevronUp className="size-2.5"/> : <ChevronDown className="size-2.5"/>}
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-2 py-1 align-top">
-                        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-1.5">
-                          <div className="flex justify-end">
-                            {prevStatus ? (
-                              <OpaqueTag name={prevStatus.name} color={prevStatus.color ?? null}/>
-                            ) : (
-                              <span className="text-[10px] text-muted-foreground italic">Unrated</span>
-                            )}
-                          </div>
-                          <span className="text-muted-foreground text-[10px]">→</span>
-                          <div className="flex justify-start">
-                            {nextStatus && <OpaqueTag name={nextStatus.name} color={nextStatus.color ?? null}/>}
-                          </div>
-                        </div>
-                      </td>
-                      <td className="text-right pl-2 py-1 tabular-nums text-[11px] align-top">
-                        {r.duration ? fmtSec(r.duration) : "—"}
-                      </td>
-                    </tr>
-                    {expanded && reviews.length > 0 && (
-                      <tr className="bg-muted/30">
-                        <td/>
-                        <td colSpan={3} className="py-2 pr-2">
-                          <ul className="space-y-2">
-                            {reviews.map((rv, idx) => (
-                              <li key={idx} className="pl-2 border-l-2 border-muted-foreground/30 space-y-1">
-                                {rv.review_type && (
-                                  <OpaqueTag name={rv.review_type} color={null}/>
-                                )}
-                                {rv.content && (
-                                  <div className="text-[12px] text-foreground leading-relaxed">
-                                    <Markdown>{rv.content}</Markdown>
-                                  </div>
-                                )}
-                              </li>
-                            ))}
-                          </ul>
-                        </td>
-                      </tr>
-                    )}
-                  </Fragment>
-                );
-              })}
-            </tbody>
-          </table>
+          dayProblems.map((p) => (
+            <ProblemCard
+              key={p.id}
+              problem={p}
+              now={new Date()}
+              dateFilter={date}
+              hideHeader
+              hideCheckpoint
+              hideActions
+              editableReviews
+              onReviewSaved={refetchAllProblems}
+              onCheck={() => { /* no-op */ }}
+              onEditProblem={() => { /* no-op */ }}
+              onEditAnswer={() => { /* no-op */ }}
+            />
+          ))
         )}
       </div>
 
