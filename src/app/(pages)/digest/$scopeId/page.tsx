@@ -456,7 +456,7 @@ export default function DigestPage() {
     for (const r of reviewTodayDone) plannedIds.add(r.problemId);
     for (const b of backlogTodayDone) plannedIds.add(b.problemId);
     const statusColorByName = new Map(statuses.map((s) => [s.name, s.color ?? "#888"]));
-    type Item = { id: string; problemId: string; color: string };
+    type Item = { id: string; problemId: string; color: string; code: string; problemName: string | null };
     type Row = {
       id: string;
       name: string;
@@ -486,7 +486,7 @@ export default function DigestPage() {
             itemsByCategory: new Map<string, Item[]>(),
           };
           const cell = row.itemsByCategory.get(category) ?? [];
-          cell.push({ id: rv.id, problemId: p.id, color: statusColor });
+          cell.push({ id: rv.id, problemId: p.id, color: statusColor, code: p.code, problemName: p.name });
           row.itemsByCategory.set(category, cell);
           row.total += 1;
           byType.set(key, row);
@@ -1201,12 +1201,10 @@ function DuePlanCard({
     color: string | null;
     total: number;
     /** category label (rows[].label と一致) → そのセルに該当する review items */
-    itemsByCategory: Map<string, { id: string; problemId: string; color: string }[]>;
+    itemsByCategory: Map<string, { id: string; problemId: string; color: string; code: string; problemName: string | null }[]>;
   }[];
 }) {
   const ordered = statusOrderWithUnrated(statuses);
-  const legendKeys = new Set<string>();
-  for (const e of ordered) if ((output.doneCounts.get(e.name) ?? 0) > 0) legendKeys.add(e.name);
   // donut: web で大きく、mobile で従来サイズ。SVG は viewBox + className で responsive
   const SIZE = 88;
   const R = 34;
@@ -1215,14 +1213,7 @@ function DuePlanCard({
   let acc = 0;
   return (
     <div className={`rounded-md border p-3 flex flex-col gap-3 ${className ?? ""}`}>
-      <div className="flex items-center justify-between gap-2 flex-wrap">
-        <div className="text-[10px] text-muted-foreground uppercase tracking-wide">Scheduled</div>
-        <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
-          {ordered.filter((e) => legendKeys.has(e.name)).map((e) => (
-            <OpaqueTag key={e.id} name={e.name} color={e.color}/>
-          ))}
-        </div>
-      </div>
+      <div className="text-[10px] text-muted-foreground uppercase tracking-wide">Scheduled</div>
       <div className="flex items-center gap-4 flex-1 my-auto">
         {/* Output donut (status mix of done items) */}
         <svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`} className="shrink-0">
@@ -1298,19 +1289,20 @@ function DuePlanCard({
                       const items = rt.itemsByCategory.get(r.label) ?? [];
                       return (
                         <div key={r.label} className="flex flex-wrap gap-px">
-                          {items.map((it) => (
-                            onOpenProblem ? (
+                          {items.map((it) => {
+                            const title = `${it.code}${it.problemName ? ` ${it.problemName}` : ''} — ${rt.name} (${r.label})`;
+                            return onOpenProblem ? (
                               <button key={it.id} type="button"
                                 onClick={() => onOpenProblem(it.problemId)}
-                                title={`${rt.name} (${r.label})`}
+                                title={title}
                                 className={`${tetrisCellClass} hover:opacity-80 cursor-pointer`}
                                 style={{ width: 14, height: 14, background: it.color }}/>
                             ) : (
-                              <div key={it.id} title={`${rt.name} (${r.label})`}
+                              <div key={it.id} title={title}
                                 className={tetrisCellClass}
                                 style={{ width: 14, height: 14, background: it.color }}/>
-                            )
-                          ))}
+                            );
+                          })}
                         </div>
                       );
                     })}
