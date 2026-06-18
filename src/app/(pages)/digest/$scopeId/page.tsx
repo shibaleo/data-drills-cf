@@ -75,7 +75,6 @@ export default function DigestPage() {
   const [activeCategory, setActiveCategory] = useState<string>("study");
   const activeTab = categoryTabs.find((t) => t.id === activeCategory) ?? categoryTabs[0];
   const activeTogglCategories = activeTab.togglCategories;
-  const activeLabel = activeTab.label;
   useEffect(() => { setCurrentScopeId(scopeId); }, [scopeId, setCurrentScopeId]);
 
   // scope_id 指定で server-side filter (cross-field 対応)
@@ -159,25 +158,6 @@ export default function DigestPage() {
       return s < dayEnd && en > dayStart;
     });
   }, [togglEntriesAll, date]);
-
-  // 当日カテゴリ時間 (= active tab に紐づく personal_category 群の合計)。日跨ぎ entry は重なった秒数のみ
-  const togglStudySec = useMemo(() => {
-    const dayStart = new Date(`${date}T00:00:00+09:00`).getTime();
-    const dayEnd = new Date(`${addDays(date, 1)}T00:00:00+09:00`).getTime();
-    const catSet = new Set(activeTogglCategories);
-    let sec = 0;
-    for (const e of togglEntries) {
-      if (!e.personal_category || !catSet.has(e.personal_category)) continue;
-      if (e.project_name === "Learning management") continue;
-      const s = new Date(e.started_at).getTime();
-      const dur = e.duration_seconds ?? 0;
-      const en = e.stopped_at ? new Date(e.stopped_at).getTime() : s + dur * 1000;
-      const overlap = Math.max(0, Math.min(en, dayEnd) - Math.max(s, dayStart));
-      sec += overlap / 1000;
-    }
-    return Math.round(sec);
-  }, [togglEntries, date, activeTogglCategories]);
-
 
   const dayFlashcardReviews = useMemo(() => {
     return fcReviews
@@ -519,36 +499,6 @@ export default function DigestPage() {
     };
   }, [rows, date]);
 
-  // Daily target (分) — D の曜日に対応する weekday_weight × daily_minutes (current scope のみ)
-  const dailyTargetMin = useMemo(() => {
-    const s = currentScopeDetail?.scope;
-    if (!s) return 0;
-    const dow = new Date(`${date}T12:00:00+09:00`).getDay();
-    const w = (s.weekday_weights as number[] | undefined)?.[dow] ?? 1;
-    return Math.round(s.daily_minutes * w);
-  }, [currentScopeDetail, date]);
-
-  // Toggl Education entry を project_name 別に集計 (= 分野別勉強時間)。
-  // 日跨ぎ entry は当日に重なった部分だけカウント。
-  const togglEducationByProject = useMemo(() => {
-    const dayStart = new Date(`${date}T00:00:00+09:00`).getTime();
-    const dayEnd = new Date(`${addDays(date, 1)}T00:00:00+09:00`).getTime();
-    const map = new Map<string, { name: string; color: string | null; sec: number }>();
-    for (const e of togglEntries) {
-      if (e.personal_category !== "Education") continue;
-      const s = new Date(e.started_at).getTime();
-      const dur = e.duration_seconds ?? 0;
-      const en = e.stopped_at ? new Date(e.stopped_at).getTime() : s + dur * 1000;
-      const overlap = Math.max(0, Math.min(en, dayEnd) - Math.max(s, dayStart));
-      if (overlap <= 0) continue;
-      const name = e.project_name ?? "(no project)";
-      const cur = map.get(name) ?? { name, color: e.project_color, sec: 0 };
-      cur.sec += overlap / 1000;
-      map.set(name, cur);
-    }
-    return [...map.values()].sort((a, b) => b.sec - a.sec);
-  }, [togglEntries, date]);
-
   const formatDelta = (curr: number, avg: number) => {
     if (avg <= 0) return null;
     const pct = Math.round(((curr - avg) / avg) * 100);
@@ -644,7 +594,30 @@ export default function DigestPage() {
         })}
       </div>
 
-      {/* サマリ: Due/Output (col-span-2) + Pace + Transition + Toggl (full-width 2 row目) */}
+      {/* Timeline (全タブ共通の 1 日時間軸ビュー、計画=Toggl / 実績=Drills) */}
+      <DayTimeline
+        date={date}
+        toggl={togglEntries}
+        answers={dayRows.map((r) => ({
+          id: r.id,
+          problemId: r.problemId,
+          code: r.code,
+          name: r.name ?? "",
+          startedAt: r.createdAt,
+          durationSec: r.duration,
+          statusColor: r.statusColor,
+          statusName: r.statusName,
+        }))}
+        flashcards={dayFlashcardReviews.map((r) => ({
+          id: r.id,
+          quality: r.quality,
+          reviewedAt: r.reviewedAt!,
+          front: flashcardsById.get(r.flashcardId)?.front ?? "",
+        }))}
+        onOpenAnswer={(problemId) => openDetail(problemId)}
+      />
+
+      {/* サマリ: Due/Output (col-span-2) + Pace + Transition */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <DuePlanCard
           className="col-span-2"
@@ -712,64 +685,7 @@ export default function DigestPage() {
           rows={dayRows}
           statuses={sortedStatuses.map((s) => ({ id: s.id, name: s.name, color: s.color ?? null, sortOrder: s.sortOrder }))}
         />
-        <SummaryCard className="col-span-2 md:col-span-4" label={`${activeLabel} time (Toggl)`}
-          value={(() => {
-            const togglMin = Math.round(togglStudySec / 60);
-            if (togglStudySec <= 0 && dailyTargetMin <= 0) return "—";
-            return (
-              <span>
-                {togglMin}
-                {dailyTargetMin > 0 && (
-                  <span className="text-muted-foreground font-normal text-xs"> / {dailyTargetMin}</span>
-                )}
-                <span className="text-muted-foreground font-normal text-xs"> min</span>
-              </span>
-            );
-          })()}
-          chart={togglEducationByProject.length > 0 ? (
-            <ul className="space-y-1 w-full">
-              {togglEducationByProject.map((r) => {
-                const maxSec = Math.max(1, ...togglEducationByProject.map((x) => x.sec));
-                const pct = (r.sec / maxSec) * 100;
-                return (
-                  <li key={r.name} className="space-y-0.5">
-                    <div className="flex items-baseline gap-1.5 text-[11px]">
-                      {r.color && <span className="inline-block size-2 rounded-full shrink-0" style={{ backgroundColor: r.color }}/>}
-                      <span className="flex-1 truncate">{r.name}</span>
-                      <span className="tabular-nums text-muted-foreground shrink-0">{fmtSec(r.sec)}</span>
-                    </div>
-                    <div className="h-1 bg-muted overflow-hidden">
-                      <div className="h-full" style={{ width: `${pct}%`, background: r.color ?? "#10b981" }}/>
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          ) : null}/>
       </div>
-
-      {/* Timeline (1日の時間軸ビュー、計画=Toggl / 実績=Drills の対比) */}
-      <DayTimeline
-        date={date}
-        toggl={togglEntries}
-        answers={dayRows.map((r) => ({
-          id: r.id,
-          problemId: r.problemId,
-          code: r.code,
-          name: r.name ?? "",
-          startedAt: r.createdAt,
-          durationSec: r.duration,
-          statusColor: r.statusColor,
-          statusName: r.statusName,
-        }))}
-        flashcards={dayFlashcardReviews.map((r) => ({
-          id: r.id,
-          quality: r.quality,
-          reviewedAt: r.reviewedAt!,
-          front: flashcardsById.get(r.flashcardId)?.front ?? "",
-        }))}
-        onOpenAnswer={(problemId) => openDetail(problemId)}
-      />
 
       {/* 予実: Backlog (前日 snapshot で D に割当だった問題 vs D 実績) */}
       <PlanSection
