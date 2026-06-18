@@ -445,26 +445,35 @@ export default function DigestPage() {
     return arr;
   }, [reviewTodayDone, backlogTodayDone, lastStatusColorByProblem]);
 
-  // 当日 review の (review_type × status) 集計。
-  // 行 = type、列 = status、cell = items[] (= 同じ組み合わせの review 群)。
+  // 当日 review の (review_type × category=Overdue|Planned) 集計。
+  // category 判定: problem が overdue 完了か planned 完了かで分類 (両方該当
+  // しない予定外 extra は集計対象外)。
   const { data: reviewTypesList = [] } = useReviewTypes();
   const reviewTypeRows = useMemo(() => {
     if (!allProblems.length) return [];
-    type Item = { id: string; problemId: string };
+    const overdueIds = new Set(reviewOverdueDone.map((r) => r.problemId));
+    const plannedIds = new Set<string>();
+    for (const r of reviewTodayDone) plannedIds.add(r.problemId);
+    for (const b of backlogTodayDone) plannedIds.add(b.problemId);
+    const statusColorByName = new Map(statuses.map((s) => [s.name, s.color ?? "#888"]));
+    type Item = { id: string; problemId: string; color: string };
     type Row = {
       id: string;
       name: string;
       color: string | null;
       total: number;
-      itemsByStatus: Map<string, Item[]>;
+      itemsByCategory: Map<string, Item[]>;
     };
     const byType = new Map<string, Row>();
     const typeByName = new Map(reviewTypesList.map((t) => [t.name, t]));
     for (const p of allProblems) {
+      const category = overdueIds.has(p.id) ? "Overdue"
+        : plannedIds.has(p.id) ? "Planned"
+        : null;
+      if (!category) continue;
       for (const a of p.answers) {
         if (a.date !== date) continue;
-        const statusName = a.status ?? "";
-        if (!statusName) continue;  // 状態未確定の review は cell に置けないので skip
+        const statusColor = a.status ? statusColorByName.get(a.status) ?? "#888" : "#888";
         for (const rv of a.reviews ?? []) {
           if (!rv.review_type) continue;
           const typeMeta = typeByName.get(rv.review_type);
@@ -474,18 +483,18 @@ export default function DigestPage() {
             name: rv.review_type,
             color: typeMeta?.color ?? null,
             total: 0,
-            itemsByStatus: new Map<string, Item[]>(),
+            itemsByCategory: new Map<string, Item[]>(),
           };
-          const cell = row.itemsByStatus.get(statusName) ?? [];
-          cell.push({ id: rv.id, problemId: p.id });
-          row.itemsByStatus.set(statusName, cell);
+          const cell = row.itemsByCategory.get(category) ?? [];
+          cell.push({ id: rv.id, problemId: p.id, color: statusColor });
+          row.itemsByCategory.set(category, cell);
           row.total += 1;
           byType.set(key, row);
         }
       }
     }
     return [...byType.values()].sort((a, b) => b.total - a.total);
-  }, [allProblems, date, reviewTypesList]);
+  }, [allProblems, date, statuses, reviewTypesList, reviewOverdueDone, reviewTodayDone, backlogTodayDone]);
 
   // サマリ
   const summary = useMemo(() => {
@@ -1184,15 +1193,15 @@ function DuePlanCard({
   /** label を Link 化する場合の遷移先 (= /plan?scope_id=…) */
   rowLinkTo?: string;
   /** review_type 集計行 (= 当日の review を type 別にまとめたマトリクス)。
-   *  列 = statuses (Miss/Hard/Fair/Easy/Solid)、cell = その (type, status)
-   *  に対応する review 件数。重複 box は cell に集約して count を出す。 */
+   *  列は上の `rows` (Overdue/Planned) と対応、cell = 当該カテゴリの review 群。
+   *  block 色は review 元 answer の status 色。 */
   reviewTypeRows?: {
     id: string;
     name: string;
     color: string | null;
     total: number;
-    /** status name → そのセルに該当する review items */
-    itemsByStatus: Map<string, { id: string; problemId: string }[]>;
+    /** category label (rows[].label と一致) → そのセルに該当する review items */
+    itemsByCategory: Map<string, { id: string; problemId: string; color: string }[]>;
   }[];
 }) {
   const ordered = statusOrderWithUnrated(statuses);
@@ -1280,19 +1289,19 @@ function DuePlanCard({
               </div>
             </div>
           ))}
-          {/* Review type × status マトリクス。行 = type、列 = status。
-             重複セルは 1 つの block に集約し、count > 1 なら数字を重ねる。 */}
+          {/* Review type × category (Overdue/Planned) マトリクス。
+             列は上の rows と対応するので、上下で「同じ問題群を別軸で見る」
+             読み方ができる。 */}
           {reviewTypeRows && reviewTypeRows.length > 0 && (
             <div className="border-t border-border/60 pt-2 mt-1 flex flex-col gap-1">
-              {/* 列ヘッダ (status 頭文字、色付き) */}
+              {/* 列ヘッダ (上の rows と同じ label) */}
               <div className="flex items-center gap-3">
                 <div className="w-16 shrink-0"/>
                 <div className="w-12 shrink-0"/>
-                <div className="flex items-center gap-px">
-                  {statuses.map((s) => (
-                    <div key={s.id} className="text-center text-[8px] font-medium leading-none tabular-nums"
-                      style={{ width: 14, color: s.color ?? "currentColor" }}>
-                      {s.name.charAt(0)}
+                <div className="flex-1 grid gap-3" style={{ gridTemplateColumns: `repeat(${rows.length}, minmax(0, 1fr))` }}>
+                  {rows.map((r) => (
+                    <div key={r.label} className="text-[9px] text-muted-foreground/70 uppercase tracking-wide">
+                      {r.label}
                     </div>
                   ))}
                 </div>
@@ -1305,33 +1314,25 @@ function DuePlanCard({
                   <div className="text-xs tabular-nums shrink-0 w-12">
                     <span className="font-semibold text-foreground">{rt.total}</span>
                   </div>
-                  <div className="flex items-center gap-px">
-                    {statuses.map((s) => {
-                      const items = rt.itemsByStatus.get(s.name) ?? [];
-                      const count = items.length;
-                      if (count === 0) {
-                        return (
-                          <div key={s.id} className={tetrisEmptyClass}
-                            style={{ width: 14, height: 14 }}/>
-                        );
-                      }
-                      const color = s.color ?? "#888";
-                      const handle = onOpenProblem && items[0]
-                        ? () => onOpenProblem(items[0].problemId)
-                        : undefined;
-                      const title = `${rt.name} → ${s.name}: ${count}`;
+                  <div className="flex-1 grid gap-3" style={{ gridTemplateColumns: `repeat(${rows.length}, minmax(0, 1fr))` }}>
+                    {rows.map((r) => {
+                      const items = rt.itemsByCategory.get(r.label) ?? [];
                       return (
-                        <button key={s.id} type="button"
-                          onClick={handle}
-                          title={title}
-                          className={`${tetrisCellClass} hover:opacity-80 ${handle ? 'cursor-pointer' : ''} relative`}
-                          style={{ width: 14, height: 14, background: color }}>
-                          {count > 1 && (
-                            <span className="absolute inset-0 flex items-center justify-center text-[8px] font-bold text-foreground tabular-nums leading-none">
-                              {count}
-                            </span>
-                          )}
-                        </button>
+                        <div key={r.label} className="flex flex-wrap gap-px">
+                          {items.map((it) => (
+                            onOpenProblem ? (
+                              <button key={it.id} type="button"
+                                onClick={() => onOpenProblem(it.problemId)}
+                                title={`${rt.name} (${r.label})`}
+                                className={`${tetrisCellClass} hover:opacity-80 cursor-pointer`}
+                                style={{ width: 14, height: 14, background: it.color }}/>
+                            ) : (
+                              <div key={it.id} title={`${rt.name} (${r.label})`}
+                                className={tetrisCellClass}
+                                style={{ width: 14, height: 14, background: it.color }}/>
+                            )
+                          ))}
+                        </div>
                       );
                     })}
                   </div>
