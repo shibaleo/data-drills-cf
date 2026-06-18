@@ -111,6 +111,7 @@ export function toScheduleRow(r: SrsRow): ScheduleRow {
     levelName: r.levelName,
     levelColor: r.levelColor,
     color: r.color,
+    lastStatusId: r.lastStatusId,
     lastStatus: r.lastStatus,
     statusColor: r.statusColor,
     nextReview: r.nextReview,

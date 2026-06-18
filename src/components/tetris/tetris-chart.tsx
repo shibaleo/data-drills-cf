@@ -120,6 +120,12 @@ type TetrisChartProps = {
   realToday?: string;
   /** tetris の最大段数を強制 (number)。未指定/null なら maxCount+2 自動。 */
   maxStackOverride?: number | null;
+  /**
+   * 評価軸の status 定義 (DB から fetch した順)。
+   * past 列の積み上げ順 (= 評価軸の優先度) は sortOrder で決まる。
+   * 未指定の場合は overlay の status 並びは一切ソートされない (= rank 0 fallback)。
+   */
+  statuses?: { name: string; sortOrder: number }[];
 };
 
 
@@ -173,6 +179,7 @@ export const TetrisChartCore = forwardRef<TetrisChartHandle, TetrisChartProps>(f
   onHiddenLayersChange,
   onTodayDrag,
   realToday,
+  statuses,
 }: TetrisChartProps, ref) {
   const axisToday = realToday ?? today;
   const _showPins = showMilestonePins ?? true;
@@ -223,15 +230,16 @@ export const TetrisChartCore = forwardRef<TetrisChartHandle, TetrisChartProps>(f
   //   未解消 (future column): stabilityDays ASC で積む (短い review interval が下)
   //     - alloc future (= 未着手 First) は stability 0 = 下端
   //     - smooth-future overlay は OverlayBlock.stabilityDays を caller が渡す
+  // status の積み上げ順は DB の sortOrder に従う (rename しても code 変更不要)。
+  // sortOrder に +1 する事で「未指定/null/未知 status = 0」を最下端に固定する。
+  const statusRankByName = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const s of statuses ?? []) m.set(s.name, s.sortOrder + 1);
+    return m;
+  }, [statuses]);
   const actualStatusOrder = (name: string | null | undefined): number => {
-    switch (name) {
-      case "Miss": return 1;
-      case "Rough": return 2;
-      case "Fair": return 3;
-      case "Fluent": return 4;
-      case "Solid": return 5;
-      default: return 0;  // First / null / unknown
-    }
+    if (!name) return 0;
+    return statusRankByName.get(name) ?? 0;
   };
   const grouped = useMemo(() => {
     const map = new Map<string, StackItem[]>();
@@ -266,7 +274,7 @@ export const TetrisChartCore = forwardRef<TetrisChartHandle, TetrisChartProps>(f
       list.sort((a, b) => rank(a) - rank(b));
     }
     return map;
-  }, [items, overlayItems]);
+  }, [items, overlayItems, statusRankByName]);
 
   const { dates, todayIdx } = useMemo(() => {
     const allDates = [

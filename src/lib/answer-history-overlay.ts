@@ -13,10 +13,12 @@ import type { SrsRow } from "@/hooks/queries/use-srs";
 import type { AnswerHistoryRow } from "@/hooks/queries/use-answer-history";
 import { computeNextReview } from "@/lib/srs-scoring";
 
-/** 順調な status 進行順 (= 各 review を smooth に通した場合の遷移) */
-const SMOOTH_CHAIN = ["Rough", "Fair", "Fluent", "Solid"] as const;
-
-/** 順調進行を仮定して将来 review 日を生成 */
+/**
+ * 順調進行を仮定して将来 review 日を生成。
+ * 評価軸の chain は statusByName の sortOrder 順から動的に構築し、
+ * stabilityDays <= 0 の "no-grade" な status (= First/New/Miss) は除外する。
+ * これで status を rename しても本 lib の変更は不要。
+ */
 function projectSmoothFuture(args: {
   problemId: string;
   code: string;
@@ -25,16 +27,24 @@ function projectSmoothFuture(args: {
   startStatus: string;
   standardTimeSec: number | null;
   lastDurationSec: number | null;
-  statusByName: Map<string, { stabilityDays: number; color: string | null }>;
+  statusByName: Map<string, { stabilityDays: number; color: string | null; sortOrder: number }>;
   horizonDate: string;
 }): OverlayBlock[] {
   const out: OverlayBlock[] = [];
+  // chain: sortOrder ASC, stability > 0 のものだけ (= "Rough"〜"Solid" 相当)
+  const chain = [...args.statusByName.entries()]
+    .filter(([, info]) => info.stabilityDays > 0)
+    .sort(([, a], [, b]) => a.sortOrder - b.sortOrder)
+    .map(([name]) => name);
+  if (chain.length === 0) return out;
   let date = args.startDate;
-  let chainIdx = SMOOTH_CHAIN.indexOf(args.startStatus as (typeof SMOOTH_CHAIN)[number]);
+  // startStatus が chain に含まれる場合はそこから次へ進む。
+  // 含まれない (= "First"/"New"/未評価/Miss) 場合は chain[0] から開始 = chainIdx = -1
+  let chainIdx = chain.indexOf(args.startStatus);
   let safety = 200;
   while (safety-- > 0) {
-    const nextIdx = Math.min(chainIdx + 1, SMOOTH_CHAIN.length - 1);
-    const nextStatusName = SMOOTH_CHAIN[nextIdx];
+    const nextIdx = Math.min(chainIdx + 1, chain.length - 1);
+    const nextStatusName = chain[nextIdx];
     const info = args.statusByName.get(nextStatusName);
     if (!info || info.stabilityDays <= 0) break;
     const projected = computeNextReview(date, info.stabilityDays, args.standardTimeSec, args.lastDurationSec);
@@ -65,7 +75,7 @@ export type AssembleOverlayInput = {
   allocated: AllocatedProblem[];
   reviews: SrsRow[];
   history: AnswerHistoryRow[];
-  statusByName: Map<string, { stabilityDays: number; color: string | null }>;
+  statusByName: Map<string, { stabilityDays: number; color: string | null; sortOrder: number }>;
   horizonDate: string;
   today: string;
 };

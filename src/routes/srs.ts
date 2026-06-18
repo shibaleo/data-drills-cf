@@ -152,8 +152,9 @@ const app = new Hono<Env>()
           statusRow = statusMap.get(latest.answerStatusId) ?? defaultStatus;
         }
         // scope override > global stability_days
-        const baseStability = (statusRow && statusStabilityOverride[statusRow.name] !== undefined)
-          ? statusStabilityOverride[statusRow.name]
+        // override は id keyed (2026-06-18〜)。rename しても orphan にならない。
+        const baseStability = (statusRow && statusStabilityOverride[statusRow.id] !== undefined)
+          ? statusStabilityOverride[statusRow.id]
           : (statusRow?.stabilityDays ?? 0);
         nextReview = computeNextReview(
           latest.date, baseStability, p.standardTime, latest.duration,
@@ -178,6 +179,9 @@ const app = new Hono<Env>()
         levelId: p.levelId,
         levelName: lvl?.name ?? "",
         levelColor: lvl?.color ?? null,
+        // id を SSOT として返す。name/color は client 側で statuses[] から解決可能。
+        // 名前変更時に stale cache でも client が現 name で表示できる。
+        lastStatusId: statusRow?.id ?? null,
         lastStatus: statusRow?.name ?? "",
         statusColor: statusRow?.color ?? "#888",
         nextReview,

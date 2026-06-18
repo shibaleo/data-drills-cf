@@ -1,7 +1,11 @@
 import { z } from "zod";
 import { memberFilterSchema } from "@/lib/schemas/member-filter";
 
-/** scope ごとに status name → stability days を保持 */
+/**
+ * scope ごとに status の stability days を上書きするマップ。
+ * key は `answer_status.id` (UUID)。name keyed だと rename で orphan になるので
+ * 2026-06-18 に意味論を id keyed に切り替えた。値は days (>=0)。
+ */
 export const statusStabilitiesSchema = z.record(z.string(), z.number().int().nonnegative());
 
 export const scopeCreateInputSchema = z.object({

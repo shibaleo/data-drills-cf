@@ -13,10 +13,10 @@ export function StabilitySlider({
   onChange,
   max,
 }: {
-  statuses: { name: string; color: string | null; stabilityDays: number }[];
-  /** override 値 (status name → days)。未設定は base stabilityDays を表示。 */
+  statuses: { id: string; name: string; color: string | null; stabilityDays: number }[];
+  /** override 値 (status id → days)。未設定は base stabilityDays を表示。 */
   overrides: Map<string, number>;
-  onChange: (name: string, v: number) => void;
+  onChange: (id: string, v: number) => void;
   max: number;
 }) {
   const trackRef = useRef<HTMLDivElement>(null);
@@ -32,21 +32,21 @@ export function StabilitySlider({
     [max],
   );
 
-  const startDrag = (name: string) => (e: React.PointerEvent<HTMLDivElement>) => {
+  const startDrag = (id: string) => (e: React.PointerEvent<HTMLDivElement>) => {
     e.preventDefault();
     e.stopPropagation();
-    draggingRef.current = name;
+    draggingRef.current = id;
     e.currentTarget.setPointerCapture(e.pointerId);
-    onChange(name, pctToVal(e.clientX));
+    onChange(id, pctToVal(e.clientX));
   };
 
-  const moveDrag = (name: string) => (e: React.PointerEvent<HTMLDivElement>) => {
-    if (draggingRef.current !== name) return;
-    onChange(name, pctToVal(e.clientX));
+  const moveDrag = (id: string) => (e: React.PointerEvent<HTMLDivElement>) => {
+    if (draggingRef.current !== id) return;
+    onChange(id, pctToVal(e.clientX));
   };
 
-  const endDrag = (name: string) => (e: React.PointerEvent<HTMLDivElement>) => {
-    if (draggingRef.current === name) draggingRef.current = null;
+  const endDrag = (id: string) => (e: React.PointerEvent<HTMLDivElement>) => {
+    if (draggingRef.current === id) draggingRef.current = null;
     try { e.currentTarget.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
   };
 
@@ -70,18 +70,18 @@ export function StabilitySlider({
         );
       })}
       {statuses.map((s) => {
-        const v = overrides.get(s.name) ?? s.stabilityDays;
+        const v = overrides.get(s.id) ?? s.stabilityDays;
         const pct = Math.min(100, Math.max(0, (v / max) * 100));
         const color = s.color ?? "#888";
         return (
           <div
-            key={s.name}
+            key={s.id}
             className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 size-4 rounded-full border-2 border-background cursor-grab active:cursor-grabbing"
             style={{ left: `${pct}%`, backgroundColor: color, boxShadow: "0 0 0 1px hsl(var(--border))" }}
-            onPointerDown={startDrag(s.name)}
-            onPointerMove={moveDrag(s.name)}
-            onPointerUp={endDrag(s.name)}
-            onPointerCancel={endDrag(s.name)}
+            onPointerDown={startDrag(s.id)}
+            onPointerMove={moveDrag(s.id)}
+            onPointerUp={endDrag(s.id)}
+            onPointerCancel={endDrag(s.id)}
           >
             <div
               className="absolute -top-4 left-1/2 -translate-x-1/2 text-[9px] tabular-nums font-medium whitespace-nowrap"

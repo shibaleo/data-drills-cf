@@ -31,6 +31,7 @@ import { ScopePlanRightPanel } from "@/components/scope-plan-right-panel";
 import { ScopeFSRSOverridePanel } from "@/components/scope-fsrs-override-panel";
 import { BlockLegend, type LegendEntry } from "@/components/block-legend";
 import { COLOR_PLANNED } from "@/lib/block-color";
+import { STATUS_PHASE } from "@/lib/status-phases";
 import { useAnswerHistoryList } from "@/hooks/queries/use-answer-history";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -234,11 +235,12 @@ export default function PlanPage() {
   const [livePreviewOverride, setLivePreviewOverride] = useState<Record<string, number> | null>(null);
 
   const statusByName = useMemo(() => {
-    const m = new Map<string, { stabilityDays: number; color: string | null }>();
+    const m = new Map<string, { stabilityDays: number; color: string | null; sortOrder: number }>();
+    // override は id keyed (rename safe)。lookup は s.id で。
     const override = livePreviewOverride ?? scopeQuery.data?.status_stabilities ?? {};
     for (const s of statuses) {
-      const days = override[s.name] !== undefined ? override[s.name] : s.stabilityDays;
-      m.set(s.name, { stabilityDays: days, color: s.color ?? null });
+      const days = override[s.id] !== undefined ? override[s.id] : s.stabilityDays;
+      m.set(s.name, { stabilityDays: days, color: s.color ?? null, sortOrder: s.sortOrder });
     }
     return m;
   }, [statuses, scopeQuery.data, livePreviewOverride]);
@@ -333,11 +335,25 @@ export default function PlanPage() {
     if (!visibleProblemIds.has(r.problemId)) return false;
     return true;
   }), [allScheduleRows, filterSubjects, filterLevels, visibleProblemIds]);
+  // id ベースで legend に出す status を決める。stale cache の name でも
+  // 現 statuses[] の id 一致で解決できるので rename しても凡例から落ちない。
   const availableStatuses = useMemo(() => {
-    const set = new Set<string>();
-    for (const r of allScheduleRows) set.add(r.lastStatus);
+    const idSet = new Set<string>();
+    const nameFallback = new Set<string>();
+    for (const r of allScheduleRows) {
+      if (r.lastStatusId) idSet.add(r.lastStatusId);
+      else if (r.lastStatus) nameFallback.add(r.lastStatus);
+    }
+    const idToCurrent = new Map(statuses.map((s) => [s.id, s]));
+    const names = new Set<string>();
+    for (const id of idSet) {
+      const cur = idToCurrent.get(id);
+      if (cur) names.add(cur.name);
+    }
+    // lastStatusId が未配信な古い response 向けの fallback
+    for (const n of nameFallback) names.add(n);
     const orderMap = new Map(statuses.map((s) => [s.name, s.sortOrder]));
-    return Array.from(set).sort((a, b) => (orderMap.get(a) ?? 0) - (orderMap.get(b) ?? 0));
+    return Array.from(names).sort((a, b) => (orderMap.get(a) ?? 0) - (orderMap.get(b) ?? 0));
   }, [allScheduleRows, statuses]);
   // 漏斗バッジは funnel 内のフィルタ (subject/level) と凡例 hide-set の合計。
   const activeFilterCount = filterSubjects.size + filterLevels.size + hiddenLastStatuses.size + hiddenAllocKinds.size + hiddenAllocFlags.size;
@@ -401,7 +417,7 @@ export default function PlanPage() {
     // 評価なし phase (past First + future Planned 同色、1 トグル)
     {
       kind: "fill",
-      label: "New",
+      label: STATUS_PHASE.UNANSWERED_LABEL,
       color: COLOR_PLANNED,
       active: isShownKind("First") && isShownKind("Planned"),
       onClick: () => {
@@ -604,6 +620,7 @@ export default function PlanPage() {
           maxStackOverride={chartMaxRows}
           items={filteredAllocated}
           overlayItems={filteredOverlay}
+          statuses={statuses}
           layers={edit.localLayers.map((l) => {
             const ms = edit.localMilestones.filter((m) => m.layer_id === l.id);
             const maxTarget = ms.reduce((acc, m) => Math.max(acc, m.target), 0);

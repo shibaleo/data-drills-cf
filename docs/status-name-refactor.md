@@ -25,7 +25,7 @@ answer_status の名前を変更するたびに、複数ファイルの文字列
 
 ## 残作業 (次セッション)
 
-### 1. DB rename (user 手動 1 回)
+### 1. DB rename (user 手動 1 回) — **未実行**
 
 Supabase 上で:
 
@@ -34,7 +34,9 @@ UPDATE answer_status SET name = 'Hard' WHERE name = 'Rough';
 UPDATE answer_status SET name = 'Easy' WHERE name = 'Fluent';
 ```
 
-### 2. tetris-chart.tsx を sortOrder ベースに
+コード側は既に sortOrder ベースに refactor 済なので、rename 後に追加の code 変更は不要。
+
+### 2. tetris-chart.tsx を sortOrder ベースに — **完了 (2026-06-18)**
 
 現状:
 
@@ -59,7 +61,9 @@ const actualStatusOrder = (name: string | null | undefined): number => {
 };
 ```
 
-### 3. answer-history-overlay.ts の SMOOTH_CHAIN を sortOrder ベースに
+実装: `TetrisChartProps.statuses?: { name: string; sortOrder: number }[]` を追加。`statusRankByName` Map を `sortOrder + 1` で構築し、未指定/null は 0 (最下端)。plan/page.tsx と scopes/$scopeId/page.tsx から `statuses={statuses}` を渡す。
+
+### 3. answer-history-overlay.ts の SMOOTH_CHAIN を sortOrder ベースに — **完了 (2026-06-18)**
 
 現状:
 
@@ -81,7 +85,9 @@ const chain = [...statusByName.entries()]
 
 呼び出し元 (`plan/page.tsx` 等) で `statusByName` 構築時に sortOrder も含める。
 
-### 4. 検証
+実装: `statusByName` のエントリに `sortOrder` を追加。`projectSmoothFuture` 内で chain を `entries → filter(stability>0) → sort(sortOrder ASC) → name[]` で動的構築。startStatus が chain に無い場合 (First/New/Miss) は `chainIdx = -1` で chain[0] から開始。plan/page.tsx で `statusByName` 構築時に `sortOrder: s.sortOrder` を含める。
+
+### 4. 検証 (次セッションで手動確認)
 
 - plan ページの tetris chart が破綻していないこと (積み上げ順、smooth-future 投影)
 - digest, scopes, stats ページのドーナツ・matrix がレンダリングされること

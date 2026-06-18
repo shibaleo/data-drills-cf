@@ -81,6 +81,7 @@ export const answerStatus = pgTable("answer_status", {
   ...timestamps(),
 }, (t) => [
   uniqueIndex("answer_status_user_code_key").on(t.userId, t.code),
+  uniqueIndex("answer_status_user_name_unique").on(t.userId, t.name),
 ]);
 
 // =============================================================================
@@ -309,7 +310,8 @@ export const scope = pgTable("scope", {
   dailyMinutes: integer("daily_minutes").notNull().default(60),
   timeMultiplierPct: integer("time_multiplier_pct").notNull().default(100),
   weekdayWeights: jsonb("weekday_weights").$type<number[]>().notNull().default([1, 1, 1, 1, 1, 1, 1]),
-  // FSRS 風: status name → stability days のマップ。空なら answer_status global を使う
+  // FSRS 風: answer_status.id → stability days のマップ。空なら answer_status global を使う
+  // (2026-06-18〜 name keyed → id keyed に semantics 変更。rename safe)
   statusStabilities: jsonb("status_stabilities").$type<StatusStabilities>().notNull().default({}),
   isActive: boolean("is_active").notNull().default(true),
   validFrom: timestamp("valid_from", { withTimezone: true }).notNull().defaultNow(),

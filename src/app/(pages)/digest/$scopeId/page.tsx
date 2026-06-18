@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useMemo, useState, useEffect, Fragment } from "react";
 import { COLOR_FIRST_ATTEMPT } from "@/lib/block-color";
+import { STATUS_PHASE } from "@/lib/status-phases";
 import { Markdown } from "@/components/markdown";
 import { tetrisCellClass, tetrisEmptyClass, TETRIS_RX, TETRIS_STROKE, TETRIS_STROKE_OPACITY, TETRIS_STROKE_WIDTH } from "@/components/tetris-cell";
 import { ChevronLeft, ChevronRight, Clock, ChevronDown, ChevronUp, MessageSquareText, Layers, ArrowUpRight, AlertTriangle } from "lucide-react";
@@ -206,10 +207,11 @@ export default function DigestPage() {
     standardTime: number | null; lastDuration: number | null;
   };
   const stabilityByStatusName = useMemo(() => {
+    // override は id keyed (2026-06-18〜)。Map の key は statusName のまま (caller 互換)。
     const override = (scopeData?.scope.status_stabilities ?? {}) as Record<string, number>;
     const m = new Map<string, number>();
     for (const s of statuses) {
-      const v = override[s.name];
+      const v = override[s.id];
       m.set(s.name, v !== undefined ? v : s.stabilityDays);
     }
     return m;
@@ -336,7 +338,7 @@ export default function DigestPage() {
   const overdueStatusCounts = useMemo(() => {
     const m = new Map<string, number>();
     for (const r of reviewOverdue) {
-      const cur = todayStatusByProblem.get(r.problemId) ?? r.lastStatus ?? "New";
+      const cur = todayStatusByProblem.get(r.problemId) ?? r.lastStatus ?? STATUS_PHASE.UNANSWERED_LABEL;
       m.set(cur, (m.get(cur) ?? 0) + 1);
     }
     return m;
@@ -357,8 +359,8 @@ export default function DigestPage() {
       const cur = todayStatusByProblem.get(problemId) ?? prior;
       m.set(cur, (m.get(cur) ?? 0) + 1);
     };
-    for (const r of reviewPlanToday) bump(r.problemId, r.lastStatus ?? "New");
-    for (const b of backlogPlanToday) bump(b.problemId, "New");
+    for (const r of reviewPlanToday) bump(r.problemId, r.lastStatus ?? STATUS_PHASE.UNANSWERED_LABEL);
+    for (const b of backlogPlanToday) bump(b.problemId, STATUS_PHASE.UNANSWERED_LABEL);
     return m;
   }, [reviewPlanToday, backlogPlanToday, todayStatusByProblem]);
   // 「消化された today plan」の今日の status 分布 (sum = todayDoneCount)
@@ -1234,7 +1236,7 @@ function CompactTransitionMatrix({
   rows: { prevStatusName: string | null; statusName: string | null }[];
   statuses: { id: string; name: string; color: string | null; sortOrder: number }[];
 }) {
-  const FIRST_LABEL = "New";
+  const FIRST_LABEL = STATUS_PHASE.UNANSWERED_LABEL;
   const { matrix, rowTotals } = useMemo(() => {
     const m: Record<string, Record<string, number>> = {};
     const totals: Record<string, number> = {};
@@ -1267,15 +1269,18 @@ function CompactTransitionMatrix({
         const GAP = 1;
         const TOP_PAD = 2; // 列ラベル ↔ grid の垂直余白
         const N = statuses.length;
+        // 最下端 (= 最上位 status の "Solid" 行) は前回が Solid だった場合の遷移で、
+        // 表示価値が低いので display 上は drop する。matrix 自体には残るが render しない。
+        const displayRowLabels = rowLabels.slice(0, -1);
         // SVG は列ラベル + grid 部分のみ。行ラベルは HTML pill で外側に並べる。
         const W = N * (CELL + GAP) - GAP;
         const HEADER_H = CELL + TOP_PAD;
-        const H = HEADER_H + rowLabels.length * (CELL + GAP) - GAP;
+        const H = HEADER_H + displayRowLabels.length * (CELL + GAP) - GAP;
         return (
           <div className="flex items-stretch gap-1.5 mt-1">
             {/* 行ラベル (pill 列) */}
             <div className="flex flex-col" style={{ gap: GAP, paddingTop: HEADER_H }}>
-              {rowLabels.map((from) => {
+              {displayRowLabels.map((from) => {
                 const fromColor = from === FIRST_LABEL ? COLOR_FIRST_ATTEMPT : colorByName.get(from) ?? "#888";
                 return (
                   <div key={from} className="flex items-center" style={{ height: CELL }}>
@@ -1293,7 +1298,7 @@ function CompactTransitionMatrix({
                   fontSize={8} fontWeight={500}
                   fill={s.color ?? "currentColor"}>{initial(s.name)}</text>
               ))}
-              {rowLabels.map((from, ri) => {
+              {displayRowLabels.map((from, ri) => {
                 const total = rowTotals[from] ?? 0;
                 const y = HEADER_H + ri * (CELL + GAP);
                 return (
@@ -1333,7 +1338,7 @@ function statusOrderWithUnrated(
   statuses: { id: string; name: string; color?: string | null; sortOrder: number }[],
 ): { id: string; name: string; color: string }[] {
   return [
-    { id: "_unrated", name: "New", color: UNRATED_COLOR },
+    { id: "_unrated", name: STATUS_PHASE.UNANSWERED_LABEL, color: UNRATED_COLOR },
     ...statuses.map((s) => ({ id: s.id, name: s.name, color: s.color ?? "hsl(var(--muted-foreground))" })),
   ];
 }

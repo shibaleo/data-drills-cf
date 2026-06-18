@@ -10,6 +10,7 @@
 import { useMemo } from "react";
 import type { AnswerHistoryRow } from "@/hooks/queries/use-answer-history";
 import { COLOR_FIRST_ATTEMPT } from "@/lib/block-color";
+import { STATUS_PHASE } from "@/lib/status-phases";
 
 type Status = { id: string; name: string; color: string | null; sortOrder: number };
 
@@ -22,7 +23,7 @@ type Props = {
   setPeriod: (p: Period) => void;
 };
 
-const FIRST_LABEL = "New";
+const FIRST_LABEL = STATUS_PHASE.UNANSWERED_LABEL;
 
 export function StatusTransitionMatrix({ rows, statuses, period, setPeriod }: Props) {
   // 期間フィルタ

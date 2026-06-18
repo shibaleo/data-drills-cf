@@ -16,6 +16,7 @@ import { problemsKeys } from "@/hooks/queries/use-problems";
 import { TetrisChart, type TetrisChartHandle } from "@/components/tetris";
 import { useScopeEditState } from "@/hooks/use-scope-edit-state";
 import { COLOR_PLANNED, COLOR_FIRST_ATTEMPT } from "@/lib/block-color";
+import { STATUS_PHASE } from "@/lib/status-phases";
 import { formatRelDay } from "@/lib/relative-day";
 import { todayJST } from "@/lib/date-utils";
 import { Input } from "@/components/ui/input";
@@ -501,8 +502,8 @@ export default function ScopeDetailPage() {
               </PopoverContent>
             </Popover>
             <BlockLegend entries={[
-              ...(hideFirst ? [] : [{ kind: "fill" as const, label: "New", color: COLOR_FIRST_ATTEMPT }]),
-              ...(hideFuture ? [] : [{ kind: "fill" as const, label: "Planned", color: COLOR_PLANNED }]),
+              ...(hideFirst ? [] : [{ kind: "fill" as const, label: STATUS_PHASE.UNANSWERED_LABEL, color: COLOR_FIRST_ATTEMPT }]),
+              ...(hideFuture ? [] : [{ kind: "fill" as const, label: STATUS_PHASE.ALLOC_KIND_FUTURE, color: COLOR_PLANNED }]),
               { kind: "ring" as const, label: "Over budget", color: "#f59e0b" },
               { kind: "ring" as const, label: "Overflow", color: "#ef4444" },
             ]}/>
@@ -536,6 +537,7 @@ export default function ScopeDetailPage() {
           </div>
         )}
           ref={chartRef}
+          statuses={statuses}
           realToday={todayJST()}
           onTodayDrag={(d) => setAsOf(d === todayJST() ? null : d)}
           rightPanelExtra={

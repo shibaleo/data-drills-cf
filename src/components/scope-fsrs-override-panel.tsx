@@ -20,6 +20,7 @@ export function ScopeFSRSOverridePanel({
   onLocalChange,
 }: {
   statuses: { id: string; name: string; color: string | null; stabilityDays: number }[];
+  /** override マップ。key は `answer_status.id` (rename-safe)、value は days。 */
   current: Record<string, number>;
   disabled?: boolean;
   onSave: (next: Record<string, number>) => Promise<unknown>;
@@ -39,7 +40,7 @@ export function ScopeFSRSOverridePanel({
   }, [local]);
 
   const sliderStatuses = useMemo(
-    () => statuses.map((s) => ({ name: s.name, color: s.color, stabilityDays: s.stabilityDays })),
+    () => statuses.map((s) => ({ id: s.id, name: s.name, color: s.color, stabilityDays: s.stabilityDays })),
     [statuses],
   );
   const sliderMax = useMemo(() => {
@@ -73,7 +74,7 @@ export function ScopeFSRSOverridePanel({
           statuses={sliderStatuses}
           overrides={overrides}
           max={sliderMax}
-          onChange={(name, v) => setLocal((prev) => ({ ...prev, [name]: Math.max(0, v) }))}
+          onChange={(id, v) => setLocal((prev) => ({ ...prev, [id]: Math.max(0, v) }))}
         />
       </div>
     </div>
