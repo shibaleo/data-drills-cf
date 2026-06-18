@@ -1255,57 +1255,36 @@ function DuePlanCard({
             {`/ ${output.totalDue}`}
           </text>
         </svg>
-        {/* Overdue / Planned blocks */}
-        <div className="flex flex-col gap-2 flex-1 min-w-0">
-          {rows.map((r) => (
-            <div key={r.label} className="flex items-center gap-3">
-              {rowLinkTo ? (
-                <Link to={rowLinkTo}
-                  className="w-16 text-xs text-muted-foreground uppercase tracking-wide shrink-0 hover:text-foreground transition-colors inline-flex items-center gap-0.5">
-                  {r.label}
-                  <ArrowUpRight className="size-3 opacity-60"/>
-                </Link>
-              ) : (
-                <div className="w-16 text-xs text-muted-foreground uppercase tracking-wide shrink-0">{r.label}</div>
-              )}
-              <div className="text-xs tabular-nums shrink-0 w-12">
-                <span className="font-semibold text-foreground">{r.doneCount}</span>
-                <span className="text-muted-foreground"> / {r.totalDue}</span>
-              </div>
-              <div className="flex flex-wrap gap-px">
-                {r.doneItems.map((it) => (
-                  onOpenProblem ? (
-                    <button key={it.problemId} type="button"
-                      onClick={() => onOpenProblem(it.problemId)}
-                      title={it.code}
-                      className={`${tetrisCellClass} hover:opacity-80 cursor-pointer`}
-                      style={{ width: 14, height: 14, background: it.color }}/>
-                  ) : (
-                    <div key={it.problemId} title={it.code}
-                      className={tetrisCellClass}
-                      style={{ width: 14, height: 14, background: it.color }}/>
-                  )
-                ))}
-              </div>
-            </div>
-          ))}
-          {/* Review type × category (Overdue/Planned) マトリクス。
-             列は上の rows と対応するので、上下で「同じ問題群を別軸で見る」
-             読み方ができる。 */}
-          {reviewTypeRows && reviewTypeRows.length > 0 && (
-            <div className="border-t border-border/60 pt-2 mt-1 flex flex-col gap-1">
-              {/* 列ヘッダ (上の rows と同じ label) */}
-              <div className="flex items-center gap-3">
-                <div className="w-16 shrink-0"/>
-                <div className="w-12 shrink-0"/>
-                <div className="flex-1 grid gap-3" style={{ gridTemplateColumns: `repeat(${rows.length}, minmax(0, 1fr))` }}>
-                  {rows.map((r) => (
-                    <div key={r.label} className="text-[9px] text-muted-foreground/70 uppercase tracking-wide">
+        {/* 列ヘッダ + Review type × category マトリクス。
+           旧 Overdue/Planned 行 (= 同じ問題群を done block で並べる) は撤去し、
+           列ヘッダに category 名 + done/total + /plan リンクを集約。 */}
+        <div className="flex flex-col gap-1 flex-1 min-w-0">
+          {/* 列ヘッダ — label を 1 行目、件数を 2 行目に縦積み */}
+          <div className="flex items-start gap-3 mb-1">
+            <div className="w-16 shrink-0"/>
+            <div className="w-12 shrink-0"/>
+            <div className="flex-1 grid gap-3" style={{ gridTemplateColumns: `repeat(${rows.length}, minmax(0, 1fr))` }}>
+              {rows.map((r) => (
+                <div key={r.label} className="flex flex-col leading-tight">
+                  {rowLinkTo ? (
+                    <Link to={rowLinkTo}
+                      className="inline-flex items-center gap-0.5 text-[10px] text-muted-foreground uppercase tracking-wide hover:text-foreground transition-colors">
                       {r.label}
-                    </div>
-                  ))}
+                      <ArrowUpRight className="size-3 opacity-60"/>
+                    </Link>
+                  ) : (
+                    <span className="text-[10px] text-muted-foreground uppercase tracking-wide">{r.label}</span>
+                  )}
+                  <span className="text-xs tabular-nums">
+                    <span className="text-foreground font-semibold">{r.doneCount}</span>
+                    <span className="text-muted-foreground"> / {r.totalDue}</span>
+                  </span>
                 </div>
-              </div>
+              ))}
+            </div>
+          </div>
+          {reviewTypeRows && reviewTypeRows.length > 0 && (
+            <>
               {reviewTypeRows.map((rt) => (
                 <div key={rt.id} className="flex items-center gap-3">
                   <div className="w-16 shrink-0">
@@ -1338,7 +1317,7 @@ function DuePlanCard({
                   </div>
                 </div>
               ))}
-            </div>
+            </>
           )}
         </div>
       </div>
