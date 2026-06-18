@@ -2,6 +2,7 @@
 import { useCallback, useMemo, useState, useEffect, Fragment } from "react";
 import { COLOR_FIRST_ATTEMPT } from "@/lib/block-color";
 import { Markdown } from "@/components/markdown";
+import { tetrisCellClass, tetrisEmptyClass, TETRIS_RX, TETRIS_STROKE, TETRIS_STROKE_OPACITY, TETRIS_STROKE_WIDTH } from "@/components/tetris-cell";
 import { ChevronLeft, ChevronRight, Clock, ChevronDown, ChevronUp, MessageSquareText, Layers, ArrowUpRight, AlertTriangle } from "lucide-react";
 import { Link, useParams, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
@@ -176,28 +177,6 @@ export default function DigestPage() {
     return Math.round(sec);
   }, [togglEntries, date, activeTogglCategories]);
 
-  // 選択日を最右に置いた 7 日 sparkbar (active tab の categories 合算)。
-  // 各日を project_color ごとの分数 segments に分けて stacked 表示する。
-  const study7d = useMemo(() => {
-    type Day = { date: string; min: number; byColor: Map<string, number> };
-    const days: Day[] = [];
-    for (let i = 6; i >= 0; i--) days.push({ date: addDays(date, -i), min: 0, byColor: new Map() });
-    const byDate = new Map(days.map((d) => [d.date, d] as const));
-    const catSet = new Set(activeTogglCategories);
-    for (const e of togglEntriesAll) {
-      if (!e.personal_category || !catSet.has(e.personal_category)) continue;
-      if (e.project_name === "Learning management") continue;
-      if (e.duration_seconds == null || e.duration_seconds <= 0) continue;
-      const jst = new Date(new Date(e.started_at).getTime() + JST_OFFSET_MS).toISOString().slice(0, 10);
-      const slot = byDate.get(jst);
-      if (!slot) continue;
-      const minutes = e.duration_seconds / 60;
-      slot.min += minutes;
-      const color = e.project_color ?? "#888";
-      slot.byColor.set(color, (slot.byColor.get(color) ?? 0) + minutes);
-    }
-    return days;
-  }, [togglEntriesAll, date, activeTogglCategories]);
 
   const dayFlashcardReviews = useMemo(() => {
     return fcReviews
@@ -362,6 +341,16 @@ export default function DigestPage() {
     }
     return m;
   }, [reviewOverdue, todayStatusByProblem]);
+  // 「消化された overdue」の今日の status 分布 (sum = overdueDoneCount)
+  const overdueDoneStatusCounts = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const r of reviewOverdue) {
+      const cur = todayStatusByProblem.get(r.problemId);
+      if (!cur) continue;
+      m.set(cur, (m.get(cur) ?? 0) + 1);
+    }
+    return m;
+  }, [reviewOverdue, todayStatusByProblem]);
   const todayDueStatusCounts = useMemo(() => {
     const m = new Map<string, number>();
     const bump = (problemId: string, prior: string) => {
@@ -370,6 +359,18 @@ export default function DigestPage() {
     };
     for (const r of reviewPlanToday) bump(r.problemId, r.lastStatus ?? "Unrated");
     for (const b of backlogPlanToday) bump(b.problemId, "Unrated");
+    return m;
+  }, [reviewPlanToday, backlogPlanToday, todayStatusByProblem]);
+  // 「消化された today plan」の今日の status 分布 (sum = todayDoneCount)
+  const todayDoneStatusCounts = useMemo(() => {
+    const m = new Map<string, number>();
+    const bump = (problemId: string) => {
+      const cur = todayStatusByProblem.get(problemId);
+      if (!cur) return;
+      m.set(cur, (m.get(cur) ?? 0) + 1);
+    };
+    for (const r of reviewPlanToday) bump(r.problemId);
+    for (const b of backlogPlanToday) bump(b.problemId);
     return m;
   }, [reviewPlanToday, backlogPlanToday, todayStatusByProblem]);
   const overdueTotal = reviewOverdue.length;
@@ -440,6 +441,32 @@ export default function DigestPage() {
   const backlogTodayMissed = backlogPlanToday.filter((b) => !actualProblemIds.has(b.problemId));
   const reviewOverdueDone = reviewOverdue.filter((r) => actualProblemIds.has(r.problemId));
   const reviewOverdueOpen = reviewOverdue.filter((r) => !actualProblemIds.has(r.problemId));
+
+  // done block 用に problemId + 色を持った配列を作る (クリックで problem dialog を開くため)
+  const lastStatusColorByProblem = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const r of dayRows) {
+      if (r.statusColor) m.set(r.problemId, r.statusColor);
+    }
+    return m;
+  }, [dayRows]);
+  type DoneItem = { problemId: string; code: string; color: string };
+  const overdueDoneItems = useMemo<DoneItem[]>(() => reviewOverdueDone.map((r) => ({
+    problemId: r.problemId, code: r.code,
+    color: lastStatusColorByProblem.get(r.problemId) ?? "#888",
+  })), [reviewOverdueDone, lastStatusColorByProblem]);
+  const plannedDoneItems = useMemo<DoneItem[]>(() => {
+    const arr: DoneItem[] = [];
+    for (const r of reviewTodayDone) arr.push({
+      problemId: r.problemId, code: r.code,
+      color: lastStatusColorByProblem.get(r.problemId) ?? "#888",
+    });
+    for (const b of backlogTodayDone) arr.push({
+      problemId: b.problemId, code: b.code,
+      color: lastStatusColorByProblem.get(b.problemId) ?? "#888",
+    });
+    return arr;
+  }, [reviewTodayDone, backlogTodayDone, lastStatusColorByProblem]);
 
   // サマリ
   const summary = useMemo(() => {
@@ -615,29 +642,75 @@ export default function DigestPage() {
         })}
       </div>
 
-      {/* サマリ */}
-      <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
-        <DueCurrentStateCard
-          label="Overdue"
+      {/* サマリ: Due/Output (col-span-2) + Pace + Transition + Toggl (full-width 2 row目) */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <DuePlanCard
+          className="col-span-2"
           statuses={sortedStatuses}
-          counts={overdueStatusCounts}
-          doneCount={overdueDoneCount}
-          totalDue={overdueTotal}
+          output={{ doneCount: plannedDoneCount, totalDue: plannedTotalDue, doneCounts: throughputStatusCounts }}
+          rows={[
+            { label: "Overdue", doneItems: overdueDoneItems, doneCount: overdueDoneCount, totalDue: overdueTotal },
+            { label: "Planned", doneItems: plannedDoneItems, doneCount: todayDoneCount, totalDue: todayDueTotal },
+          ]}
+          onOpenProblem={openDetail}
         />
-        <DueCurrentStateCard
-          label="Backlog"
-          statuses={sortedStatuses}
-          counts={todayDueStatusCounts}
-          doneCount={todayDoneCount}
-          totalDue={todayDueTotal}
+        <SummaryCard label="Pace"
+          value={paceRatio.median == null ? "—" : ""}
+          chart={(() => {
+            const ROWS = 6;
+            const COLS = 11;
+            const m = paceRatio.median;
+            const medianIdx = m == null ? -1 : Math.max(0, Math.min(COLS - 1, Math.floor((m - 0.3) / 0.1)));
+            const medianTone = m == null ? "" : m < 0.9 ? "text-emerald-500" : m > 1.1 ? "text-red-500" : "text-foreground";
+            // 中央値の bin で「一番上のブロック」直上のセル位置 (= rowIdx)
+            const medianRowIdx = m == null ? -1 : Math.max(0, ROWS - paceRatio.buckets[medianIdx].length - 1);
+            return (
+              <div className="flex flex-col gap-1 items-start" aria-label="pace distribution">
+                <div className="grid gap-px"
+                  style={{ gridTemplateColumns: `repeat(${COLS}, 14px)` }}>
+                  {Array.from({ length: ROWS }).map((_, rowIdx) => {
+                    const k = ROWS - 1 - rowIdx;
+                    return paceRatio.buckets.map((bucket, i) => {
+                      const a = bucket[k];
+                      const lo = 0.3 + i * 0.1;
+                      const isMedianLabel = i === medianIdx && rowIdx === medianRowIdx && m != null;
+                      if (isMedianLabel && !a) {
+                        return (
+                          <div key={`${rowIdx}-${i}`} className={`flex items-center justify-center text-[9px] font-semibold tabular-nums leading-none ${medianTone}`}
+                            style={{ width: 14, height: 14 }}>
+                            {m.toFixed(2)}
+                          </div>
+                        );
+                      }
+                      return a ? (
+                        <button key={`${rowIdx}-${i}`} type="button"
+                          onClick={() => openDetail(a.problemId)}
+                          title={`${a.code} — ${a.ratio.toFixed(2)}x`}
+                          className={`${tetrisCellClass} hover:opacity-80 cursor-pointer`}
+                          style={{ width: 14, height: 14, background: a.color }}/>
+                      ) : (
+                        <div key={`${rowIdx}-${i}`}
+                          title={`${lo.toFixed(1)}–${(lo + 0.1).toFixed(1)}x: ${bucket.length}`}
+                          className={tetrisEmptyClass}
+                          style={{ width: 14, height: 14 }}/>
+                      );
+                    });
+                  })}
+                </div>
+                <div className="flex justify-between text-[8px] leading-none tabular-nums text-muted-foreground"
+                  style={{ width: COLS * 14 + (COLS - 1) }}>
+                  <span>0.3</span>
+                  <span>1.0</span>
+                  <span>1.4</span>
+                </div>
+              </div>
+            );
+          })()}/>
+        <CompactTransitionMatrix
+          rows={dayRows}
+          statuses={sortedStatuses.map((s) => ({ id: s.id, name: s.name, color: s.color ?? null, sortOrder: s.sortOrder }))}
         />
-        <ThroughputCard
-          statuses={sortedStatuses}
-          counts={throughputStatusCounts}
-          totalAttempts={plannedDoneCount}
-          totalDue={plannedTotalDue}
-        />
-        <SummaryCard label={`${activeLabel} time (Toggl)`}
+        <SummaryCard className="col-span-2 md:col-span-4" label={`${activeLabel} time (Toggl)`}
           value={(() => {
             const togglMin = Math.round(togglStudySec / 60);
             if (togglStudySec <= 0 && dailyTargetMin <= 0) return "—";
@@ -651,114 +724,27 @@ export default function DigestPage() {
               </span>
             );
           })()}
-          chart={(() => {
-            const MAX_H = 22;
-            const peak = Math.max(60, dailyTargetMin, ...study7d.map((d) => d.min));
-            const targetOffset = dailyTargetMin > 0 ? MAX_H - (dailyTargetMin / peak) * MAX_H : null;
-            const DOW = ["S", "M", "T", "W", "T", "F", "S"]; // 0=Sun..6=Sat
-            return (
-              <div className="flex flex-col gap-0.5 w-full" aria-label="last 7 days">
-                <div className="relative flex items-end h-6 w-full">
-                  {targetOffset !== null && (
-                    <div
-                      title={`Daily target ${dailyTargetMin}m`}
-                      className="absolute left-0 right-0 border-t border-dashed border-foreground/40 pointer-events-none"
-                      style={{ top: `${targetOffset}px` }}/>
-                  )}
-                  {study7d.map((d, i) => {
-                    const totalH = peak > 0 ? Math.max(2, (d.min / peak) * MAX_H) : 2;
-                    const isSel = i === study7d.length - 1;
-                    const segs = Array.from(d.byColor.entries()).sort((a, b) => b[1] - a[1]);
-                    return (
-                      <div key={d.date} className="flex-1 flex justify-center"
-                        title={`${d.date.slice(5)}: ${d.min >= 60 ? `${Math.floor(d.min/60)}h${Math.round(d.min%60)}m` : `${Math.round(d.min)}m`}`}>
-                        <div className="w-[6px] rounded-sm overflow-hidden flex flex-col-reverse"
-                          style={{ height: `${totalH}px`, opacity: isSel ? 1 : 0.55 }}>
-                          {segs.length === 0 ? (
-                            <div className="w-full flex-1 bg-foreground/20"/>
-                          ) : segs.map(([color, min]) => (
-                            <div key={color} style={{ background: color, flex: `${min} 0 0` }}/>
-                          ))}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-                <div className="flex items-center text-[8px] leading-none tabular-nums w-full">
-                  {study7d.map((d) => {
-                    // JST 曜日: 元 date string は JST 日付。UTC midnight + JST offset で安全に取得
-                    const ms = new Date(`${d.date}T00:00:00Z`).getTime();
-                    const jstDow = new Date(ms + JST_OFFSET_MS).getUTCDay();
-                    const cls = jstDow === 0 ? "text-red-500" : jstDow === 6 ? "text-blue-500" : "text-muted-foreground";
-                    return (
-                      <span key={d.date} className={`flex-1 text-center ${cls}`}>{DOW[jstDow]}</span>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })()}/>
-        <SummaryCard label="Pace"
-          value={(() => {
-            if (paceRatio.median == null) return "—";
-            const r = paceRatio.median;
-            const tone = r < 0.9 ? "text-emerald-500" : r > 1.1 ? "text-red-500" : "";
-            return <span className={tone}>{r.toFixed(2)}<span className="text-muted-foreground font-normal text-xs">x</span></span>;
-          })()}
-          chart={(() => {
-            const BLOCK = 8;
-            const GAP = 1;
-            const ROWS = 6;
-            const COLS = 11;
-            const W = COLS * (BLOCK + GAP) - GAP;
-            const H = ROWS * (BLOCK + GAP) - GAP;
-            return (
-              <div className="flex flex-col gap-1 items-stretch w-full" aria-label="pace distribution">
-                <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet" className="w-full h-auto">
-                  {paceRatio.buckets.map((bucket, i) => {
-                    const x = i * (BLOCK + GAP);
-                    const lo = 0.3 + i * 0.1;
-                    return (
-                      <g key={i}>
-                        {Array.from({ length: ROWS }).map((_, k) => {
-                          const y = H - (k + 1) * (BLOCK + GAP) + GAP;
-                          const a = bucket[k];
-                          return a ? (
-                            <rect key={k} x={x} y={y} width={BLOCK} height={BLOCK} rx={1}
-                              fill={a.color} className="cursor-pointer hover:opacity-80"
-                              onClick={() => openDetail(a.problemId)}>
-                              <title>{`${a.code} — ${a.ratio.toFixed(2)}x`}</title>
-                            </rect>
-                          ) : (
-                            <rect key={k} x={x + 0.25} y={y + 0.25} width={BLOCK - 0.5} height={BLOCK - 0.5} rx={1}
-                              fill="none" stroke="hsl(var(--border))" strokeOpacity={0.6} strokeWidth={0.5}/>
-                          );
-                        })}
-                        <title>{`${lo.toFixed(1)}–${(lo + 0.1).toFixed(1)}x: ${bucket.length}`}</title>
-                      </g>
-                    );
-                  })}
-                </svg>
-                <div className="flex justify-between text-[8px] leading-none tabular-nums text-muted-foreground">
-                  <span>0.3</span>
-                  <span>1.0</span>
-                  <span>1.4</span>
-                </div>
-              </div>
-            );
-          })()}/>
-        <CompactTransitionMatrix
-          rows={dayRows}
-          statuses={sortedStatuses.map((s) => ({ id: s.id, name: s.name, color: s.color ?? null, sortOrder: s.sortOrder }))}
-        />
+          chart={togglEducationByProject.length > 0 ? (
+            <ul className="space-y-1 w-full">
+              {togglEducationByProject.map((r) => {
+                const maxSec = Math.max(1, ...togglEducationByProject.map((x) => x.sec));
+                const pct = (r.sec / maxSec) * 100;
+                return (
+                  <li key={r.name} className="space-y-0.5">
+                    <div className="flex items-baseline gap-1.5 text-[11px]">
+                      {r.color && <span className="inline-block size-2 rounded-full shrink-0" style={{ backgroundColor: r.color }}/>}
+                      <span className="flex-1 truncate">{r.name}</span>
+                      <span className="tabular-nums text-muted-foreground shrink-0">{fmtSec(r.sec)}</span>
+                    </div>
+                    <div className="h-1 bg-muted overflow-hidden">
+                      <div className="h-full" style={{ width: `${pct}%`, background: r.color ?? "#10b981" }}/>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : null}/>
       </div>
-
-      {/* Toggl project 別 breakdown — どの project (簿記/財表 等) に時間を割いたか */}
-      {togglEducationByProject.length > 0 && (
-        <div className="rounded-md border p-3 text-xs">
-          <TogglProjectColumn rows={togglEducationByProject}/>
-        </div>
-      )}
 
       {/* Timeline (1日の時間軸ビュー、計画=Toggl / 実績=Drills の対比) */}
       <DayTimeline
@@ -1211,65 +1197,22 @@ function PlanSection({
   );
 }
 
-/**
- * Toggl Education category の project_name 別時間 breakdown 列。
- * 「読みっぱなし vs 解いてる」の分野別比較に Subject 列と並べて使う。
- */
-function TogglProjectColumn({
-  rows,
-}: {
-  rows: { name: string; color: string | null; sec: number }[];
-}) {
-  if (rows.length === 0) {
-    return (
-      <div className="space-y-1.5">
-        <div className="text-[10px] text-muted-foreground uppercase tracking-wide">Study (Toggl)</div>
-        <div className="text-[10px] text-muted-foreground italic">None</div>
-      </div>
-    );
-  }
-  const maxSec = rows.reduce((m, r) => Math.max(m, r.sec), 1);
-  return (
-    <div className="space-y-1.5">
-      <div className="text-[10px] text-muted-foreground uppercase tracking-wide">Study (Toggl)</div>
-      <ul className="space-y-1">
-        {rows.map((r) => {
-          const pct = (r.sec / maxSec) * 100;
-          return (
-            <li key={r.name} className="space-y-0.5">
-              <div className="flex items-baseline gap-1.5 text-[11px]">
-                {r.color && (
-                  <span className="inline-block size-2 rounded-full shrink-0" style={{ backgroundColor: r.color }}/>
-                )}
-                <span className="flex-1 truncate">{r.name}</span>
-                <span className="tabular-nums text-muted-foreground shrink-0">{fmtSec(r.sec)}</span>
-              </div>
-              <div className="h-1 rounded-full bg-muted overflow-hidden">
-                <div className="h-full bg-emerald-500/60" style={{ width: `${pct}%` }}/>
-              </div>
-            </li>
-          );
-        })}
-      </ul>
-    </div>
-  );
-}
-
-function SummaryCard({ label, value, sub, trend, chart }: {
+function SummaryCard({ label, value, sub, trend, chart, className }: {
   label: string;
   value: React.ReactNode;
   sub?: string;
   trend?: { label: string; color: string } | null;
   chart?: React.ReactNode;
+  className?: string;
 }) {
   return (
-    <div className="rounded-md border p-3 flex flex-col gap-0.5 min-h-[88px] min-w-0 overflow-hidden">
+    <div className={`rounded-md border p-3 flex flex-col gap-0.5 min-h-[88px] min-w-0 overflow-hidden ${className ?? ""}`}>
       <div className="flex items-baseline justify-between gap-1">
         <div className="text-[10px] text-muted-foreground uppercase tracking-wide">{label}</div>
         {trend && <div className={`text-[9px] tabular-nums ${trend.color}`}>{trend.label}</div>}
       </div>
       <div className="text-base font-semibold tabular-nums">{value}</div>
-      {chart && <div className="mt-1 min-w-0">{chart}</div>}
+      {chart && <div className="my-auto pt-2 min-w-0 flex justify-center">{chart}</div>}
       {sub && <div className="text-[10px] text-muted-foreground tabular-nums mt-auto">{sub}</div>}
     </div>
   );
@@ -1317,56 +1260,69 @@ function CompactTransitionMatrix({
   const initial = (n: string) => n.charAt(0);
 
   return (
-    <div className="rounded-md border p-2 flex flex-col gap-1 min-h-[88px] min-w-0 overflow-hidden">
-      <div className="text-[10px] text-muted-foreground uppercase tracking-wide">Transition</div>
+    <div className="rounded-md border p-3 pb-4 flex flex-col min-h-[88px] min-w-0 overflow-hidden">
+      <div className="text-[10px] text-muted-foreground uppercase tracking-wide leading-none -mb-1">Transition</div>
       {(() => {
-        const CELL = 14;
-        const GAP = 2;
-        const LABEL = 10;
+        const CELL = 22; // OpaqueTag の natural height に合わせる
+        const GAP = 1;
+        const TOP_PAD = 2; // 列ラベル ↔ grid の垂直余白
         const N = statuses.length;
-        const W = LABEL + GAP + N * (CELL + GAP) - GAP;
-        const H = (rowLabels.length + 1) * (CELL + GAP) - GAP;
+        // SVG は列ラベル + grid 部分のみ。行ラベルは HTML pill で外側に並べる。
+        const W = N * (CELL + GAP) - GAP;
+        const HEADER_H = CELL + TOP_PAD;
+        const H = HEADER_H + rowLabels.length * (CELL + GAP) - GAP;
         return (
-          <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet" className="w-full h-auto">
-            {/* column headers */}
-            {statuses.map((s, i) => (
-              <text key={s.id} x={LABEL + GAP + i * (CELL + GAP) + CELL / 2} y={CELL / 2 + 1}
-                textAnchor="middle" dominantBaseline="central"
-                fontSize={8} fontWeight={500}
-                fill={s.color ?? "currentColor"}>{initial(s.name)}</text>
-            ))}
-            {rowLabels.map((from, ri) => {
-              const total = rowTotals[from] ?? 0;
-              const fromColor = from === FIRST_LABEL ? COLOR_FIRST_ATTEMPT : colorByName.get(from) ?? "#888";
-              const y = (ri + 1) * (CELL + GAP);
-              return (
-                <Fragment key={from}>
-                  <text x={LABEL} y={y + CELL / 2} textAnchor="end" dominantBaseline="central"
-                    fontSize={8} fontWeight={500} fill={fromColor}>{initial(from)}</text>
-                  {statuses.map((to, ci) => {
-                    const count = matrix[from]?.[to.name] ?? 0;
-                    const pct = total > 0 ? count / total : 0;
-                    const bg = pct > 0
-                      ? `color-mix(in srgb, hsl(var(--card)) ${100 - Math.round(pct * 70)}%, ${to.color ?? "#888"})`
-                      : "transparent";
-                    const x = LABEL + GAP + ci * (CELL + GAP);
-                    return (
-                      <g key={to.id}>
-                        <rect x={x} y={y} width={CELL} height={CELL} rx={2}
-                          fill={bg} stroke="hsl(var(--border))" strokeOpacity={0.6} strokeWidth={0.5}/>
-                        {count > 0 && (
-                          <text x={x + CELL / 2} y={y + CELL / 2} textAnchor="middle" dominantBaseline="central"
-                            fontSize={9} className="fill-foreground"
-                            style={{ fontVariantNumeric: "tabular-nums" }}>{count}</text>
-                        )}
-                        <title>{`${from} → ${to.name}: ${count} (${Math.round(pct * 100)}%)`}</title>
-                      </g>
-                    );
-                  })}
-                </Fragment>
-              );
-            })}
-          </svg>
+          <div className="flex items-stretch gap-1.5 mt-1">
+            {/* 行ラベル (pill 列) */}
+            <div className="flex flex-col" style={{ gap: GAP, paddingTop: HEADER_H }}>
+              {rowLabels.map((from) => {
+                const fromColor = from === FIRST_LABEL ? COLOR_FIRST_ATTEMPT : colorByName.get(from) ?? "#888";
+                return (
+                  <div key={from} className="flex items-center" style={{ height: CELL }}>
+                    <OpaqueTag name={from} color={fromColor}/>
+                  </div>
+                );
+              })}
+            </div>
+            {/* SVG: 列ラベル + grid。w-full で右余白いっぱいまで広げる */}
+            <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet"
+              className="w-full h-auto flex-1">
+              {statuses.map((s, i) => (
+                <text key={s.id} x={i * (CELL + GAP) + CELL / 2} y={CELL / 2}
+                  textAnchor="middle" dominantBaseline="central"
+                  fontSize={8} fontWeight={500}
+                  fill={s.color ?? "currentColor"}>{initial(s.name)}</text>
+              ))}
+              {rowLabels.map((from, ri) => {
+                const total = rowTotals[from] ?? 0;
+                const y = HEADER_H + ri * (CELL + GAP);
+                return (
+                  <Fragment key={from}>
+                    {statuses.map((to, ci) => {
+                      const count = matrix[from]?.[to.name] ?? 0;
+                      const pct = total > 0 ? count / total : 0;
+                      const bg = pct > 0
+                        ? `color-mix(in srgb, hsl(var(--card)) ${100 - Math.round(pct * 70)}%, ${to.color ?? "#888"})`
+                        : "transparent";
+                      const x = ci * (CELL + GAP);
+                      return (
+                        <g key={to.id}>
+                          <rect x={x} y={y} width={CELL} height={CELL} rx={TETRIS_RX}
+                            fill={bg} stroke={TETRIS_STROKE} strokeOpacity={TETRIS_STROKE_OPACITY} strokeWidth={TETRIS_STROKE_WIDTH}/>
+                          {count > 0 && (
+                            <text x={x + CELL / 2} y={y + CELL / 2} textAnchor="middle" dominantBaseline="central"
+                              fontSize={12} fontWeight={600} className="fill-foreground"
+                              style={{ fontVariantNumeric: "tabular-nums" }}>{count}</text>
+                          )}
+                          <title>{`${from} → ${to.name}: ${count} (${Math.round(pct * 100)}%)`}</title>
+                        </g>
+                      );
+                    })}
+                  </Fragment>
+                );
+              })}
+            </svg>
+          </div>
         );
       })()}
     </div>
@@ -1401,8 +1357,8 @@ function StatusDonut({
   return (
     <div className="rounded-md border p-3 flex flex-col gap-1 min-h-[88px]">
       <div className="text-[10px] text-muted-foreground uppercase tracking-wide">{label}</div>
-      <div className="flex items-center justify-center gap-3">
-        <svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`} className="shrink-0">
+      <div className="flex items-center gap-3">
+      <svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`} className="shrink-0">
           <circle cx={SIZE/2} cy={SIZE/2} r={R} fill="none" stroke="hsl(var(--muted))" strokeWidth={STROKE}/>
           <g transform={`rotate(-90 ${SIZE/2} ${SIZE/2})`}>
             {total > 0 && entries.map(({ id, name, color, n }) => {
@@ -1433,13 +1389,115 @@ function StatusDonut({
               {centerBottom}
             </text>
           )}
-        </svg>
-        <div className="flex flex-col gap-0.5 text-[10px] tabular-nums leading-none min-w-0">
+      </svg>
+        <div className="flex flex-col gap-1 text-xs tabular-nums min-w-0 flex-1">
           {entries.filter((e) => e.n > 0).map((e) => (
-            <span key={e.id} className="inline-flex items-center gap-1 whitespace-nowrap" title={`${e.name}: ${e.n}`}>
-              <span className="inline-block size-1.5 rounded-full shrink-0" style={{ backgroundColor: e.color }}/>
-              <span className="text-foreground">{e.n}</span>
+            <span key={e.id} className="flex items-center gap-1.5 w-full">
+              <span className="shrink-0"><OpaqueTag name={e.name} color={e.color}/></span>
+              <span className="ml-auto text-foreground font-medium">{e.n}</span>
             </span>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Overdue / Backlog / Throughput を 3 行の水平 stacked bar に統合表示。
+ * 全 row 共通の denominator (Throughput.totalDue) でスケール → bar 長で o + b = t が可視。
+ * 凡例は 1 度のみ表示。
+ */
+function DuePlanCard({
+  statuses, rows, output, className, onOpenProblem,
+}: {
+  statuses: { id: string; name: string; color?: string | null; sortOrder: number }[];
+  rows: {
+    label: string;
+    doneItems: { problemId: string; code: string; color: string }[];
+    doneCount: number;
+    totalDue: number;
+  }[];
+  output: { doneCount: number; totalDue: number; doneCounts: Map<string, number> };
+  className?: string;
+  onOpenProblem?: (problemId: string) => void;
+}) {
+  const ordered = statusOrderWithUnrated(statuses);
+  const legendKeys = new Set<string>();
+  for (const e of ordered) if ((output.doneCounts.get(e.name) ?? 0) > 0) legendKeys.add(e.name);
+  // donut: web で大きく、mobile で従来サイズ。SVG は viewBox + className で responsive
+  const SIZE = 88;
+  const R = 34;
+  const STROKE = 10;
+  const CIRC = 2 * Math.PI * R;
+  let acc = 0;
+  return (
+    <div className={`rounded-md border p-3 flex flex-col gap-3 ${className ?? ""}`}>
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="text-[10px] text-muted-foreground uppercase tracking-wide">Scheduled</div>
+        <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
+          {ordered.filter((e) => legendKeys.has(e.name)).map((e) => (
+            <OpaqueTag key={e.id} name={e.name} color={e.color}/>
+          ))}
+        </div>
+      </div>
+      <div className="flex items-center gap-4 flex-1 my-auto">
+        {/* Output donut (status mix of done items) */}
+        <svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`} className="shrink-0">
+          <circle cx={SIZE/2} cy={SIZE/2} r={R} fill="none" stroke="hsl(var(--muted))" strokeWidth={STROKE}/>
+          <g transform={`rotate(-90 ${SIZE/2} ${SIZE/2})`}>
+            {output.totalDue > 0 && ordered.map((e) => {
+              const n = output.doneCounts.get(e.name) ?? 0;
+              if (n === 0) return null;
+              const len = (n / output.totalDue) * CIRC;
+              const dasharray = `${len} ${CIRC - len}`;
+              const dashoffset = -acc;
+              acc += len;
+              return (
+                <circle key={e.id} cx={SIZE/2} cy={SIZE/2} r={R} fill="none"
+                  stroke={e.color} strokeWidth={STROKE}
+                  strokeDasharray={dasharray} strokeDashoffset={dashoffset}>
+                  <title>{`${e.name}: ${n}`}</title>
+                </circle>
+              );
+            })}
+          </g>
+          <text x={SIZE/2} y={SIZE/2 - 4} textAnchor="middle" dominantBaseline="central"
+            className="fill-foreground" fontSize={15} fontWeight={700}
+            style={{ fontVariantNumeric: "tabular-nums" }}>
+            {output.doneCount}
+          </text>
+          <text x={SIZE/2} y={SIZE/2 + 9} textAnchor="middle" dominantBaseline="central"
+            className="fill-muted-foreground" fontSize={9}
+            style={{ fontVariantNumeric: "tabular-nums" }}>
+            {`/ ${output.totalDue}`}
+          </text>
+        </svg>
+        {/* Overdue / Planned blocks */}
+        <div className="flex flex-col gap-2 flex-1 min-w-0">
+          {rows.map((r) => (
+            <div key={r.label} className="flex items-center gap-3">
+              <div className="w-16 text-xs text-muted-foreground uppercase tracking-wide shrink-0">{r.label}</div>
+              <div className="text-xs tabular-nums shrink-0 w-12">
+                <span className="font-semibold text-foreground">{r.doneCount}</span>
+                <span className="text-muted-foreground"> / {r.totalDue}</span>
+              </div>
+              <div className="flex flex-wrap gap-px">
+                {r.doneItems.map((it) => (
+                  onOpenProblem ? (
+                    <button key={it.problemId} type="button"
+                      onClick={() => onOpenProblem(it.problemId)}
+                      title={it.code}
+                      className={`${tetrisCellClass} hover:opacity-80 cursor-pointer`}
+                      style={{ width: 14, height: 14, background: it.color }}/>
+                  ) : (
+                    <div key={it.problemId} title={it.code}
+                      className={tetrisCellClass}
+                      style={{ width: 14, height: 14, background: it.color }}/>
+                  )
+                ))}
+              </div>
+            </div>
           ))}
         </div>
       </div>
