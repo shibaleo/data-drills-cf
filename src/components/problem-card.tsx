@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useState, useRef, type RefObject } from 'react'
-import { ArrowUp, ArrowDown, Plus, Pencil, Trash2 } from 'lucide-react'
+import { useState, useRef, type RefObject } from 'react'
+import { ArrowUp, ArrowDown, Plus, Pencil, Trash2, RotateCcw, Check, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import type { ProblemWithAnswers, AnswerWithReviews } from '@/hooks/queries/use-problems'
 import type { Problem } from '@/lib/types'
@@ -158,6 +158,59 @@ export function ProblemCard({
   const info = computeForgettingInfo(p.answers, now)
   const [highlightDate, setHighlightDate] = useState<string | null>(null)
   const timelineRef = useRef<HTMLDivElement>(null)
+
+  // ── editableReviews=true 用の per-answer lock state ──
+  // unlockedAnswerId: 編集 unlock 中の answer.id (null = 全 lock)
+  // reviewDrafts: review.id → 現在の draft (CodeMirror から流れ込む)
+  const [unlockedAnswerId, setUnlockedAnswerId] = useState<string | null>(null)
+  const [reviewDrafts, setReviewDrafts] = useState<Map<string, string>>(new Map())
+  const [savingAnswerId, setSavingAnswerId] = useState<string | null>(null)
+
+  const unlockAnswer = (answerId: string, reviews: AnswerWithReviews['reviews']) => {
+    // 既存 draft をクリアしつつ baseline を流し込む
+    setReviewDrafts((prev) => {
+      const next = new Map(prev)
+      for (const r of reviews) next.set(r.id, r.content ?? '')
+      return next
+    })
+    setUnlockedAnswerId(answerId)
+  }
+  const lockAndReset = (reviews: AnswerWithReviews['reviews']) => {
+    setReviewDrafts((prev) => {
+      const next = new Map(prev)
+      for (const r of reviews) next.delete(r.id)
+      return next
+    })
+    setUnlockedAnswerId(null)
+  }
+  const saveAndLock = async (answerId: string, reviews: AnswerWithReviews['reviews']) => {
+    if (savingAnswerId) return
+    const dirty = reviews.filter((r) => {
+      const d = reviewDrafts.get(r.id)
+      return d !== undefined && d.trim() !== (r.content ?? '').trim()
+    })
+    if (dirty.length === 0) { setUnlockedAnswerId(null); return }
+    setSavingAnswerId(answerId)
+    try {
+      for (const r of dirty) {
+        const next = (reviewDrafts.get(r.id) ?? '').trim()
+        await unwrap(rpc.api.v1.reviews[':id'].$put({
+          param: { id: r.id }, json: { content: next },
+        }))
+      }
+      setReviewDrafts((prev) => {
+        const m = new Map(prev)
+        for (const r of reviews) m.delete(r.id)
+        return m
+      })
+      setUnlockedAnswerId(null)
+      onReviewSaved?.()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Save failed')
+    } finally {
+      setSavingAnswerId(null)
+    }
+  }
 
   const toggleHighlight = (date: string | null) => {
     setHighlightDate((prev) => (prev === date ? null : date))
@@ -320,20 +373,54 @@ export function ProblemCard({
                           </span>
                         )
                       })()}
-                      <button
-                        type="button"
-                        onClick={() => onEditAnswer(a, p)}
-                        title="編集"
-                        className="inline-flex size-5 items-center justify-center rounded text-muted-foreground/40 hover:text-foreground transition-colors print:hidden"
-                      >
-                        <Pencil className="size-3" />
-                      </button>
+                      {editableReviews ? (
+                        unlockedAnswerId === a.id ? (
+                          <span className="inline-flex items-center print:hidden">
+                            <button type="button"
+                              onClick={() => lockAndReset(reviews)}
+                              disabled={savingAnswerId === a.id}
+                              title="変更を破棄して lock"
+                              className="inline-flex size-5 items-center justify-center rounded text-muted-foreground/60 hover:text-foreground transition-colors disabled:opacity-40">
+                              <RotateCcw className="size-3" />
+                            </button>
+                            <button type="button"
+                              onClick={() => saveAndLock(a.id, reviews)}
+                              disabled={savingAnswerId === a.id}
+                              title="保存して lock"
+                              className="inline-flex size-5 items-center justify-center rounded text-primary hover:opacity-80 transition-colors disabled:opacity-40">
+                              {savingAnswerId === a.id
+                                ? <Loader2 className="size-3 animate-spin" />
+                                : <Check className="size-3" />}
+                            </button>
+                          </span>
+                        ) : (
+                          <button type="button"
+                            onClick={() => unlockAnswer(a.id, reviews)}
+                            title="編集を unlock"
+                            className="inline-flex size-5 items-center justify-center rounded text-muted-foreground/40 hover:text-foreground transition-colors print:hidden">
+                            <Pencil className="size-3" />
+                          </button>
+                        )
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => onEditAnswer(a, p)}
+                          title="編集"
+                          className="inline-flex size-5 items-center justify-center rounded text-muted-foreground/40 hover:text-foreground transition-colors print:hidden"
+                        >
+                          <Pencil className="size-3" />
+                        </button>
+                      )}
                     </div>
                     {reviews.map((rv) => (
                       <ReviewBlock key={rv.id}
                         review={rv}
-                        editable={editableReviews}
-                        onSaved={onReviewSaved}/>
+                        unlocked={editableReviews === true && unlockedAnswerId === a.id}
+                        onDraftChange={(v) => setReviewDrafts((prev) => {
+                          const next = new Map(prev)
+                          next.set(rv.id, v)
+                          return next
+                        })}/>
                     ))}
                   </div>
                 </div>
@@ -412,72 +499,37 @@ export function ProblemCard({
  * editable=true の時に content 部分を click → MarkdownEditor で書き換え、
  * Save で `PUT /reviews/:id` を投げて表示モードに戻す。
  */
+/**
+ * 1 review 分の表示。unlocked=true の時 CodeMirror live-markdown editor を
+ * マウントし、入力ごとに `onDraftChange` で親に draft を吐く。lock 解除 / 再
+ * lock は ProblemCard 側のロックトグル (鉛筆 ↔ reset/save) で制御。
+ *
+ * CodeMirror は live-preview なので border/bg を消すと static `<Markdown>`
+ * と視覚的に揃う (= 同じ位置で同じ render になる)。
+ */
 function ReviewBlock({
-  review, editable, onSaved,
+  review, unlocked, onDraftChange,
 }: {
   review: AnswerWithReviews['reviews'][number]
-  editable?: boolean
-  onSaved?: () => void
+  unlocked: boolean
+  onDraftChange: (v: string) => void
 }) {
-  const [editing, setEditing] = useState(false)
-  const [draft, setDraft] = useState(review.content ?? '')
-  const [saving, setSaving] = useState(false)
-
-  useEffect(() => { setDraft(review.content ?? '') }, [review.content])
-
-  const save = async () => {
-    if (saving) return
-    const next = draft.trim()
-    if (next === (review.content ?? '')) { setEditing(false); return }
-    setSaving(true)
-    try {
-      await unwrap(rpc.api.v1.reviews[':id'].$put({
-        param: { id: review.id },
-        json: { content: next },
-      }))
-      onSaved?.()
-      setEditing(false)
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Save failed')
-    } finally {
-      setSaving(false)
-    }
-  }
-
   return (
     <div className="py-1 text-xs">
       {review.review_type && (
         <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs -ml-6 bg-muted text-muted-foreground">{review.review_type}</span>
       )}
-      {editing ? (
-        <div className="mt-1 space-y-1.5 print:hidden">
+      {unlocked ? (
+        <div className="mt-1">
           <MarkdownEditor
+            // unlock のたびに最新 content から start するため key remount
+            key={`${review.id}-${review.content ?? ''}`}
             defaultValue={review.content ?? ''}
-            onChange={setDraft}
+            onChange={onDraftChange}
             compact
-            className="text-sm"
+            className="border-0 bg-transparent text-sm rounded-none"
           />
-          <div className="flex items-center gap-1.5">
-            <button type="button" onClick={save} disabled={saving}
-              className="text-[10px] text-primary hover:underline disabled:opacity-50">
-              {saving ? 'Saving…' : 'Save'}
-            </button>
-            <button type="button"
-              onClick={() => { setDraft(review.content ?? ''); setEditing(false) }}
-              className="text-[10px] text-muted-foreground hover:text-foreground">
-              Cancel
-            </button>
-          </div>
         </div>
-      ) : editable ? (
-        <button type="button"
-          onClick={() => setEditing(true)}
-          title="クリックで編集"
-          className="block w-full text-left text-sm text-foreground mt-1 leading-relaxed rounded hover:bg-accent/30 px-1 -mx-1 cursor-text print:hover:bg-transparent">
-          {review.content
-            ? <Markdown>{review.content}</Markdown>
-            : <span className="text-muted-foreground italic">(空 — クリックで追記)</span>}
-        </button>
       ) : (
         review.content && (
           <div className="text-sm text-foreground mt-1 leading-relaxed">
