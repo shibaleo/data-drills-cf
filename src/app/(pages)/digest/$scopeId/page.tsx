@@ -932,12 +932,15 @@ function DayTimeline({
               );
             });
           })()}
-          {/* Answer 帯 (duration ある→帯幅、なし→点) */}
+          {/* Answer 帯 — createdAt は「回答完了 (= 記録時刻)」なので
+             帯は [createdAt - dur, createdAt] の範囲で描く (= 解答中の実時間)。
+             duration が無いものは点表示。 */}
           {answers.map((a) => {
-            const startMs = new Date(a.startedAt).getTime();
-            const x = xForMs(startMs, 1000);
+            const endMs = new Date(a.startedAt).getTime();  // 実は createdAt
             const dur = a.durationSec ?? 0;
-            // duration は分→x ピクセルに変換。総時間幅 (HOUR_END-HOUR_START)*3600 が 1000px に対応
+            const startMs = endMs - dur * 1000;
+            const x = xForMs(startMs, 1000);
+            // duration は秒→x ピクセルに変換。総時間幅 (HOUR_END-HOUR_START)*3600 が 1000px に対応
             const wPx = (dur / ((HOUR_END - HOUR_START) * 3600)) * 1000;
             const w = Math.max(2, wPx); // 最小 2px
             const fill = a.statusColor ?? COLOR_FIRST_ATTEMPT;
@@ -947,7 +950,7 @@ function DayTimeline({
                   fill={fill} opacity={0.85}
                   className="cursor-pointer"
                   onClick={() => onOpenAnswer(a.problemId)}>
-                  <title>{`${jstHM(a.startedAt)} ${a.code} ${a.name}${dur ? ` (${fmtSec(dur)})` : ""}${a.statusName ? ` → ${a.statusName}` : ""}`}</title>
+                  <title>{`${jstHM(new Date(startMs).toISOString())}–${jstHM(a.startedAt)} ${a.code} ${a.name}${dur ? ` (${fmtSec(dur)})` : ""}${a.statusName ? ` → ${a.statusName}` : ""}`}</title>
                 </rect>
               </g>
             );
