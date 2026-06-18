@@ -695,7 +695,6 @@ export default function DigestPage() {
               problem={p}
               now={new Date()}
               dateFilter={date}
-              hideHeader
               hideCheckpoint
               hideActions
               editableReviews
