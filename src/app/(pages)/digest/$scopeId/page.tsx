@@ -336,7 +336,7 @@ export default function DigestPage() {
   const overdueStatusCounts = useMemo(() => {
     const m = new Map<string, number>();
     for (const r of reviewOverdue) {
-      const cur = todayStatusByProblem.get(r.problemId) ?? r.lastStatus ?? "Unrated";
+      const cur = todayStatusByProblem.get(r.problemId) ?? r.lastStatus ?? "New";
       m.set(cur, (m.get(cur) ?? 0) + 1);
     }
     return m;
@@ -357,8 +357,8 @@ export default function DigestPage() {
       const cur = todayStatusByProblem.get(problemId) ?? prior;
       m.set(cur, (m.get(cur) ?? 0) + 1);
     };
-    for (const r of reviewPlanToday) bump(r.problemId, r.lastStatus ?? "Unrated");
-    for (const b of backlogPlanToday) bump(b.problemId, "Unrated");
+    for (const r of reviewPlanToday) bump(r.problemId, r.lastStatus ?? "New");
+    for (const b of backlogPlanToday) bump(b.problemId, "New");
     return m;
   }, [reviewPlanToday, backlogPlanToday, todayStatusByProblem]);
   // 「消化された today plan」の今日の status 分布 (sum = todayDoneCount)
@@ -1234,7 +1234,7 @@ function CompactTransitionMatrix({
   rows: { prevStatusName: string | null; statusName: string | null }[];
   statuses: { id: string; name: string; color: string | null; sortOrder: number }[];
 }) {
-  const FIRST_LABEL = "Unrated";
+  const FIRST_LABEL = "New";
   const { matrix, rowTotals } = useMemo(() => {
     const m: Record<string, Record<string, number>> = {};
     const totals: Record<string, number> = {};
@@ -1333,7 +1333,7 @@ function statusOrderWithUnrated(
   statuses: { id: string; name: string; color?: string | null; sortOrder: number }[],
 ): { id: string; name: string; color: string }[] {
   return [
-    { id: "_unrated", name: "Unrated", color: UNRATED_COLOR },
+    { id: "_unrated", name: "New", color: UNRATED_COLOR },
     ...statuses.map((s) => ({ id: s.id, name: s.name, color: s.color ?? "hsl(var(--muted-foreground))" })),
   ];
 }

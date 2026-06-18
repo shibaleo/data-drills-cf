@@ -501,7 +501,7 @@ export default function ScopeDetailPage() {
               </PopoverContent>
             </Popover>
             <BlockLegend entries={[
-              ...(hideFirst ? [] : [{ kind: "fill" as const, label: "Unrated", color: COLOR_FIRST_ATTEMPT }]),
+              ...(hideFirst ? [] : [{ kind: "fill" as const, label: "New", color: COLOR_FIRST_ATTEMPT }]),
               ...(hideFuture ? [] : [{ kind: "fill" as const, label: "Planned", color: COLOR_PLANNED }]),
               { kind: "ring" as const, label: "Over budget", color: "#f59e0b" },
               { kind: "ring" as const, label: "Overflow", color: "#ef4444" },

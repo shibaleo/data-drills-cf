@@ -401,7 +401,7 @@ export default function PlanPage() {
     // 評価なし phase (past First + future Planned 同色、1 トグル)
     {
       kind: "fill",
-      label: "Unrated",
+      label: "New",
       color: COLOR_PLANNED,
       active: isShownKind("First") && isShownKind("Planned"),
       onClick: () => {

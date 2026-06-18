@@ -22,7 +22,7 @@ type Props = {
   setPeriod: (p: Period) => void;
 };
 
-const FIRST_LABEL = "Unrated";
+const FIRST_LABEL = "New";
 
 export function StatusTransitionMatrix({ rows, statuses, period, setPeriod }: Props) {
   // 期間フィルタ
