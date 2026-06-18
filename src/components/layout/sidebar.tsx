@@ -6,7 +6,6 @@ import { SITE_NAME } from "@/lib/site";
 import {
   BarChart3,
   BookOpen,
-  CalendarRange,
   CheckCircle2,
   Info,
   LayoutGrid,
@@ -15,6 +14,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   PenLine,
+  Route,
   Target,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -34,7 +34,7 @@ interface NavItem {
 const navItems: NavItem[] = [
   // Scope = 「何を演習対象とするか」の入口。一番上。
   { href: "/scopes", label: "Scopes", icon: Target },
-  { href: "/plan", label: "Roadmap", icon: CalendarRange },
+  { href: "/plan", label: "Roadmap", icon: Route },
   { href: "/habits", label: "Habits", icon: CheckCircle2, badge: "beta" },
   { href: "/stats", label: "Stats", icon: BarChart3 },
   { href: "/digest", label: "Digest", icon: Newspaper, dividerAfter: true },
