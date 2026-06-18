@@ -529,13 +529,17 @@ function ReviewBlock({
             compact
             // 表示モード (text-sm leading-relaxed の static <Markdown>) と
             // 視覚的に揃える: 枠/背景なし、cm-content の padding/min-height を 0、
-            // line-height は relaxed (1.625) で行間を一致させる。
-            className="border-0 bg-transparent text-sm rounded-none [&_.cm-content]:p-0 [&_.cm-content]:min-h-0 [&_.cm-line]:leading-relaxed"
+            // .cm-line に明示的に text-sm + leading 1.5 を当てて行間/字サイズを揃える。
+            // ※ 数式 (KaTeX) は codemirror-live-markdown と rehype-katex で
+            //    rendering pipeline が別物なので、math 部分はわずかに見た目が
+            //    変わるのが残るが許容範囲。
+            className="border-0 bg-transparent text-sm rounded-none [&_.cm-content]:p-0 [&_.cm-content]:min-h-0 [&_.cm-line]:text-sm [&_.cm-line]:leading-[1.5]"
           />
         </div>
       ) : (
         review.content && (
-          <div className="text-sm text-foreground mt-1 leading-relaxed">
+          // unlock 時の CodeMirror と行間/サイズを揃えるため leading-[1.5] で固定
+          <div className="text-sm text-foreground mt-1 leading-[1.5]">
             <Markdown>{review.content}</Markdown>
           </div>
         )
