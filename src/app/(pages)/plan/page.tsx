@@ -55,7 +55,7 @@ function addDays(s: string, n: number): string {
 }
 
 export default function PlanPage() {
-  usePageTitle("Plan");
+  usePageTitle("Roadmap");
   const navigate = useNavigate();
   usePageBack(useCallback(() => navigate({ to: "/scopes" as string }), [navigate]));
   const { statuses, currentScopeId, setCurrentScopeId } = useField();

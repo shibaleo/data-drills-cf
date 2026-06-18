@@ -1229,7 +1229,15 @@ function DuePlanCard({
   let acc = 0;
   return (
     <div className={`rounded-md border p-3 flex flex-col gap-3 ${className ?? ""}`}>
-      <div className="text-[10px] text-muted-foreground uppercase tracking-wide">Scheduled</div>
+      {rowLinkTo ? (
+        <Link to={rowLinkTo}
+          className="text-[10px] text-muted-foreground uppercase tracking-wide hover:text-foreground transition-colors inline-flex items-center gap-0.5 self-start">
+          Scheduled
+          <ArrowUpRight className="size-3 opacity-60"/>
+        </Link>
+      ) : (
+        <div className="text-[10px] text-muted-foreground uppercase tracking-wide">Scheduled</div>
+      )}
       <div className="flex items-center gap-4 flex-1 my-auto">
         {/* Output donut (status mix of done items) */}
         <svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`} className="shrink-0">
@@ -1273,15 +1281,7 @@ function DuePlanCard({
             <div className="flex-1 grid gap-3" style={{ gridTemplateColumns: `repeat(${rows.length}, minmax(0, 1fr))` }}>
               {rows.map((r) => (
                 <div key={r.label} className="flex flex-col leading-tight">
-                  {rowLinkTo ? (
-                    <Link to={rowLinkTo}
-                      className="inline-flex items-center gap-0.5 text-[10px] text-muted-foreground uppercase tracking-wide hover:text-foreground transition-colors">
-                      {r.label}
-                      <ArrowUpRight className="size-3 opacity-60"/>
-                    </Link>
-                  ) : (
-                    <span className="text-[10px] text-muted-foreground uppercase tracking-wide">{r.label}</span>
-                  )}
+                  <span className="text-[10px] text-muted-foreground uppercase tracking-wide">{r.label}</span>
                   <span className="text-xs tabular-nums">
                     <span className="text-foreground font-semibold">{r.doneCount}</span>
                     {r.totalDue !== undefined && (

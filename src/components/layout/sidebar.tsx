@@ -34,7 +34,7 @@ interface NavItem {
 const navItems: NavItem[] = [
   // Scope = 「何を演習対象とするか」の入口。一番上。
   { href: "/scopes", label: "Scopes", icon: Target },
-  { href: "/plan", label: "Plan", icon: CalendarRange },
+  { href: "/plan", label: "Roadmap", icon: CalendarRange },
   { href: "/habits", label: "Habits", icon: CheckCircle2, badge: "beta" },
   { href: "/stats", label: "Stats", icon: BarChart3 },
   { href: "/digest", label: "Digest", icon: Newspaper, dividerAfter: true },
