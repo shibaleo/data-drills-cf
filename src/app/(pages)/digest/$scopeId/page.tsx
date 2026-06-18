@@ -418,6 +418,18 @@ export default function DigestPage() {
   const reviewTodayDone = reviewPlanToday.filter((r) => actualProblemIds.has(r.problemId));
   const backlogTodayDone = backlogPlanToday.filter((b) => actualProblemIds.has(b.problemId));
   const reviewOverdueDone = reviewOverdue.filter((r) => actualProblemIds.has(r.problemId));
+  // Ahead = 今日 answer したが、overdue でも今日 due でも backlog でもない
+  // (= 未来予定 entry を先取り、または unscheduled extra)
+  const aheadProblemIds = useMemo(() => {
+    const scheduled = new Set<string>();
+    for (const r of reviewOverdue) scheduled.add(r.problemId);
+    for (const r of reviewPlanToday) scheduled.add(r.problemId);
+    for (const b of backlogPlanToday) scheduled.add(b.problemId);
+    const out = new Set<string>();
+    for (const id of actualProblemIds) if (!scheduled.has(id)) out.add(id);
+    return out;
+  }, [reviewOverdue, reviewPlanToday, backlogPlanToday, actualProblemIds]);
+  const aheadDoneCount = aheadProblemIds.size;
 
   // done block 用に problemId + 色を持った配列を作る (クリックで problem dialog を開くため)
   const lastStatusColorByProblem = useMemo(() => {
@@ -445,16 +457,17 @@ export default function DigestPage() {
     return arr;
   }, [reviewTodayDone, backlogTodayDone, lastStatusColorByProblem]);
 
-  // 当日 review の (review_type × category=Overdue|Planned) 集計。
-  // category 判定: problem が overdue 完了か planned 完了かで分類 (両方該当
-  // しない予定外 extra は集計対象外)。
+  // 当日 review の (review_type × category=Late|Due|Ahead) 集計。
+  // category 判定: problem が overdue 完了 / 今日予定完了 / 予定外完了 のどれか。
+  // 完全に未消化な problem (= skipped) は今日 review されないので対象外。
   const { data: reviewTypesList = [] } = useReviewTypes();
   const reviewTypeRows = useMemo(() => {
     if (!allProblems.length) return [];
-    const overdueIds = new Set(reviewOverdueDone.map((r) => r.problemId));
-    const plannedIds = new Set<string>();
-    for (const r of reviewTodayDone) plannedIds.add(r.problemId);
-    for (const b of backlogTodayDone) plannedIds.add(b.problemId);
+    const lateIds = new Set(reviewOverdueDone.map((r) => r.problemId));
+    const dueIds = new Set<string>();
+    for (const r of reviewTodayDone) dueIds.add(r.problemId);
+    for (const b of backlogTodayDone) dueIds.add(b.problemId);
+    const aheadIds = aheadProblemIds;
     const statusColorByName = new Map(statuses.map((s) => [s.name, s.color ?? "#888"]));
     type Item = { id: string; problemId: string; color: string; code: string; problemName: string | null };
     type Row = {
@@ -467,8 +480,9 @@ export default function DigestPage() {
     const byType = new Map<string, Row>();
     const typeByName = new Map(reviewTypesList.map((t) => [t.name, t]));
     for (const p of allProblems) {
-      const category = overdueIds.has(p.id) ? "Overdue"
-        : plannedIds.has(p.id) ? "Planned"
+      const category = lateIds.has(p.id) ? "Late"
+        : dueIds.has(p.id) ? "Due"
+        : aheadIds.has(p.id) ? "Ahead"
         : null;
       if (!category) continue;
       for (const a of p.answers) {
@@ -494,7 +508,7 @@ export default function DigestPage() {
       }
     }
     return [...byType.values()].sort((a, b) => b.total - a.total);
-  }, [allProblems, date, statuses, reviewTypesList, reviewOverdueDone, reviewTodayDone, backlogTodayDone]);
+  }, [allProblems, date, statuses, reviewTypesList, reviewOverdueDone, reviewTodayDone, backlogTodayDone, aheadProblemIds]);
 
   // サマリ
   const summary = useMemo(() => {
@@ -670,8 +684,9 @@ export default function DigestPage() {
           statuses={sortedStatuses}
           output={{ doneCount: plannedDoneCount, totalDue: plannedTotalDue, doneCounts: throughputStatusCounts }}
           rows={[
-            { label: "Overdue", doneItems: overdueDoneItems, doneCount: overdueDoneCount, totalDue: overdueTotal },
-            { label: "Planned", doneItems: plannedDoneItems, doneCount: todayDoneCount, totalDue: todayDueTotal },
+            { label: "Late", doneItems: overdueDoneItems, doneCount: overdueDoneCount, totalDue: overdueTotal },
+            { label: "Due", doneItems: plannedDoneItems, doneCount: todayDoneCount, totalDue: todayDueTotal },
+            { label: "Ahead", doneItems: [], doneCount: aheadDoneCount },
           ]}
           rowLinkTo={scopeId ? `/plan?scope_id=${scopeId}` : "/plan"}
           reviewTypeRows={reviewTypeRows}
@@ -1185,7 +1200,8 @@ function DuePlanCard({
     label: string;
     doneItems: { problemId: string; code: string; color: string }[];
     doneCount: number;
-    totalDue: number;
+    /** denominator (省略時は count のみ表示 = Ahead など bonus 用) */
+    totalDue?: number;
   }[];
   output: { doneCount: number; totalDue: number; doneCounts: Map<string, number> };
   className?: string;
@@ -1193,7 +1209,7 @@ function DuePlanCard({
   /** label を Link 化する場合の遷移先 (= /plan?scope_id=…) */
   rowLinkTo?: string;
   /** review_type 集計行 (= 当日の review を type 別にまとめたマトリクス)。
-   *  列は上の `rows` (Overdue/Planned) と対応、cell = 当該カテゴリの review 群。
+   *  列は上の `rows` (Late/Due/Ahead) と対応、cell = 当該カテゴリの review 群。
    *  block 色は review 元 answer の status 色。 */
   reviewTypeRows?: {
     id: string;
@@ -1268,7 +1284,9 @@ function DuePlanCard({
                   )}
                   <span className="text-xs tabular-nums">
                     <span className="text-foreground font-semibold">{r.doneCount}</span>
-                    <span className="text-muted-foreground"> / {r.totalDue}</span>
+                    {r.totalDue !== undefined && (
+                      <span className="text-muted-foreground"> / {r.totalDue}</span>
+                    )}
                   </span>
                 </div>
               ))}
