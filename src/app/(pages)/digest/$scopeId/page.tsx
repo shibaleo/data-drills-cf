@@ -4,7 +4,7 @@ import { COLOR_FIRST_ATTEMPT } from "@/lib/block-color";
 import { STATUS_PHASE } from "@/lib/status-phases";
 import { Markdown } from "@/components/markdown";
 import { tetrisCellClass, tetrisEmptyClass, TETRIS_RX, TETRIS_STROKE, TETRIS_STROKE_OPACITY, TETRIS_STROKE_WIDTH } from "@/components/tetris-cell";
-import { ChevronLeft, ChevronRight, Clock, ChevronDown, ChevronUp, MessageSquareText, Layers, ArrowUpRight, AlertTriangle } from "lucide-react";
+import { ChevronLeft, ChevronRight, Clock, ChevronDown, ChevronUp, MessageSquareText, Layers, ArrowUpRight } from "lucide-react";
 import { Link, useParams, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useField } from "@/hooks/use-field";
@@ -418,11 +418,8 @@ export default function DigestPage() {
   }, [reviewOverdue, reviewPlanToday, backlogPlanToday, dayRows]);
 
   const reviewTodayDone = reviewPlanToday.filter((r) => actualProblemIds.has(r.problemId));
-  const reviewTodayMissed = reviewPlanToday.filter((r) => !actualProblemIds.has(r.problemId));
   const backlogTodayDone = backlogPlanToday.filter((b) => actualProblemIds.has(b.problemId));
-  const backlogTodayMissed = backlogPlanToday.filter((b) => !actualProblemIds.has(b.problemId));
   const reviewOverdueDone = reviewOverdue.filter((r) => actualProblemIds.has(r.problemId));
-  const reviewOverdueOpen = reviewOverdue.filter((r) => !actualProblemIds.has(r.problemId));
 
   // done block 用に problemId + 色を持った配列を作る (クリックで problem dialog を開くため)
   const lastStatusColorByProblem = useMemo(() => {
@@ -627,6 +624,7 @@ export default function DigestPage() {
             { label: "Overdue", doneItems: overdueDoneItems, doneCount: overdueDoneCount, totalDue: overdueTotal },
             { label: "Planned", doneItems: plannedDoneItems, doneCount: todayDoneCount, totalDue: todayDueTotal },
           ]}
+          rowLinkTo={scopeId ? `/plan?scope_id=${scopeId}` : "/plan"}
           onOpenProblem={openDetail}
         />
         <SummaryCard label="Pace"
@@ -686,56 +684,6 @@ export default function DigestPage() {
           statuses={sortedStatuses.map((s) => ({ id: s.id, name: s.name, color: s.color ?? null, sortOrder: s.sortOrder }))}
         />
       </div>
-
-      {/* 予実: Backlog (前日 snapshot で D に割当だった問題 vs D 実績) */}
-      <PlanSection
-        title="Backlog"
-        planned={backlogPlanToday.length}
-        done={backlogTodayDone.length}
-        missed={backlogTodayMissed}
-        extras={[...actualProblemIds].filter(
-          (id) => !backlogPlanToday.some((p) => p.problemId === id),
-        ).length}
-        emptyHint="No backlog problems planned for this date"
-        onOpen={openDetail}
-        href="/scopes"
-      />
-
-      {/* 予実: Review 今日 due (前日時点で D がジャストの due) */}
-      <PlanSection
-        title="Review (due today)"
-        planned={reviewPlanToday.length}
-        done={reviewTodayDone.length}
-        missed={reviewTodayMissed.map((r) => ({
-          problemId: r.problemId, code: r.code, name: r.name, sub: r.lastStatus || null,
-        }))}
-        emptyHint="No problems due today"
-        onOpen={openDetail}
-        href="/review"
-      />
-
-      {/* 過去 due の持ち越し (前日時点で既に nextReview が D 未満) */}
-      <PlanSection
-        title="Review carry-over (past due)"
-        planned={reviewOverdue.length}
-        done={reviewOverdueDone.length}
-        missed={reviewOverdueOpen.map((r) => {
-          const days = Math.round(
-            (new Date(`${date}T00:00:00Z`).getTime() - new Date(`${r.nextReview}T00:00:00Z`).getTime()) / 86400000,
-          );
-          return {
-            problemId: r.problemId,
-            code: r.code,
-            name: r.name,
-            sub: `${days}d overdue (due ${r.nextReview})`,
-          };
-        })}
-        emptyHint="No overdue carry-over"
-        onOpen={openDetail}
-        missedLabel="Outstanding"
-        href="/review"
-        warn={reviewOverdueOpen.length >= 20}
-      />
 
       {/* Answer log (時系列) */}
       <div className="rounded-md border p-3 space-y-2">
@@ -1030,91 +978,6 @@ function DayTimeline({
   );
 }
 
-function PlanSection({
-  title, planned, done, missed, extras, emptyHint, onOpen, missedLabel = "Pending",
-  href, warn,
-}: {
-  title: string;
-  planned: number;
-  done: number;
-  missed: { problemId: string; code: string; name: string | null; sub: string | null }[];
-  extras?: number;
-  emptyHint: string;
-  onOpen: (problemId: string) => void;
-  missedLabel?: string;
-  /** 振り返り→アクション動線 (Review / Backlog ページへ) */
-  href?: string;
-  /** missed が多すぎる時の警告。空ならテーマ色 (red) で section header を縁取り */
-  warn?: boolean;
-}) {
-  const [open, setOpen] = useState(false);
-  const pct = planned > 0 ? Math.round((done * 100) / planned) : 0;
-  const hasContent = planned > 0;
-  return (
-    <div className={`rounded-md border p-3 space-y-2 ${warn ? "border-red-500/40 bg-red-500/5" : ""}`}>
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-1.5">
-          {warn && <AlertTriangle className="size-3.5 text-red-500"/>}
-          <div className="text-xs font-semibold">{title}</div>
-          {href && (
-            <Link to={href}
-              className="inline-flex items-center gap-0.5 text-[10px] text-muted-foreground hover:text-foreground"
-              title="ページを開く">
-              <ArrowUpRight className="size-3"/>
-            </Link>
-          )}
-        </div>
-        {hasContent ? (
-          <div className="flex items-center gap-2 text-[11px] tabular-nums">
-            <span className="text-muted-foreground">Planned <span className="text-foreground font-medium">{planned}</span></span>
-            <span className="text-muted-foreground">/ Done <span className="text-foreground font-medium">{done}</span></span>
-            <span className={`font-medium ${pct >= 100 ? "text-emerald-500" : pct >= 50 ? "text-amber-500" : "text-red-500"}`}>{pct}%</span>
-            {extras && extras > 0 ? (
-              <span className="text-[10px] text-muted-foreground">+{extras} extra</span>
-            ) : null}
-          </div>
-        ) : (
-          <span className="text-[10px] text-muted-foreground italic">{emptyHint}</span>
-        )}
-      </div>
-      {hasContent && (
-        <>
-          {/* 進捗バー */}
-          <div className="h-1.5 rounded-full bg-muted overflow-hidden">
-            <div
-              className={`h-full transition-all ${pct >= 100 ? "bg-emerald-500" : pct >= 50 ? "bg-amber-500" : "bg-red-500"}`}
-              style={{ width: `${Math.min(100, pct)}%` }}
-            />
-          </div>
-          {missed.length > 0 && (
-            <button type="button"
-              onClick={() => setOpen((v) => !v)}
-              className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground">
-              {open ? <ChevronUp className="size-3"/> : <ChevronDown className="size-3"/>}
-              {missedLabel} {missed.length}
-            </button>
-          )}
-          {open && missed.length > 0 && (
-            <ul className="space-y-0.5 pt-1 border-t">
-              {missed.map((m) => (
-                <li key={m.problemId}>
-                  <button type="button"
-                    onClick={() => onOpen(m.problemId)}
-                    className="w-full text-left flex items-baseline gap-2 px-1 py-1 rounded-sm hover:bg-accent text-[11px]">
-                    <span className="font-mono text-muted-foreground w-12 shrink-0">{m.code}</span>
-                    <span className="flex-1 truncate">{m.name ?? ""}</span>
-                    {m.sub && <span className="text-[9px] text-muted-foreground shrink-0">{m.sub}</span>}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </>
-      )}
-    </div>
-  );
-}
-
 function SummaryCard({ label, value, sub, trend, chart, className }: {
   label: string;
   value: React.ReactNode;
@@ -1330,7 +1193,7 @@ function StatusDonut({
  * 凡例は 1 度のみ表示。
  */
 function DuePlanCard({
-  statuses, rows, output, className, onOpenProblem,
+  statuses, rows, output, className, onOpenProblem, rowLinkTo,
 }: {
   statuses: { id: string; name: string; color?: string | null; sortOrder: number }[];
   rows: {
@@ -1342,6 +1205,8 @@ function DuePlanCard({
   output: { doneCount: number; totalDue: number; doneCounts: Map<string, number> };
   className?: string;
   onOpenProblem?: (problemId: string) => void;
+  /** label を Link 化する場合の遷移先 (= /plan?scope_id=…) */
+  rowLinkTo?: string;
 }) {
   const ordered = statusOrderWithUnrated(statuses);
   const legendKeys = new Set<string>();
@@ -1398,7 +1263,15 @@ function DuePlanCard({
         <div className="flex flex-col gap-2 flex-1 min-w-0">
           {rows.map((r) => (
             <div key={r.label} className="flex items-center gap-3">
-              <div className="w-16 text-xs text-muted-foreground uppercase tracking-wide shrink-0">{r.label}</div>
+              {rowLinkTo ? (
+                <Link to={rowLinkTo}
+                  className="w-16 text-xs text-muted-foreground uppercase tracking-wide shrink-0 hover:text-foreground transition-colors inline-flex items-center gap-0.5">
+                  {r.label}
+                  <ArrowUpRight className="size-3 opacity-60"/>
+                </Link>
+              ) : (
+                <div className="w-16 text-xs text-muted-foreground uppercase tracking-wide shrink-0">{r.label}</div>
+              )}
               <div className="text-xs tabular-nums shrink-0 w-12">
                 <span className="font-semibold text-foreground">{r.doneCount}</span>
                 <span className="text-muted-foreground"> / {r.totalDue}</span>
