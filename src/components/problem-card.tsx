@@ -155,6 +155,30 @@ export function ProblemCard({
   const answers = dateFilter
     ? answersAll.filter((a) => a.date === dateFilter)
     : answersAll
+  // dateFilter 時のコンテキスト: 表示対象 (= 今日分) の直前の 1 entry。
+  // sparkline / timeline 終端に勾配の起点として描く (情報量を失わないため)。
+  const prevAnswer = (() => {
+    if (!dateFilter || answers.length === 0) return null
+    const bottomToday = answers[answers.length - 1]
+    const idx = answersAll.findIndex((a) => a.id === bottomToday.id)
+    return idx >= 0 ? answersAll[idx + 1] ?? null : null
+  })()
+  // sparkline 用 entries (ASC)。dateFilter 時は今日分 + prev、そうでない時は全件。
+  const sparklineEntries = (() => {
+    const base = answers.slice().reverse().map((a) => ({
+      date: a.date ?? '',
+      duration: a.duration,
+      color: a.status ? lookup.statusColor(a.status) : null,
+    }))
+    if (prevAnswer) {
+      base.unshift({
+        date: prevAnswer.date ?? '',
+        duration: prevAnswer.duration,
+        color: prevAnswer.status ? lookup.statusColor(prevAnswer.status) : null,
+      })
+    }
+    return base
+  })()
   const info = computeForgettingInfo(p.answers, now)
   const [highlightDate, setHighlightDate] = useState<string | null>(null)
   const timelineRef = useRef<HTMLDivElement>(null)
@@ -255,8 +279,22 @@ export function ProblemCard({
           </div>
         )}
 
-        {/* Retention bar + schedule info + Sparkline */}
-        {hideHeader ? null : info ? (
+        {/* Retention bar + schedule info + Sparkline。hideHeader=true でも
+           sparkline は維持する (digest day view で勉強パフォーマンスの軌跡が
+           失われないように)。 */}
+        {hideHeader ? (
+          sparklineEntries.length > 0 && (
+            <div className="-mt-1 flex justify-end overflow-visible">
+              <div className="leading-[0]">
+                <DurationSparkline
+                  entries={sparklineEntries}
+                  highlightDate={highlightDate}
+                  onClickDot={(date) => toggleHighlight(date)}
+                />
+              </div>
+            </div>
+          )
+        ) : info ? (
           <div className="-mt-1 flex items-center gap-2 overflow-visible">
             <div className="h-1.5 w-16 shrink-0 rounded-full bg-muted overflow-hidden">
               <div
@@ -284,11 +322,7 @@ export function ProblemCard({
               )}
               <div className="leading-[0]">
                 <DurationSparkline
-                  entries={answers.slice().reverse().map((a) => ({
-                    date: a.date ?? '',
-                    duration: a.duration,
-                    color: a.status ? lookup.statusColor(a.status) : null,
-                  }))}
+                  entries={sparklineEntries}
                   highlightDate={highlightDate}
                   onClickDot={(date) => toggleHighlight(date)}
                 />
@@ -311,8 +345,8 @@ export function ProblemCard({
         {/* Answers — timeline style */}
         {answers.length > 0 && (
           <div ref={timelineRef} className="relative ml-5">
-            {/* Continuous vertical timeline line */}
-            <div className="absolute left-[-1px] -translate-x-1/2 top-3 bottom-[18px] w-0.5 bg-border" />
+            {/* Continuous vertical timeline line。prev pill がある時は最下端まで伸ばす */}
+            <div className={`absolute left-[-1px] -translate-x-1/2 top-3 w-0.5 bg-border ${prevAnswer ? 'bottom-3' : 'bottom-[18px]'}`} />
             {answers.map((a, i) => {
               const reviews = [...a.reviews].sort(
                 (x, y) => (x.created_at ?? '').localeCompare(y.created_at ?? ''),
@@ -426,6 +460,20 @@ export function ProblemCard({
                 </div>
               )
             })}
+            {/* prev state (= 表示対象の直前) pill。dateFilter で過去が削られた
+               時に「どこから始まったか」を timeline 終端に提示する。 */}
+            {prevAnswer && (
+              <div className="relative pl-9 pt-1">
+                <div className="absolute left-[-1px] -translate-x-1/2 top-2.5 -translate-y-1/2 whitespace-nowrap">
+                  {prevAnswer.status
+                    ? <StatusTag status={prevAnswer.status} color={lookup.statusColor(prevAnswer.status)} opaque />
+                    : <span className="inline-block size-2 rounded-full bg-foreground/40" />}
+                </div>
+                <div className="text-[10px] text-foreground/50">
+                  直前 ({prevAnswer.date ? toJSTDate(prevAnswer.date) : '-'})
+                </div>
+              </div>
+            )}
           </div>
         )}
 
