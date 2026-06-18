@@ -12,6 +12,7 @@ import { useField } from "@/hooks/use-field";
 import { useSubjects, useLevels } from "@/hooks/queries/use-field-data";
 import { useAnswerHistoryList } from "@/hooks/queries/use-answer-history";
 import { useProblemsList } from "@/hooks/queries/use-problems";
+import { useReviewTypes } from "@/hooks/queries/use-review-types";
 import { computeNextReview } from "@/lib/srs-scoring";
 import { hmsToSeconds } from "@/lib/duration";
 import { useFlashcardsData } from "@/hooks/queries/use-flashcards";
@@ -444,6 +445,37 @@ export default function DigestPage() {
     return arr;
   }, [reviewTodayDone, backlogTodayDone, lastStatusColorByProblem]);
 
+  // 当日 review の review_type 別集計 (= type cloud)。
+  // pill 色 = review_type の color、各 block 色 = review が書かれた answer の status 色。
+  const { data: reviewTypesList = [] } = useReviewTypes();
+  const reviewTypeRows = useMemo(() => {
+    if (!allProblems.length) return [];
+    type Item = { id: string; color: string; problemId: string };
+    const byType = new Map<string, { id: string; name: string; color: string | null; items: Item[] }>();
+    const statusColorByName = new Map(statuses.map((s) => [s.name, s.color ?? "#888"]));
+    const typeByName = new Map(reviewTypesList.map((t) => [t.name, t]));
+    for (const p of allProblems) {
+      for (const a of p.answers) {
+        if (a.date !== date) continue;
+        const statusColor = a.status ? statusColorByName.get(a.status) ?? "#888" : "#888";
+        for (const rv of a.reviews ?? []) {
+          if (!rv.review_type) continue;
+          const typeMeta = typeByName.get(rv.review_type);
+          const key = typeMeta?.id ?? rv.review_type;
+          const entry = byType.get(key) ?? {
+            id: key,
+            name: rv.review_type,
+            color: typeMeta?.color ?? null,
+            items: [] as Item[],
+          };
+          entry.items.push({ id: rv.id, color: statusColor, problemId: p.id });
+          byType.set(key, entry);
+        }
+      }
+    }
+    return [...byType.values()].sort((a, b) => b.items.length - a.items.length);
+  }, [allProblems, date, statuses, reviewTypesList]);
+
   // サマリ
   const summary = useMemo(() => {
     const totalSec = dayRows.reduce((s, r) => s + (r.duration ?? 0), 0);
@@ -622,6 +654,7 @@ export default function DigestPage() {
             { label: "Planned", doneItems: plannedDoneItems, doneCount: todayDoneCount, totalDue: todayDueTotal },
           ]}
           rowLinkTo={scopeId ? `/plan?scope_id=${scopeId}` : "/plan"}
+          reviewTypeRows={reviewTypeRows}
           onOpenProblem={openDetail}
         />
         <SummaryCard label="Pace"
