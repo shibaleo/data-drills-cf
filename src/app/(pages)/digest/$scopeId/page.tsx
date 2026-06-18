@@ -1269,18 +1269,18 @@ function CompactTransitionMatrix({
         const GAP = 1;
         const TOP_PAD = 2; // 列ラベル ↔ grid の垂直余白
         const N = statuses.length;
-        // 最下端 (= 最上位 status の "Solid" 行) は前回が Solid だった場合の遷移で、
-        // 表示価値が低いので display 上は drop する。matrix 自体には残るが render しない。
-        const displayRowLabels = rowLabels.slice(0, -1);
+        // 最上位 status (= "Solid") の grid 行は「前回 Solid → 次回」の遷移で
+        // 表示価値が低いため drop する。ピル列は凡例兼用で全 status 残す。
+        const gridRowLabels = rowLabels.slice(0, -1);
         // SVG は列ラベル + grid 部分のみ。行ラベルは HTML pill で外側に並べる。
         const W = N * (CELL + GAP) - GAP;
         const HEADER_H = CELL + TOP_PAD;
-        const H = HEADER_H + displayRowLabels.length * (CELL + GAP) - GAP;
+        const H = HEADER_H + gridRowLabels.length * (CELL + GAP) - GAP;
         return (
           <div className="flex items-stretch gap-1.5 mt-1">
-            {/* 行ラベル (pill 列) */}
+            {/* 行ラベル (pill 列) — 全 status 表示 */}
             <div className="flex flex-col" style={{ gap: GAP, paddingTop: HEADER_H }}>
-              {displayRowLabels.map((from) => {
+              {rowLabels.map((from) => {
                 const fromColor = from === FIRST_LABEL ? COLOR_FIRST_ATTEMPT : colorByName.get(from) ?? "#888";
                 return (
                   <div key={from} className="flex items-center" style={{ height: CELL }}>
@@ -1298,7 +1298,7 @@ function CompactTransitionMatrix({
                   fontSize={8} fontWeight={500}
                   fill={s.color ?? "currentColor"}>{initial(s.name)}</text>
               ))}
-              {displayRowLabels.map((from, ri) => {
+              {gridRowLabels.map((from, ri) => {
                 const total = rowTotals[from] ?? 0;
                 const y = HEADER_H + ri * (CELL + GAP);
                 return (
