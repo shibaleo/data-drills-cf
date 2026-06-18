@@ -166,6 +166,7 @@ export default function DigestPage() {
     let sec = 0;
     for (const e of togglEntries) {
       if (!e.personal_category || !catSet.has(e.personal_category)) continue;
+      if (e.project_name === "Learning management") continue;
       const s = new Date(e.started_at).getTime();
       const dur = e.duration_seconds ?? 0;
       const en = e.stopped_at ? new Date(e.stopped_at).getTime() : s + dur * 1000;
@@ -185,6 +186,7 @@ export default function DigestPage() {
     const catSet = new Set(activeTogglCategories);
     for (const e of togglEntriesAll) {
       if (!e.personal_category || !catSet.has(e.personal_category)) continue;
+      if (e.project_name === "Learning management") continue;
       if (e.duration_seconds == null || e.duration_seconds <= 0) continue;
       const jst = new Date(new Date(e.started_at).getTime() + JST_OFFSET_MS).toISOString().slice(0, 10);
       const slot = byDate.get(jst);
@@ -344,32 +346,93 @@ export default function DigestPage() {
   //   - 完了した item は今日の結果 status で着色 (= grade 上がった/下がった効果が即色に反映)
   //   - 未完了 item は prior status (= 昨日と同じ状態のまま)
   //   - 色 1 つに意味を絞れる: "今、このタイプ (status) の item は何個あるか"
-  const dueCurrentStatusCounts = useMemo(() => {
-    const m = new Map<string, number>();
-    // problemId → 今日の結果 status (dayRows の最後の entry)
-    const todayStatusByProblem = new Map<string, string>();
+  // 今日の結果 status (dayRows の最後の entry) — overdue / today 両方の bump に使う
+  const todayStatusByProblem = useMemo(() => {
+    const m = new Map<string, string>();
     for (const r of dayRows) {
-      if (r.statusName) todayStatusByProblem.set(r.problemId, r.statusName);
+      if (r.statusName) m.set(r.problemId, r.statusName);
     }
+    return m;
+  }, [dayRows]);
+  const overdueStatusCounts = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const r of reviewOverdue) {
+      const cur = todayStatusByProblem.get(r.problemId) ?? r.lastStatus ?? "Unrated";
+      m.set(cur, (m.get(cur) ?? 0) + 1);
+    }
+    return m;
+  }, [reviewOverdue, todayStatusByProblem]);
+  const todayDueStatusCounts = useMemo(() => {
+    const m = new Map<string, number>();
     const bump = (problemId: string, prior: string) => {
       const cur = todayStatusByProblem.get(problemId) ?? prior;
       m.set(cur, (m.get(cur) ?? 0) + 1);
     };
     for (const r of reviewPlanToday) bump(r.problemId, r.lastStatus ?? "Unrated");
-    for (const r of reviewOverdue) bump(r.problemId, r.lastStatus ?? "Unrated");
     for (const b of backlogPlanToday) bump(b.problemId, "Unrated");
     return m;
-  }, [reviewPlanToday, reviewOverdue, backlogPlanToday, dayRows]);
-  const plannedTotalDue = reviewPlanToday.length + reviewOverdue.length + backlogPlanToday.length;
-  const plannedDoneCount = useMemo(() => {
+  }, [reviewPlanToday, backlogPlanToday, todayStatusByProblem]);
+  const overdueTotal = reviewOverdue.length;
+  const overdueDoneCount = useMemo(
+    () => reviewOverdue.filter((r) => actualProblemIds.has(r.problemId)).length,
+    [reviewOverdue, actualProblemIds],
+  );
+  const todayDueTotal = reviewPlanToday.length + backlogPlanToday.length;
+  const todayDoneCount = useMemo(() => {
     const due = new Set<string>();
     for (const r of reviewPlanToday) due.add(r.problemId);
-    for (const r of reviewOverdue) due.add(r.problemId);
     for (const b of backlogPlanToday) due.add(b.problemId);
     let n = 0;
     for (const id of due) if (actualProblemIds.has(id)) n++;
     return n;
-  }, [reviewPlanToday, reviewOverdue, backlogPlanToday, actualProblemIds]);
+  }, [reviewPlanToday, backlogPlanToday, actualProblemIds]);
+  const plannedTotalDue = overdueTotal + todayDueTotal;
+  const plannedDoneCount = overdueDoneCount + todayDoneCount;
+  // Pace = actual / standard_time の分布。X 軸 = 速さ、ブロック色 = その attempt の status (Transition と統一)
+  const paceRatio = useMemo(() => {
+    type Attempt = { ratio: number; color: string; problemId: string; code: string };
+    const attempts: Attempt[] = [];
+    for (const r of dayRows) {
+      const dur = r.duration ?? 0;
+      const std = r.standardTime ?? 0;
+      if (dur <= 0 || std <= 0) continue;
+      attempts.push({ ratio: dur / std, color: r.statusColor ?? "#888", problemId: r.problemId, code: r.code });
+    }
+    // 11 bins, 0.3 〜 1.4 を 0.1 刻み。範囲外は両端の bin に lump。
+    const BIN_COUNT = 11;
+    const BIN_MIN = 0.3;
+    const BIN_STEP = 0.1;
+    const buckets: Attempt[][] = Array.from({ length: BIN_COUNT }, () => []);
+    for (const a of attempts) {
+      let idx = Math.floor((a.ratio - BIN_MIN) / BIN_STEP);
+      if (idx < 0) idx = 0;
+      if (idx >= BIN_COUNT) idx = BIN_COUNT - 1;
+      buckets[idx].push(a);
+    }
+    if (attempts.length === 0) return { median: null as number | null, n: 0, buckets };
+    const ratios = attempts.map((a) => a.ratio).sort((a, b) => a - b);
+    const mid = Math.floor(ratios.length / 2);
+    const median = ratios.length % 2 === 0
+      ? (ratios[mid - 1] + ratios[mid]) / 2
+      : ratios[mid];
+    return { median, n: ratios.length, buckets };
+  }, [dayRows]);
+  // Throughput donut: plan 内で消化された問題を今日の最終 status で分類
+  // (= attempt 単位でなく unique 問題単位。Overdue/Backlog の分子と恒等的に整合)
+  const throughputStatusCounts = useMemo(() => {
+    const planIds = new Set<string>();
+    for (const r of reviewOverdue) planIds.add(r.problemId);
+    for (const r of reviewPlanToday) planIds.add(r.problemId);
+    for (const b of backlogPlanToday) planIds.add(b.problemId);
+    const lastByProblem = new Map<string, string>();
+    for (const r of dayRows) {
+      if (!planIds.has(r.problemId)) continue;
+      if (r.statusName) lastByProblem.set(r.problemId, r.statusName);
+    }
+    const m = new Map<string, number>();
+    for (const [, s] of lastByProblem) m.set(s, (m.get(s) ?? 0) + 1);
+    return m;
+  }, [reviewOverdue, reviewPlanToday, backlogPlanToday, dayRows]);
 
   const reviewTodayDone = reviewPlanToday.filter((r) => actualProblemIds.has(r.problemId));
   const reviewTodayMissed = reviewPlanToday.filter((r) => !actualProblemIds.has(r.problemId));
@@ -555,87 +618,139 @@ export default function DigestPage() {
       {/* サマリ */}
       <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
         <DueCurrentStateCard
+          label="Overdue"
           statuses={sortedStatuses}
-          counts={dueCurrentStatusCounts}
-          doneCount={plannedDoneCount}
-          totalDue={plannedTotalDue}
+          counts={overdueStatusCounts}
+          doneCount={overdueDoneCount}
+          totalDue={overdueTotal}
+        />
+        <DueCurrentStateCard
+          label="Backlog"
+          statuses={sortedStatuses}
+          counts={todayDueStatusCounts}
+          doneCount={todayDoneCount}
+          totalDue={todayDueTotal}
         />
         <ThroughputCard
           statuses={sortedStatuses}
-          counts={summary.byStatus}
-          totalAttempts={dayRows.length}
+          counts={throughputStatusCounts}
+          totalAttempts={plannedDoneCount}
           totalDue={plannedTotalDue}
         />
-        <SummaryCard label="Problem time"
-          value={summary.totalSec > 0 ? fmtSec(summary.totalSec) : "—"}
-          sub={dayRows.length > 0 ? `Avg ${fmtSec(summary.totalSec / Math.max(1, dayRows.filter((r) => r.duration).length))}` : ""}
-          trend={formatDelta(summary.totalSec, trend.totalSecAvg)}/>
         <SummaryCard label={`${activeLabel} time (Toggl)`}
-          value={togglStudySec > 0 ? fmtSec(togglStudySec) : "—"}
-          sub={
-            togglStudySec > 0 && summary.totalSec > 0
-              ? `Problem ${Math.round((summary.totalSec * 100) / togglStudySec)}%`
-              : (togglStudySec > 0 ? "Problem 0%" : "")
-          }
+          value={(() => {
+            const togglMin = Math.round(togglStudySec / 60);
+            if (togglStudySec <= 0 && dailyTargetMin <= 0) return "—";
+            return (
+              <span>
+                {togglMin}
+                {dailyTargetMin > 0 && (
+                  <span className="text-muted-foreground font-normal text-xs"> / {dailyTargetMin}</span>
+                )}
+                <span className="text-muted-foreground font-normal text-xs"> min</span>
+              </span>
+            );
+          })()}
           chart={(() => {
-            const peak = Math.max(60, ...study7d.map((d) => d.min));
             const MAX_H = 22;
+            const peak = Math.max(60, dailyTargetMin, ...study7d.map((d) => d.min));
+            const targetOffset = dailyTargetMin > 0 ? MAX_H - (dailyTargetMin / peak) * MAX_H : null;
             const DOW = ["S", "M", "T", "W", "T", "F", "S"]; // 0=Sun..6=Sat
             return (
-              <div className="flex flex-col gap-0.5" aria-label="last 7 days">
-                <div className="flex items-end gap-[3px] h-6">
+              <div className="flex flex-col gap-0.5 w-full" aria-label="last 7 days">
+                <div className="relative flex items-end h-6 w-full">
+                  {targetOffset !== null && (
+                    <div
+                      title={`Daily target ${dailyTargetMin}m`}
+                      className="absolute left-0 right-0 border-t border-dashed border-foreground/40 pointer-events-none"
+                      style={{ top: `${targetOffset}px` }}/>
+                  )}
                   {study7d.map((d, i) => {
                     const totalH = peak > 0 ? Math.max(2, (d.min / peak) * MAX_H) : 2;
                     const isSel = i === study7d.length - 1;
                     const segs = Array.from(d.byColor.entries()).sort((a, b) => b[1] - a[1]);
                     return (
-                      <div key={d.date} title={`${d.date.slice(5)}: ${d.min >= 60 ? `${Math.floor(d.min/60)}h${Math.round(d.min%60)}m` : `${Math.round(d.min)}m`}`}
-                        className="w-[6px] rounded-sm overflow-hidden flex flex-col-reverse"
-                        style={{ height: `${totalH}px`, opacity: isSel ? 1 : 0.55 }}>
-                        {segs.length === 0 ? (
-                          <div className="w-full flex-1 bg-foreground/20"/>
-                        ) : segs.map(([color, min]) => (
-                          <div key={color} style={{ background: color, flex: `${min} 0 0` }}/>
-                        ))}
+                      <div key={d.date} className="flex-1 flex justify-center"
+                        title={`${d.date.slice(5)}: ${d.min >= 60 ? `${Math.floor(d.min/60)}h${Math.round(d.min%60)}m` : `${Math.round(d.min)}m`}`}>
+                        <div className="w-[6px] rounded-sm overflow-hidden flex flex-col-reverse"
+                          style={{ height: `${totalH}px`, opacity: isSel ? 1 : 0.55 }}>
+                          {segs.length === 0 ? (
+                            <div className="w-full flex-1 bg-foreground/20"/>
+                          ) : segs.map(([color, min]) => (
+                            <div key={color} style={{ background: color, flex: `${min} 0 0` }}/>
+                          ))}
+                        </div>
                       </div>
                     );
                   })}
                 </div>
-                <div className="flex items-center gap-[3px] text-[8px] leading-none tabular-nums">
+                <div className="flex items-center text-[8px] leading-none tabular-nums w-full">
                   {study7d.map((d) => {
                     // JST 曜日: 元 date string は JST 日付。UTC midnight + JST offset で安全に取得
                     const ms = new Date(`${d.date}T00:00:00Z`).getTime();
                     const jstDow = new Date(ms + JST_OFFSET_MS).getUTCDay();
                     const cls = jstDow === 0 ? "text-red-500" : jstDow === 6 ? "text-blue-500" : "text-muted-foreground";
                     return (
-                      <span key={d.date} className={`w-[6px] text-center ${cls}`}>{DOW[jstDow]}</span>
+                      <span key={d.date} className={`flex-1 text-center ${cls}`}>{DOW[jstDow]}</span>
                     );
                   })}
                 </div>
               </div>
             );
           })()}/>
-        <SummaryCard label="Daily target"
-          value={dailyTargetMin > 0 ? `${dailyTargetMin}m` : "—"}
-          sub={
-            dailyTargetMin > 0 && togglStudySec > 0
-              ? `${Math.round((togglStudySec / 60 * 100) / dailyTargetMin)}% of target`
-              : ""
-          }
-          trend={
-            dailyTargetMin > 0
-              ? (() => {
-                  const pct = Math.round(((togglStudySec / 60) - dailyTargetMin) / dailyTargetMin * 100);
-                  if (Math.abs(pct) < 5) return { label: "on target", color: "text-muted-foreground" };
-                  return pct > 0
-                    ? { label: `+${pct}%`, color: "text-emerald-500" }
-                    : { label: `${pct}%`, color: "text-red-500" };
-                })()
-              : null
-          }/>
-        <SummaryCard label="Up / Same / Down"
-          value={`${summary.up} / ${summary.same} / ${summary.down}`}
-          sub={summary.first > 0 ? `First ${summary.first}` : ""}/>
+        <SummaryCard label="Pace"
+          value={(() => {
+            if (paceRatio.median == null) return "—";
+            const r = paceRatio.median;
+            const tone = r < 0.9 ? "text-emerald-500" : r > 1.1 ? "text-red-500" : "";
+            return <span className={tone}>{r.toFixed(2)}<span className="text-muted-foreground font-normal text-xs">x</span></span>;
+          })()}
+          chart={(() => {
+            const BLOCK = 8;
+            const GAP = 1;
+            const ROWS = 6;
+            const COLS = 11;
+            const W = COLS * (BLOCK + GAP) - GAP;
+            const H = ROWS * (BLOCK + GAP) - GAP;
+            return (
+              <div className="flex flex-col gap-1 items-stretch w-full" aria-label="pace distribution">
+                <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet" className="w-full h-auto">
+                  {paceRatio.buckets.map((bucket, i) => {
+                    const x = i * (BLOCK + GAP);
+                    const lo = 0.3 + i * 0.1;
+                    return (
+                      <g key={i}>
+                        {Array.from({ length: ROWS }).map((_, k) => {
+                          const y = H - (k + 1) * (BLOCK + GAP) + GAP;
+                          const a = bucket[k];
+                          return a ? (
+                            <rect key={k} x={x} y={y} width={BLOCK} height={BLOCK} rx={1}
+                              fill={a.color} className="cursor-pointer hover:opacity-80"
+                              onClick={() => openDetail(a.problemId)}>
+                              <title>{`${a.code} — ${a.ratio.toFixed(2)}x`}</title>
+                            </rect>
+                          ) : (
+                            <rect key={k} x={x + 0.25} y={y + 0.25} width={BLOCK - 0.5} height={BLOCK - 0.5} rx={1}
+                              fill="none" stroke="hsl(var(--border))" strokeOpacity={0.6} strokeWidth={0.5}/>
+                          );
+                        })}
+                        <title>{`${lo.toFixed(1)}–${(lo + 0.1).toFixed(1)}x: ${bucket.length}`}</title>
+                      </g>
+                    );
+                  })}
+                </svg>
+                <div className="flex justify-between text-[8px] leading-none tabular-nums text-muted-foreground">
+                  <span>0.3</span>
+                  <span>1.0</span>
+                  <span>1.4</span>
+                </div>
+              </div>
+            );
+          })()}/>
+        <CompactTransitionMatrix
+          rows={dayRows}
+          statuses={sortedStatuses.map((s) => ({ id: s.id, name: s.name, color: s.color ?? null, sortOrder: s.sortOrder }))}
+        />
       </div>
 
       {/* Toggl project 別 breakdown — どの project (簿記/財表 等) に時間を割いたか */}
@@ -1142,19 +1257,19 @@ function TogglProjectColumn({
 
 function SummaryCard({ label, value, sub, trend, chart }: {
   label: string;
-  value: string;
+  value: React.ReactNode;
   sub?: string;
   trend?: { label: string; color: string } | null;
   chart?: React.ReactNode;
 }) {
   return (
-    <div className="rounded-md border p-3 flex flex-col gap-0.5 min-h-[88px]">
+    <div className="rounded-md border p-3 flex flex-col gap-0.5 min-h-[88px] min-w-0 overflow-hidden">
       <div className="flex items-baseline justify-between gap-1">
         <div className="text-[10px] text-muted-foreground uppercase tracking-wide">{label}</div>
         {trend && <div className={`text-[9px] tabular-nums ${trend.color}`}>{trend.label}</div>}
       </div>
       <div className="text-base font-semibold tabular-nums">{value}</div>
-      {chart && <div className="mt-1">{chart}</div>}
+      {chart && <div className="mt-1 min-w-0">{chart}</div>}
       {sub && <div className="text-[10px] text-muted-foreground tabular-nums mt-auto">{sub}</div>}
     </div>
   );
@@ -1165,6 +1280,98 @@ function SummaryCard({ label, value, sub, trend, chart }: {
  * 数字羅列より一瞬で偏り (Miss 多い / Fluent 多い 等) が見える。
  */
 const UNRATED_COLOR = "#c084fc"; // = COLOR_PLANNED (block-color.ts と同じ)
+
+/**
+ * Compact transition matrix — card 1 枚に収まるサイズ。
+ * 行: prev (Unrated + statuses)、列: next (statuses)、セル: 行内 % で着色。
+ */
+function CompactTransitionMatrix({
+  rows, statuses,
+}: {
+  rows: { prevStatusName: string | null; statusName: string | null }[];
+  statuses: { id: string; name: string; color: string | null; sortOrder: number }[];
+}) {
+  const FIRST_LABEL = "Unrated";
+  const { matrix, rowTotals } = useMemo(() => {
+    const m: Record<string, Record<string, number>> = {};
+    const totals: Record<string, number> = {};
+    const labels = [FIRST_LABEL, ...statuses.map((s) => s.name)];
+    for (const from of labels) {
+      m[from] = {};
+      for (const s of statuses) m[from][s.name] = 0;
+      totals[from] = 0;
+    }
+    for (const r of rows) {
+      const to = r.statusName;
+      if (!to) continue;
+      const from = r.prevStatusName ?? FIRST_LABEL;
+      if (!m[from]) continue;
+      m[from][to] = (m[from][to] ?? 0) + 1;
+      totals[from]++;
+    }
+    return { matrix: m, rowTotals: totals };
+  }, [rows, statuses]);
+
+  const colorByName = new Map(statuses.map((s) => [s.name, s.color ?? "#888"]));
+  const rowLabels = [FIRST_LABEL, ...statuses.map((s) => s.name)];
+  const initial = (n: string) => n.charAt(0);
+
+  return (
+    <div className="rounded-md border p-2 flex flex-col gap-1 min-h-[88px] min-w-0 overflow-hidden">
+      <div className="text-[10px] text-muted-foreground uppercase tracking-wide">Transition</div>
+      {(() => {
+        const CELL = 14;
+        const GAP = 2;
+        const LABEL = 10;
+        const N = statuses.length;
+        const W = LABEL + GAP + N * (CELL + GAP) - GAP;
+        const H = (rowLabels.length + 1) * (CELL + GAP) - GAP;
+        return (
+          <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet" className="w-full h-auto">
+            {/* column headers */}
+            {statuses.map((s, i) => (
+              <text key={s.id} x={LABEL + GAP + i * (CELL + GAP) + CELL / 2} y={CELL / 2 + 1}
+                textAnchor="middle" dominantBaseline="central"
+                fontSize={8} fontWeight={500}
+                fill={s.color ?? "currentColor"}>{initial(s.name)}</text>
+            ))}
+            {rowLabels.map((from, ri) => {
+              const total = rowTotals[from] ?? 0;
+              const fromColor = from === FIRST_LABEL ? COLOR_FIRST_ATTEMPT : colorByName.get(from) ?? "#888";
+              const y = (ri + 1) * (CELL + GAP);
+              return (
+                <Fragment key={from}>
+                  <text x={LABEL} y={y + CELL / 2} textAnchor="end" dominantBaseline="central"
+                    fontSize={8} fontWeight={500} fill={fromColor}>{initial(from)}</text>
+                  {statuses.map((to, ci) => {
+                    const count = matrix[from]?.[to.name] ?? 0;
+                    const pct = total > 0 ? count / total : 0;
+                    const bg = pct > 0
+                      ? `color-mix(in srgb, hsl(var(--card)) ${100 - Math.round(pct * 70)}%, ${to.color ?? "#888"})`
+                      : "transparent";
+                    const x = LABEL + GAP + ci * (CELL + GAP);
+                    return (
+                      <g key={to.id}>
+                        <rect x={x} y={y} width={CELL} height={CELL} rx={2}
+                          fill={bg} stroke="hsl(var(--border))" strokeOpacity={0.6} strokeWidth={0.5}/>
+                        {count > 0 && (
+                          <text x={x + CELL / 2} y={y + CELL / 2} textAnchor="middle" dominantBaseline="central"
+                            fontSize={9} className="fill-foreground"
+                            style={{ fontVariantNumeric: "tabular-nums" }}>{count}</text>
+                        )}
+                        <title>{`${from} → ${to.name}: ${count} (${Math.round(pct * 100)}%)`}</title>
+                      </g>
+                    );
+                  })}
+                </Fragment>
+              );
+            })}
+          </svg>
+        );
+      })()}
+    </div>
+  );
+}
 
 function statusOrderWithUnrated(
   statuses: { id: string; name: string; color?: string | null; sortOrder: number }[],
@@ -1194,7 +1401,7 @@ function StatusDonut({
   return (
     <div className="rounded-md border p-3 flex flex-col gap-1 min-h-[88px]">
       <div className="text-[10px] text-muted-foreground uppercase tracking-wide">{label}</div>
-      <div className="flex items-center gap-3">
+      <div className="flex items-center justify-center gap-3">
         <svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`} className="shrink-0">
           <circle cx={SIZE/2} cy={SIZE/2} r={R} fill="none" stroke="hsl(var(--muted))" strokeWidth={STROKE}/>
           <g transform={`rotate(-90 ${SIZE/2} ${SIZE/2})`}>
@@ -1227,10 +1434,10 @@ function StatusDonut({
             </text>
           )}
         </svg>
-        <div className="flex flex-wrap gap-x-1.5 gap-y-0.5 text-[9px] tabular-nums leading-none">
+        <div className="flex flex-col gap-0.5 text-[10px] tabular-nums leading-none min-w-0">
           {entries.filter((e) => e.n > 0).map((e) => (
-            <span key={e.id} className="inline-flex items-center gap-0.5 whitespace-nowrap" title={`${e.name}: ${e.n}`}>
-              <span className="inline-block size-1.5 rounded-full" style={{ backgroundColor: e.color }}/>
+            <span key={e.id} className="inline-flex items-center gap-1 whitespace-nowrap" title={`${e.name}: ${e.n}`}>
+              <span className="inline-block size-1.5 rounded-full shrink-0" style={{ backgroundColor: e.color }}/>
               <span className="text-foreground">{e.n}</span>
             </span>
           ))}
@@ -1245,8 +1452,9 @@ function StatusDonut({
  * 完了 item は今日の status、未完了は prior status で着色 → 色 1 つの意味が一意。
  */
 function DueCurrentStateCard({
-  statuses, counts, doneCount, totalDue,
+  label, statuses, counts, doneCount, totalDue,
 }: {
+  label: string;
   statuses: { id: string; name: string; color?: string | null; sortOrder: number }[];
   counts: Map<string, number>;
   doneCount: number;
@@ -1257,7 +1465,7 @@ function DueCurrentStateCard({
   }));
   return (
     <StatusDonut entries={entries} total={totalDue}
-      label="Backlog"
+      label={label}
       centerTop={doneCount} centerBottom={`/ ${totalDue}`}/>
   );
 }
