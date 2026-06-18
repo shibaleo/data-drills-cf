@@ -471,7 +471,7 @@ export function ProblemCard({
                     ? <StatusTag status={prevAnswer.status} color={lookup.statusColor(prevAnswer.status)} opaque />
                     : <span className="inline-block size-2 rounded-full bg-foreground/40" />}
                 </div>
-                <div className="text-[10px] text-foreground/50">
+                <div className="text-xs text-foreground/60">
                   {prevAnswer.date ? toJSTDate(prevAnswer.date) : '-'}
                 </div>
               </div>
