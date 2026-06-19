@@ -882,12 +882,15 @@ function DayTimeline({
   const SLEEP_SVG_H = TRACK_TOGGL_TOP + (SLEEP_STAGE_ORDER.length + 1) * (ROW_H + 4) + 8;
   const SVG_H = mode === "sleep" ? SLEEP_SVG_H : TRACK_FC_TOP + 16;
 
+  const TOTAL_W = 1000;
+  const LABEL_GUTTER = 32;        // 左端ラベル領域 (TOGGL/AWAKE/...)
+  const PLOT_W = TOTAL_W - LABEL_GUTTER;
   // jstHM 計算と同じ要領で「JST 0:00 of date」を起点に hour offset を計算
   const baseMs = new Date(`${date}T00:00:00+09:00`).getTime();
-  const xForMs = (ms: number, totalW: number) => {
+  const xForMs = (ms: number, _totalW?: number) => {
     const hours = (ms - baseMs) / 3_600_000;
     const t = Math.max(0, Math.min(1, (hours - HOUR_START) / (HOUR_END - HOUR_START)));
-    return t * totalW;
+    return LABEL_GUTTER + t * PLOT_W;
   };
 
   // sleep stage 色
@@ -936,9 +939,9 @@ function DayTimeline({
         <div className="text-[11px] text-muted-foreground py-2">No activity on this date</div>
       ) : (
         <svg viewBox={`0 0 1000 ${SVG_H}`} preserveAspectRatio="none" className="w-full" style={{ height: SVG_H }}>
-          {/* 時刻軸 */}
+          {/* 時刻軸 — LABEL_GUTTER 以降の領域に描く */}
           {Array.from({ length: HOUR_END - HOUR_START + 1 }, (_, i) => HOUR_START + i).map((h) => {
-            const x = ((h - HOUR_START) / (HOUR_END - HOUR_START)) * 1000;
+            const x = LABEL_GUTTER + ((h - HOUR_START) / (HOUR_END - HOUR_START)) * PLOT_W;
             const major = h % 3 === 0;
             return (
               <g key={h}>
@@ -956,14 +959,14 @@ function DayTimeline({
           {mode === "sleep" && (() => {
             const dayStartMs = baseMs + HOUR_START * 3_600_000;
             const dayEndMs = baseMs + HOUR_END * 3_600_000;
-            const pxPerMs = 1000 / ((HOUR_END - HOUR_START) * 3_600_000);
+            const pxPerMs = PLOT_W / ((HOUR_END - HOUR_START) * 3_600_000);
             return sleepStages.map((s) => {
               const startMs = new Date(s.start_at).getTime();
               const endMs = new Date(s.end_at).getTime();
               const effStart = Math.max(startMs, dayStartMs);
               const effEnd = Math.min(endMs, dayEndMs);
               if (effEnd <= effStart) return null;
-              const x = (effStart - dayStartMs) * pxPerMs;
+              const x = LABEL_GUTTER + (effStart - dayStartMs) * pxPerMs;
               const w = Math.max(1, (effEnd - effStart) * pxPerMs);
               const fill = stageColor(s.type);
               const durSec = Math.round((endMs - startMs) / 1000);
@@ -994,7 +997,7 @@ function DayTimeline({
           {(() => {
             const dayStartMs = baseMs + HOUR_START * 3_600_000;
             const dayEndMs = baseMs + HOUR_END * 3_600_000;
-            const pxPerMs = 1000 / ((HOUR_END - HOUR_START) * 3_600_000);
+            const pxPerMs = PLOT_W / ((HOUR_END - HOUR_START) * 3_600_000);
             return toggl.map((e) => {
               const startMs = new Date(e.started_at).getTime();
               const dur = e.duration_seconds ?? 0;
@@ -1004,7 +1007,7 @@ function DayTimeline({
               const effStart = Math.max(startMs, dayStartMs);
               const effEnd = Math.min(endMs, dayEndMs);
               if (effEnd <= effStart) return null;  // 視認領域に重なってない
-              const x = (effStart - dayStartMs) * pxPerMs;
+              const x = LABEL_GUTTER + (effStart - dayStartMs) * pxPerMs;
               const w = Math.max(2, (effEnd - effStart) * pxPerMs);
               const fill = togglFill(e);
               return (
@@ -1028,9 +1031,9 @@ function DayTimeline({
             const endMs = new Date(a.startedAt).getTime();  // 実は createdAt
             const dur = a.durationSec ?? 0;
             const startMs = endMs - dur * 1000;
-            const x = xForMs(startMs, 1000);
-            // duration は秒→x ピクセルに変換。総時間幅 (HOUR_END-HOUR_START)*3600 が 1000px に対応
-            const wPx = (dur / ((HOUR_END - HOUR_START) * 3600)) * 1000;
+            const x = xForMs(startMs);
+            // duration は秒→x ピクセルに変換。総時間幅 (HOUR_END-HOUR_START)*3600 が PLOT_W に対応
+            const wPx = (dur / ((HOUR_END - HOUR_START) * 3600)) * PLOT_W;
             const w = Math.max(2, wPx); // 最小 2px
             const fill = a.statusColor ?? COLOR_FIRST_ATTEMPT;
             return (
@@ -1046,7 +1049,7 @@ function DayTimeline({
           })}
           {/* Flashcard マーカー (quality で色) */}
           {mode === "study" && flashcards.map((f) => {
-            const x = xForMs(new Date(f.reviewedAt).getTime(), 1000);
+            const x = xForMs(new Date(f.reviewedAt).getTime());
             const color = f.quality >= 4 ? "#10b981" : f.quality >= 3 ? "#f59e0b" : "#ef4444";
             return (
               <g key={f.id}>
