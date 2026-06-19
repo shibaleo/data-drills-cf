@@ -68,12 +68,19 @@ export default function DigestPage() {
   // Digest の "切り口" とは別次元の概念)。各 tab は 1 つ以上の Toggl personal_category を
   // 集約 — 将来 DWH 側で Vitals → Nutrition/Hygiene 等に分割されてもここで吸収可能。
   type DigestTab = { id: string; label: string; togglCategories: string[] };
+  // 1 タブ = 1 Toggl personal_category = 1 色 で揃える (= 色の数だけタブ)。
+  // 並び順は dim_category_time_personal.sort_order に準拠 (= Essentials → Obligation → Leisure)。
   const categoryTabs = useMemo<DigestTab[]>(() => [
-    { id: "study", label: "勉強", togglCategories: ["Education"] },
+    { id: "vitals", label: "維持", togglCategories: ["Vitals"] },
     { id: "sleep", label: "睡眠", togglCategories: ["Sleep"] },
     { id: "exercise", label: "運動", togglCategories: ["Exercise"] },
+    { id: "overhead", label: "間接", togglCategories: ["Overhead"] },
     { id: "work", label: "仕事", togglCategories: ["Work"] },
+    { id: "study", label: "勉強", togglCategories: ["Education"] },
+    { id: "creative", label: "創造", togglCategories: ["Creative"] },
     { id: "social", label: "社交", togglCategories: ["Social"] },
+    { id: "meta", label: "内省", togglCategories: ["Meta"] },
+    { id: "leisure", label: "余暇", togglCategories: ["Pleasure"] },
   ], []);
   const [activeCategory, setActiveCategory] = useState<string>("study");
   const activeTab = categoryTabs.find((t) => t.id === activeCategory) ?? categoryTabs[0];
