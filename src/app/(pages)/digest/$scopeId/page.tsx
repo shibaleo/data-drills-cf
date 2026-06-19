@@ -937,7 +937,7 @@ function DayTimeline({
   sleepStages?: { session_id: string; stage_index: number; type: string; start_at: string; end_at: string }[];
   hourStart?: number;
   hourEnd?: number;
-  exerciseSessions?: { source_id: string; recorded_date: string; subject: string | null; weight_kg: number | null; reps: number | null; notion_created_at?: string }[];
+  exerciseSessions?: { source_id: string; recorded_date: string; subject: string | null; weight_kg: number | null; reps: number | null; notion_created_at?: string | null }[];
   orgasmEvents?: { source_id: string; occurred_at: string; behaviors: string[]; type: string | null }[];
 }) {
   const HOUR_START = hourStart ?? (mode === "sleep" ? -12 : 0);
