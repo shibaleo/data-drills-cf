@@ -1495,7 +1495,7 @@ function ExerciseSummaryRow({
             ) : (
               [...todayBySubject.entries()].sort((a, b) => b[1] - a[1]).map(([subj, v]) => (
                 <div key={subj} className="flex items-center gap-1.5">
-                  <span className="inline-block size-2 rounded-sm shrink-0" style={{ background: subjectColor.get(subj) }}/>
+                  <span className="inline-block size-2 rounded-sm shrink-0" style={{ background: subjectColor(subj) }}/>
                   <span className="text-muted-foreground flex-1 truncate">{subj}</span>
                   <span className="text-foreground font-medium">{v}</span>
                 </div>
