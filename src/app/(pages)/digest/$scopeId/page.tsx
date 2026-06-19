@@ -1232,6 +1232,7 @@ function SleepSummaryRow({
           const ghTotal = sleepCore + (c.wake_minutes ?? 0);
           const effGh = ghTotal > 0 ? (sleepCore / ghTotal) * 100 : null;
           const effToggl = togglMin > 0 ? (sleepCore / togglMin) * 100 : null;
+          const fmtHM = (m: number) => `${Math.floor(m / 60)}h${String(m % 60).padStart(2, "0")}m`;
           const Row = ({
             icon, label, pct, num, den, extra,
           }: {
@@ -1250,7 +1251,7 @@ function SleepSummaryRow({
                   <span className="text-[10px] text-muted-foreground">{label}</span>
                 </div>
                 <div className="flex items-baseline justify-between gap-2 text-[10px] text-muted-foreground tabular-nums">
-                  <span>{num}m / {den}m</span>
+                  <span>{fmtHM(num)} / {fmtHM(den)}</span>
                   {extra}
                 </div>
               </div>
@@ -1266,7 +1267,7 @@ function SleepSummaryRow({
                 extra={togglMin > 0 ? (
                   <span className={lossPct != null && lossPct >= 15 ? "text-amber-500" : ""}>
                     loss{" "}
-                    <span className="text-foreground font-medium">{Math.max(0, lossMin)}m</span>
+                    <span className="text-foreground font-medium">{fmtHM(Math.max(0, lossMin))}</span>
                     {lossPct != null ? ` (${lossPct.toFixed(0)}%)` : ""}
                   </span>
                 ) : undefined}/>
