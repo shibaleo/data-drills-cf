@@ -18,6 +18,8 @@ import { hmsToSeconds } from "@/lib/duration";
 import { useFlashcardsData } from "@/hooks/queries/use-flashcards";
 import { useTogglEntries, type TogglEntry } from "@/hooks/queries/use-toggl";
 import { useSleepStages, useSleepSummary, type SleepSummary } from "@/hooks/queries/use-sleep";
+import { useExerciseSessions, type StrengthSession } from "@/hooks/queries/use-exercise";
+import { useOrgasmEvents, type OrgasmEvent } from "@/hooks/queries/use-leisure";
 import { useDigestScope } from "@/hooks/queries/use-digest-scopes";
 import { useProblemDialogs } from "@/hooks/use-problem-dialogs";
 import { usePageTitle, usePageBack } from "@/lib/page-context";
@@ -171,6 +173,16 @@ export default function DigestPage() {
   const sleepFrom = useMemo(() => addDays(date, -1), [date]);
   const { data: sleepStagesAll = [] } = useSleepStages(sleepFrom, date);
   const { data: sleepSummary = null } = useSleepSummary(activeCategory === "sleep" ? date : undefined);
+  // 運動・余暇は当日 + 直近 7d を一括 fetch、card 内で当日/履歴を切り分ける
+  const from7d = useMemo(() => addDays(date, -6), [date]);
+  const { data: exerciseSessions = [] } = useExerciseSessions(
+    activeCategory === "exercise" ? from7d : undefined,
+    activeCategory === "exercise" ? date : undefined,
+  );
+  const { data: orgasmEvents = [] } = useOrgasmEvents(
+    activeCategory === "leisure" ? from7d : undefined,
+    activeCategory === "leisure" ? date : undefined,
+  );
   const daySleepStages = useMemo(() => {
     const windowStart = new Date(`${addDays(date, -1)}T12:00:00+09:00`).getTime();
     const windowEnd = new Date(`${date}T12:00:00+09:00`).getTime();
@@ -705,8 +717,13 @@ export default function DigestPage() {
         onOpenAnswer={(problemId) => openDetail(problemId)}
       />
 
-      {/* サマリ — タブで切替。sleep: STAGES/EFFICIENCY/RECOVERY、study: Scheduled/Pace/Transition */}
-      {activeCategory === "sleep" ? (
+      {/* サマリ — タブで切替。study: Scheduled/Pace/Transition、sleep: STAGES/EFFICIENCY/RECOVERY、
+         exercise: VOLUME/PR、leisure: BEHAVIORS/REDUCTION */}
+      {activeCategory === "exercise" ? (
+        <ExerciseSummaryRow sessions={exerciseSessions} date={date}/>
+      ) : activeCategory === "leisure" ? (
+        <LeisureSummaryRow events={orgasmEvents} date={date}/>
+      ) : activeCategory === "sleep" ? (
         <SleepSummaryRow
           summary={sleepSummary}
           togglSleepMinutes={(() => {
@@ -1331,6 +1348,250 @@ function SleepSummaryRow({
               <text x={1} y={22} fontSize={6} className="fill-muted-foreground">HRV 7d</text>
             </svg>
           )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * 運動タブ lower section。VOLUME (= 当日総挙上量 + 種目別) + 7d trend。
+ */
+function ExerciseSummaryRow({
+  sessions, date,
+}: { sessions: StrengthSession[]; date: string }) {
+  const today = sessions.filter((s) => s.recorded_date === date);
+  if (sessions.length === 0) {
+    return (
+      <div className="rounded-md border p-3 text-[11px] text-muted-foreground">
+        No strength sessions in the last 7 days
+      </div>
+    );
+  }
+  // 当日種目別 volume
+  const todayBySubject = new Map<string, number>();
+  for (const s of today) {
+    if (!s.subject) continue;
+    todayBySubject.set(s.subject, (todayBySubject.get(s.subject) ?? 0) + (s.volume_kg_reps ?? 0));
+  }
+  const totalVolume = [...todayBySubject.values()].reduce((a, b) => a + b, 0);
+  const subjectPalette = ["#10b981", "#3b82f6", "#f59e0b", "#ef4444", "#a855f7", "#06b6d4", "#f97316"];
+  const subjectColor = new Map<string, string>();
+  let pi = 0;
+  for (const [k] of [...todayBySubject.entries()].sort((a, b) => b[1] - a[1])) {
+    subjectColor.set(k, subjectPalette[pi % subjectPalette.length]);
+    pi++;
+  }
+  // 7d max weight per subject for PR card
+  const maxByDay = new Map<string, Map<string, number>>();
+  for (const s of sessions) {
+    if (!s.subject || s.weight_kg == null) continue;
+    const day = maxByDay.get(s.recorded_date) ?? new Map<string, number>();
+    const cur = day.get(s.subject) ?? 0;
+    if (s.weight_kg > cur) day.set(s.subject, s.weight_kg);
+    maxByDay.set(s.recorded_date, day);
+  }
+  const allSubjects = [...new Set(sessions.map((s) => s.subject).filter((x): x is string => !!x))];
+  const SIZE = 88, R = 34, STROKE = 10;
+  const CIRC = 2 * Math.PI * R;
+  let acc = 0;
+  return (
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      {/* VOLUME */}
+      <div className="rounded-md border p-3 flex flex-col gap-2 col-span-2">
+        <div className="text-[10px] text-muted-foreground uppercase tracking-wide">Volume</div>
+        <div className="flex items-center gap-4 flex-1 my-auto">
+          <svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`} className="shrink-0">
+            <circle cx={SIZE/2} cy={SIZE/2} r={R} fill="none" stroke="hsl(var(--muted))" strokeWidth={STROKE}/>
+            <g transform={`rotate(-90 ${SIZE/2} ${SIZE/2})`}>
+              {totalVolume > 0 && [...todayBySubject.entries()].map(([subj, v]) => {
+                const len = (v / totalVolume) * CIRC;
+                const dasharray = `${len} ${CIRC - len}`;
+                const dashoffset = -acc;
+                acc += len;
+                return (
+                  <circle key={subj} cx={SIZE/2} cy={SIZE/2} r={R} fill="none"
+                    stroke={subjectColor.get(subj) ?? "#888"} strokeWidth={STROKE}
+                    strokeDasharray={dasharray} strokeDashoffset={dashoffset}>
+                    <title>{`${subj}: ${v} kg·reps`}</title>
+                  </circle>
+                );
+              })}
+            </g>
+            <text x={SIZE/2} y={SIZE/2 - 3} textAnchor="middle" dominantBaseline="central"
+              className="fill-foreground" fontSize={13} fontWeight={700}
+              style={{ fontVariantNumeric: "tabular-nums" }}>
+              {totalVolume}
+            </text>
+            <text x={SIZE/2} y={SIZE/2 + 9} textAnchor="middle" dominantBaseline="central"
+              className="fill-muted-foreground" fontSize={8}>
+              kg·reps
+            </text>
+          </svg>
+          <div className="flex flex-col gap-1 text-xs tabular-nums min-w-0 flex-1">
+            {today.length === 0 ? (
+              <span className="text-muted-foreground text-[10px]">No session today</span>
+            ) : (
+              [...todayBySubject.entries()].sort((a, b) => b[1] - a[1]).map(([subj, v]) => (
+                <div key={subj} className="flex items-center gap-1.5">
+                  <span className="inline-block size-2 rounded-sm shrink-0" style={{ background: subjectColor.get(subj) }}/>
+                  <span className="text-muted-foreground flex-1 truncate">{subj}</span>
+                  <span className="text-foreground font-medium">{v}</span>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+      {/* PR (max weight per subject 7d) */}
+      <div className="rounded-md border p-3 flex flex-col gap-2 col-span-2">
+        <div className="text-[10px] text-muted-foreground uppercase tracking-wide">Max weight (7d)</div>
+        <div className="flex flex-col gap-1 text-xs tabular-nums flex-1 my-auto">
+          {allSubjects.length === 0 ? (
+            <span className="text-muted-foreground text-[10px]">—</span>
+          ) : (
+            allSubjects.map((subj) => {
+              const series: number[] = [];
+              for (let i = 6; i >= 0; i--) {
+                const d = addDays(date, -i);
+                const m = maxByDay.get(d);
+                series.push(m?.get(subj) ?? 0);
+              }
+              const max = Math.max(...series, 1);
+              return (
+                <div key={subj} className="flex items-center gap-2">
+                  <span className="text-muted-foreground w-28 truncate text-[10px]">{subj}</span>
+                  <div className="flex items-end gap-0.5 flex-1">
+                    {series.map((v, i) => (
+                      <div key={i} className="w-2"
+                        style={{ height: `${(v / max) * 14}px`, background: v > 0 ? "#3b82f6" : "transparent",
+                                 border: v === 0 ? "1px solid hsl(var(--border))" : "none", minHeight: 1 }}
+                        title={`${addDays(date, -(6 - i))}: ${v} kg`}/>
+                    ))}
+                  </div>
+                  <span className="text-foreground font-medium tabular-nums">
+                    {Math.max(...series)} kg
+                  </span>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * 余暇タブ lower section。BEHAVIORS (= behaviors 別件数) + REDUCTION (= escape/fatigue 比).
+ * 「不必要を削る」が主目的なので escape/fatigue を視覚的に大きく扱う。
+ */
+function LeisureSummaryRow({
+  events, date,
+}: { events: OrgasmEvent[]; date: string }) {
+  const today = events.filter((e) => e.occurred_date === date);
+  const week = events;
+  if (week.length === 0) {
+    return (
+      <div className="rounded-md border p-3 text-[11px] text-muted-foreground">
+        No events in the last 7 days
+      </div>
+    );
+  }
+  // behaviors 集計 (7d)
+  const behaviorCount = new Map<string, number>();
+  for (const e of week) {
+    for (const b of e.behaviors ?? []) {
+      behaviorCount.set(b, (behaviorCount.get(b) ?? 0) + 1);
+    }
+  }
+  const behaviorEntries = [...behaviorCount.entries()].sort((a, b) => b[1] - a[1]);
+  const REDUCTION_TAGS = new Set(["escape", "fatigue"]);
+  const reductionCount = [...behaviorCount.entries()].filter(([k]) => REDUCTION_TAGS.has(k)).reduce((a, [, v]) => a + v, 0);
+  const totalCount = [...behaviorCount.values()].reduce((a, b) => a + b, 0);
+  const reductionPct = totalCount > 0 ? (reductionCount / totalCount) * 100 : null;
+  // hour x dow heatmap 7d
+  const heatmap = Array.from({ length: 7 }, () => Array.from({ length: 24 }, () => 0));
+  for (const e of week) {
+    if (e.hour_of_day == null || e.dow == null) continue;
+    if (e.dow >= 0 && e.dow < 7 && e.hour_of_day >= 0 && e.hour_of_day < 24) {
+      heatmap[e.dow][e.hour_of_day] += 1;
+    }
+  }
+  const maxHeat = Math.max(1, ...heatmap.flat());
+  const behaviorColor = (b: string) =>
+    b === "escape" ? "#ef4444"
+    : b === "fatigue" ? "#f59e0b"
+    : b === "curiosity" ? "#10b981"
+    : b === "habit" ? "#a855f7"
+    : "#6b7280";
+  const dowLabels = ["日", "月", "火", "水", "木", "金", "土"];
+  return (
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      {/* BEHAVIORS (today + 7d) */}
+      <div className="rounded-md border p-3 flex flex-col gap-2">
+        <div className="text-[10px] text-muted-foreground uppercase tracking-wide">Behaviors (7d)</div>
+        <div className="flex flex-col gap-1 text-xs flex-1 my-auto">
+          {behaviorEntries.map(([b, n]) => (
+            <div key={b} className="flex items-center gap-2">
+              <span className="inline-block size-2 rounded-sm shrink-0" style={{ background: behaviorColor(b) }}/>
+              <span className="text-muted-foreground flex-1 truncate">{b}</span>
+              <span className="text-foreground font-medium tabular-nums">{n}</span>
+            </div>
+          ))}
+          <div className="border-t border-border/60 pt-1 mt-0.5 flex items-baseline gap-2 text-[10px] text-muted-foreground tabular-nums">
+            <span>today</span>
+            <span className="text-foreground font-semibold">{today.length}</span>
+            <span className="ml-auto">7d</span>
+            <span className="text-foreground font-semibold">{week.length}</span>
+          </div>
+        </div>
+      </div>
+      {/* REDUCTION (escape + fatigue ratio) */}
+      <div className="rounded-md border p-3 flex flex-col gap-2">
+        <div className="text-[10px] text-muted-foreground uppercase tracking-wide">Reduction target</div>
+        <div className="flex flex-col gap-1 flex-1 my-auto">
+          <div className="flex items-baseline gap-1.5">
+            <span className={`text-2xl font-bold tabular-nums leading-none ${reductionPct != null && reductionPct >= 50 ? "text-amber-500" : ""}`}>
+              {reductionPct != null ? `${reductionPct.toFixed(0)}%` : "—"}
+            </span>
+            <span className="text-[10px] text-muted-foreground">escape + fatigue</span>
+          </div>
+          <div className="text-[10px] text-muted-foreground tabular-nums">
+            {reductionCount} / {totalCount} behaviors
+          </div>
+          <div className="text-[9px] text-muted-foreground mt-1">
+            高いほど「削るべき」候補が多い
+          </div>
+        </div>
+      </div>
+      {/* PATTERN (heatmap hour x dow) */}
+      <div className="rounded-md border p-3 flex flex-col gap-2 col-span-2">
+        <div className="text-[10px] text-muted-foreground uppercase tracking-wide">Pattern (7d, hour × dow)</div>
+        <div className="flex-1 my-auto">
+          <div className="flex items-center gap-px text-[8px] text-muted-foreground/70 mb-0.5 ml-3">
+            {Array.from({ length: 24 }, (_, h) => (
+              <div key={h} className="text-center" style={{ width: 9 }}>
+                {h % 6 === 0 ? h : ""}
+              </div>
+            ))}
+          </div>
+          {dowLabels.map((d, dow) => (
+            <div key={d} className="flex items-center gap-px">
+              <div className="text-[8px] text-muted-foreground w-3 text-right pr-0.5">{d}</div>
+              {Array.from({ length: 24 }, (_, h) => {
+                const v = heatmap[dow][h];
+                const opacity = v / maxHeat;
+                return (
+                  <div key={h} title={`${d} ${h}:00 — ${v}`}
+                    style={{
+                      width: 9, height: 9, borderRadius: 1,
+                      background: v > 0 ? `rgba(239, 68, 68, ${0.3 + opacity * 0.7})` : "hsl(var(--muted))",
+                    }}/>
+                );
+              })}
+            </div>
+          ))}
         </div>
       </div>
     </div>

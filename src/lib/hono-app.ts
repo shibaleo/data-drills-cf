@@ -23,6 +23,8 @@ import googleAuth from "@/routes/google-auth";
 import drive from "@/routes/drive";
 import toggl from "@/routes/toggl";
 import sleep from "@/routes/sleep";
+import exercise from "@/routes/exercise";
+import leisure from "@/routes/leisure";
 // Phase 6: 新エンティティ routes (旧 projects/tags/backlog は廃止済)
 import fields from "@/routes/fields";
 import reviewTypes from "@/routes/review-types";
@@ -78,6 +80,8 @@ const v1 = new Hono<Env>()
   .route("/filter-prefs", filterPrefs)
   .route("/toggl", toggl)
   .route("/sleep", sleep)
+  .route("/exercise", exercise)
+  .route("/leisure", leisure)
   // Phase 6: 新エンティティ
   .route("/fields", fields)
   .route("/review-types", reviewTypes)
