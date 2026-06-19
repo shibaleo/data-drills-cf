@@ -705,14 +705,13 @@ export default function DigestPage() {
           togglSleepMinutes={(() => {
             const start = new Date(`${addDays(date, -1)}T12:00:00+09:00`).getTime();
             const end = new Date(`${date}T12:00:00+09:00`).getTime();
-            // Sleep カテゴリ + description に "nap" を含む entry (Vitals に
-            // 属する仮眠) を合算。これを入れないと recorded/asleep が 100% を
-            // 大幅に超える異常値になる (= 昼寝の health 記録が分子に入るのに
-            // 分母 toggl は夜だけ、という不整合が原因)。
+            // Sleep カテゴリ + description が nap 系 (Vitals に属する仮眠) を
+            // 合算。旧表記の "snap" は最新 rev で "nap" に rename される予定
+            // (= 同じ概念) なので過渡期として両方拾う。
             const isNap = (desc: string | null) => {
               if (!desc) return false;
               const d = desc.toLowerCase();
-              return /\bnap\b|napping|昼寝|仮眠/.test(d);
+              return /\bs?nap\b|napping|昼寝|仮眠/.test(d);
             };
             let sec = 0;
             for (const e of togglEntries) {
