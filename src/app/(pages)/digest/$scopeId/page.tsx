@@ -833,7 +833,8 @@ export default function DigestPage() {
       </div>
       )}
 
-      {/* Flashcards 今日 */}
+      {/* Flashcards 今日 (sleep タブでは非表示) */}
+      {activeCategory !== "sleep" && (
       <div className="rounded-md border p-3 space-y-2">
         <div className="text-xs font-semibold flex items-center gap-1.5">
           <Layers className="size-3.5 text-muted-foreground"/>
@@ -870,6 +871,7 @@ export default function DigestPage() {
           </>
         )}
       </div>
+      )}
 
       {renderDialogs()}
     </div>
