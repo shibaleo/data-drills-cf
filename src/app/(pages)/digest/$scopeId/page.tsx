@@ -1246,7 +1246,9 @@ function SleepSummaryRow({
                 pct={effToggl} num={sleepCore} den={togglMin}
                 extra={togglMin > 0 ? (
                   <span className={lossPct != null && lossPct >= 15 ? "text-amber-500" : ""}>
-                    loss {Math.max(0, lossMin)}m{lossPct != null ? ` (${lossPct.toFixed(0)}%)` : ""}
+                    loss{" "}
+                    <span className="text-foreground font-medium">{Math.max(0, lossMin)}m</span>
+                    {lossPct != null ? ` (${lossPct.toFixed(0)}%)` : ""}
                   </span>
                 ) : undefined}/>
             </div>
