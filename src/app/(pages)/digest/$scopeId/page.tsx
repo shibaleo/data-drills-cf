@@ -974,7 +974,12 @@ function DayTimeline({
               );
             });
           })()}
-          {/* sleep mode: 行ラベル (左端) */}
+          {/* 行ラベル (左端) — Toggl 行は両モード共通、stage 行は sleep mode のみ */}
+          <text x={4} y={TRACK_TOGGL_TOP + ROW_H / 2}
+            dominantBaseline="central" fontSize={7}
+            className="fill-muted-foreground" style={{ pointerEvents: "none" }}>
+            TOGGL
+          </text>
           {mode === "sleep" && SLEEP_STAGE_ORDER.map((t) => (
             <text key={t} x={4} y={sleepRowY(t) + ROW_H / 2}
               dominantBaseline="central" fontSize={7}
