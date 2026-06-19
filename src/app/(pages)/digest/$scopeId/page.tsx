@@ -5,7 +5,7 @@ import { COLOR_FIRST_ATTEMPT } from "@/lib/block-color";
 import { STATUS_PHASE } from "@/lib/status-phases";
 import { Markdown } from "@/components/markdown";
 import { tetrisCellClass, tetrisEmptyClass, TETRIS_RX, TETRIS_STROKE, TETRIS_STROKE_OPACITY, TETRIS_STROKE_WIDTH } from "@/components/tetris-cell";
-import { ChevronLeft, ChevronRight, Clock, ChevronDown, ChevronUp, Layers, ArrowUpRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Clock, ChevronDown, ChevronUp, Layers, ArrowUpRight, HeartPulse, Timer } from "lucide-react";
 import { Link, useParams, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useField } from "@/hooks/use-field";
@@ -1205,49 +1205,49 @@ function SleepSummaryRow({
       </div>
       {/* EFFICIENCY — 2 種類:
          ① GH 内部効率 = (light+deep+rem) / (awake+light+deep+rem)
-         ② Toggl 比効率 = (light+deep+rem) / toggl_minutes (sleep + nap 含む)
-         どちらも 100% 以下 (理論値) で、低いほど中途覚醒/床上滞在が多い。 */}
+         ② Toggl 比効率 = (light+deep+rem) / toggl_minutes (sleep + nap 含む) */}
       <div className="rounded-md border p-3 flex flex-col gap-2">
         <div className="text-[10px] text-muted-foreground uppercase tracking-wide">Efficiency</div>
-        <div className="flex flex-col gap-2 flex-1 my-auto text-[11px]">
-          {(() => {
-            const sleepCore = (c.light_minutes ?? 0) + (c.deep_minutes ?? 0) + (c.rem_minutes ?? 0);
-            const ghTotal = sleepCore + (c.wake_minutes ?? 0);
-            const effGh = ghTotal > 0 ? (sleepCore / ghTotal) * 100 : null;
-            const effToggl = togglMin > 0 ? (sleepCore / togglMin) * 100 : null;
-            return (
-              <>
-                <div className="flex flex-col">
-                  <div className="flex items-baseline gap-1.5">
-                    <span className="text-lg font-bold tabular-nums leading-none">
-                      {effGh != null ? `${effGh.toFixed(0)}%` : "—"}
-                    </span>
-                    <span className="text-[9px] text-muted-foreground">GH internal</span>
-                  </div>
-                  <div className="text-[9px] text-muted-foreground tabular-nums">
-                    {sleepCore}m / {ghTotal}m
-                  </div>
+        {(() => {
+          const sleepCore = (c.light_minutes ?? 0) + (c.deep_minutes ?? 0) + (c.rem_minutes ?? 0);
+          const ghTotal = sleepCore + (c.wake_minutes ?? 0);
+          const effGh = ghTotal > 0 ? (sleepCore / ghTotal) * 100 : null;
+          const effToggl = togglMin > 0 ? (sleepCore / togglMin) * 100 : null;
+          const Row = ({
+            icon, label, pct, num, den,
+          }: { icon: React.ReactNode; label: string; pct: number | null; num: number; den: number }) => (
+            <div className="flex items-center gap-2.5">
+              <div className="size-7 rounded-md bg-muted flex items-center justify-center text-muted-foreground shrink-0">
+                {icon}
+              </div>
+              <div className="flex flex-col min-w-0 flex-1">
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-lg font-bold tabular-nums leading-none">
+                    {pct != null ? `${pct.toFixed(0)}%` : "—"}
+                  </span>
+                  <span className="text-[10px] text-muted-foreground">{label}</span>
                 </div>
-                <div className="flex flex-col border-t border-border/60 pt-1.5">
-                  <div className="flex items-baseline gap-1.5">
-                    <span className="text-lg font-bold tabular-nums leading-none">
-                      {effToggl != null ? `${effToggl.toFixed(0)}%` : "—"}
-                    </span>
-                    <span className="text-[9px] text-muted-foreground">vs Toggl</span>
-                  </div>
-                  <div className="text-[9px] text-muted-foreground tabular-nums">
-                    {sleepCore}m / {togglMin}m
-                  </div>
+                <div className="text-[10px] text-muted-foreground tabular-nums">
+                  {num}m / {den}m
                 </div>
-                {togglMin > 0 && (
-                  <div className={`text-[9px] tabular-nums ${lossPct != null && lossPct >= 15 ? "text-amber-500" : "text-muted-foreground"}`}>
-                    loss {Math.max(0, lossMin)}m{lossPct != null ? ` (${lossPct.toFixed(0)}%)` : ""}
-                  </div>
-                )}
-              </>
-            );
-          })()}
-        </div>
+              </div>
+            </div>
+          );
+          return (
+            <div className="flex flex-col gap-2 flex-1 my-auto">
+              <Row icon={<HeartPulse className="size-4"/>} label="GH internal"
+                pct={effGh} num={sleepCore} den={ghTotal}/>
+              <div className="border-t border-border/60"/>
+              <Row icon={<Timer className="size-4"/>} label="vs Toggl"
+                pct={effToggl} num={sleepCore} den={togglMin}/>
+              {togglMin > 0 && (
+                <div className={`text-[10px] tabular-nums pl-[38px] ${lossPct != null && lossPct >= 15 ? "text-amber-500" : "text-muted-foreground"}`}>
+                  loss {Math.max(0, lossMin)}m{lossPct != null ? ` (${lossPct.toFixed(0)}%)` : ""}
+                </div>
+              )}
+            </div>
+          );
+        })()}
       </div>
       {/* RECOVERY */}
       <div className="rounded-md border p-3 flex flex-col gap-2">
