@@ -1265,10 +1265,9 @@ function SleepSummaryRow({
               <Row icon={<Timer className="size-4"/>} label="vs Toggl"
                 pct={effToggl} num={sleepCore} den={togglMin}
                 extra={togglMin > 0 ? (
-                  <span className={lossPct != null && lossPct >= 15 ? "text-amber-500" : ""}>
-                    loss{" "}
-                    <span className="text-foreground font-medium">{fmtHM(Math.max(0, lossMin))}</span>
-                    {lossPct != null ? ` (${lossPct.toFixed(0)}%)` : ""}
+                  <span className={`whitespace-nowrap ${lossPct != null && lossPct >= 15 ? "text-amber-500" : ""}`}
+                    title={`loss ${fmtHM(Math.max(0, lossMin))}`}>
+                    loss <span className="text-foreground font-medium">{lossPct != null ? `${lossPct.toFixed(0)}%` : "—"}</span>
                   </span>
                 ) : undefined}/>
             </div>
