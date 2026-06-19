@@ -1026,18 +1026,14 @@ function DayTimeline({
             );
           })}
           {/* Exercise: 各セッションを subject 色の固定幅 rect で配置。
-             notion_created_at の時刻を使う (= 入力 ≒ 実施時刻と仮定)。 */}
+             勉強の answer 帯と同じく右端を created_at (= 記録時刻 ≒ 実施終了) に揃える。 */}
           {mode === "exercise" && (() => {
             const FIXED_W = 8;
             return exerciseSessions.filter((s) => s.recorded_date === date).map((s) => {
               const ts = s.notion_created_at ?? `${s.recorded_date}T12:00:00+09:00`;
               const ms = new Date(ts).getTime();
-              const x = xForMs(ms) - FIXED_W / 2;
-              const palette: Record<string, string> = {
-                squat: "#10b981", "chest-press": "#ef4444", "pectoral-fly": "#f97316",
-                "low-row": "#3b82f6", "seated-leg-press": "#a855f7",
-              };
-              const fill = (s.subject && palette[s.subject]) ?? "#3b82f6";
+              const x = xForMs(ms) - FIXED_W;
+              const fill = exerciseSubjectColor(s.subject);
               return (
                 <rect key={s.source_id} x={x} y={TRACK_TOP}
                   width={FIXED_W} height={ROW_H - 2} rx={1.5}
@@ -1057,7 +1053,7 @@ function DayTimeline({
               return ms >= dayStart && ms < dayEnd;
             }).map((e) => {
               const ms = new Date(e.occurred_at).getTime();
-              const x = xForMs(ms) - FIXED_W / 2;
+              const x = xForMs(ms) - FIXED_W;
               const primary = e.behaviors?.[0] ?? "";
               const color = primary === "escape" ? "#ef4444"
                 : primary === "fatigue" ? "#f59e0b"
@@ -1193,8 +1189,8 @@ function DayTimeline({
           })}
         </svg>
       )}
-      {/* 凡例 */}
-      {mode === "study" ? (
+      {/* 凡例 — mode 別に出し分け、exercise/leisure は下の card 側で凡例代替 */}
+      {mode === "study" && (
         <div className="flex items-center gap-3 text-[9px] text-muted-foreground flex-wrap">
           <span className="font-medium text-foreground">Actual:</span>
           <span className="inline-flex items-center gap-1"><span className="inline-block w-2.5 h-2 rounded-sm bg-violet-500"/>Answer</span>
@@ -1202,7 +1198,8 @@ function DayTimeline({
           <span className="inline-flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-full bg-amber-500"/>Q3</span>
           <span className="inline-flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-full bg-red-500"/>Q≤2</span>
         </div>
-      ) : (
+      )}
+      {mode === "sleep" && (
         <div className="flex items-center gap-3 text-[9px] text-muted-foreground flex-wrap">
           <span className="font-medium text-foreground">Stages:</span>
           <span className="inline-flex items-center gap-1"><span className="inline-block w-2.5 h-2 rounded-sm" style={{ background: '#ef4444' }}/>Awake</span>
@@ -1412,6 +1409,18 @@ function SleepSummaryRow({
 }
 
 /**
+ * 種目 → 色 の deterministic mapping (文字列 hash で palette を index)。
+ * Timeline / VOLUME card で同じ subject に同じ色を使うために共有。
+ */
+const EXERCISE_SUBJECT_PALETTE = ["#10b981", "#3b82f6", "#f59e0b", "#ef4444", "#a855f7", "#06b6d4", "#f97316"];
+function exerciseSubjectColor(subject: string | null | undefined): string {
+  if (!subject) return "#888";
+  let hash = 0;
+  for (const ch of subject) hash = (hash * 31 + ch.charCodeAt(0)) | 0;
+  return EXERCISE_SUBJECT_PALETTE[Math.abs(hash) % EXERCISE_SUBJECT_PALETTE.length];
+}
+
+/**
  * 運動タブ lower section。VOLUME (= 当日総挙上量 + 種目別) + 7d trend。
  */
 function ExerciseSummaryRow({
@@ -1432,13 +1441,8 @@ function ExerciseSummaryRow({
     todayBySubject.set(s.subject, (todayBySubject.get(s.subject) ?? 0) + (s.volume_kg_reps ?? 0));
   }
   const totalVolume = [...todayBySubject.values()].reduce((a, b) => a + b, 0);
-  const subjectPalette = ["#10b981", "#3b82f6", "#f59e0b", "#ef4444", "#a855f7", "#06b6d4", "#f97316"];
-  const subjectColor = new Map<string, string>();
-  let pi = 0;
-  for (const [k] of [...todayBySubject.entries()].sort((a, b) => b[1] - a[1])) {
-    subjectColor.set(k, subjectPalette[pi % subjectPalette.length]);
-    pi++;
-  }
+  // Timeline (STR 行) と共有の deterministic color mapping
+  const subjectColor = (subj: string) => exerciseSubjectColor(subj);
   // 7d max weight per subject for PR card
   const maxByDay = new Map<string, Map<string, number>>();
   for (const s of sessions) {
@@ -1468,7 +1472,7 @@ function ExerciseSummaryRow({
                 acc += len;
                 return (
                   <circle key={subj} cx={SIZE/2} cy={SIZE/2} r={R} fill="none"
-                    stroke={subjectColor.get(subj) ?? "#888"} strokeWidth={STROKE}
+                    stroke={subjectColor(subj)} strokeWidth={STROKE}
                     strokeDasharray={dasharray} strokeDashoffset={dashoffset}>
                     <title>{`${subj}: ${v} kg·reps`}</title>
                   </circle>
