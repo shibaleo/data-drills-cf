@@ -146,15 +146,17 @@ export default function DigestPage() {
   const togglRangeFrom = useMemo(() => addDays(togglRangeTo, -90), [togglRangeTo]);
   const { data: togglEntriesAll = [] } = useTogglEntries(togglRangeFrom, togglRangeTo);
 
-  // 当日 (D) と OVERLAP する entry をクライアント側で抽出
+  // Timeline window と OVERLAP する Toggl entry を抽出。
+  // study (0:00–24:00 of date) と sleep (prev 12:00 – date 12:00) の両方を
+  // 包含する [prev 12:00, date+1 00:00) で fetch → DayTimeline 側で clip させる。
   const togglEntries = useMemo(() => {
-    const dayStart = new Date(`${date}T00:00:00+09:00`).getTime();
-    const dayEnd = new Date(`${addDays(date, 1)}T00:00:00+09:00`).getTime();
+    const winStart = new Date(`${addDays(date, -1)}T12:00:00+09:00`).getTime();
+    const winEnd = new Date(`${addDays(date, 1)}T00:00:00+09:00`).getTime();
     return togglEntriesAll.filter((e) => {
       const s = new Date(e.started_at).getTime();
       const dur = e.duration_seconds ?? 0;
       const en = e.stopped_at ? new Date(e.stopped_at).getTime() : s + dur * 1000;
-      return s < dayEnd && en > dayStart;
+      return s < winEnd && en > winStart;
     });
   }, [togglEntriesAll, date]);
 
