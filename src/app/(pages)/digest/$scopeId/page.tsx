@@ -695,9 +695,16 @@ export default function DigestPage() {
          sleep: prev 12:00 → today 12:00、sleep stage のみ。 */}
       <DayTimeline
         date={date}
-        mode={activeCategory === "sleep" ? "sleep" : "study"}
+        mode={
+          activeCategory === "sleep" ? "sleep"
+          : activeCategory === "exercise" ? "exercise"
+          : activeCategory === "leisure" ? "leisure"
+          : "study"
+        }
         toggl={togglEntries}
         sleepStages={daySleepStages}
+        exerciseSessions={exerciseSessions}
+        orgasmEvents={orgasmEvents}
         answers={dayRows.map((r) => ({
           id: r.id,
           problemId: r.problemId,
@@ -824,7 +831,7 @@ export default function DigestPage() {
       </div>
       )}
 
-      {/* タブで切替: study → Answer log、sleep → Dream log placeholder */}
+      {/* タブで切替: study → Answer log、sleep → Dream log placeholder、他 → 非表示 */}
       {activeCategory === "sleep" ? (
         <div className="rounded-md border p-3 space-y-2">
           <div className="text-xs font-semibold">Dream log</div>
@@ -832,7 +839,7 @@ export default function DigestPage() {
             記録機能はまだ未実装です。
           </div>
         </div>
-      ) : (
+      ) : activeCategory === "study" ? (
       <div className="space-y-3">
         <div className="text-xs font-semibold">Answer log ({dayRows.length})</div>
         {dayRows.length === 0 ? (
@@ -855,10 +862,10 @@ export default function DigestPage() {
           ))
         )}
       </div>
-      )}
+      ) : null}
 
-      {/* Flashcards 今日 (sleep タブでは非表示) */}
-      {activeCategory !== "sleep" && (
+      {/* Flashcards 今日 (study タブでのみ表示) */}
+      {activeCategory === "study" && (
       <div className="rounded-md border p-3 space-y-2">
         <div className="text-xs font-semibold flex items-center gap-1.5">
           <Layers className="size-3.5 text-muted-foreground"/>
@@ -910,6 +917,7 @@ export default function DigestPage() {
 function DayTimeline({
   date, toggl, answers, flashcards, onOpenAnswer,
   mode = "study", sleepStages = [], hourStart, hourEnd,
+  exerciseSessions = [], orgasmEvents = [],
 }: {
   date: string;
   toggl: TogglEntry[];
@@ -925,23 +933,24 @@ function DayTimeline({
   }[];
   flashcards: { id: string; quality: number; reviewedAt: string; front: string }[];
   onOpenAnswer: (problemId: string) => void;
-  mode?: "study" | "sleep";
+  mode?: "study" | "sleep" | "exercise" | "leisure";
   sleepStages?: { session_id: string; stage_index: number; type: string; start_at: string; end_at: string }[];
   hourStart?: number;
   hourEnd?: number;
+  exerciseSessions?: { source_id: string; recorded_date: string; subject: string | null; weight_kg: number | null; reps: number | null; notion_created_at?: string }[];
+  orgasmEvents?: { source_id: string; occurred_at: string; behaviors: string[]; type: string | null }[];
 }) {
   const HOUR_START = hourStart ?? (mode === "sleep" ? -12 : 0);
   const HOUR_END = hourEnd ?? (mode === "sleep" ? 12 : 24);
   const ROW_H = 16;
-  const TRACK_TOGGL_TOP = 14;       // row 1: Toggl (両モード共通)
-  // sleep: 単一行に全 stage を色分けで描画 (= 同時並行しないので分ける必要なし)
-  const SLEEP_ROW_TOP = TRACK_TOGGL_TOP + ROW_H + 4;
-  const SLEEP_SVG_H = SLEEP_ROW_TOP + ROW_H + 12;
-  // study: 単一行 (= 答案) + flashcard markers 行
+  const TRACK_TOGGL_TOP = 14;       // row 1: Toggl (全モード共通)
+  // 2 行目 = content (sleep stage / strength / orgasm / answer)
   const TRACK_TOP = TRACK_TOGGL_TOP + ROW_H + 4;
+  // study のみ 3 行目に flashcard markers
   const TRACK_FC_TOP = TRACK_TOP + ROW_H + 6;
+  const SINGLE_SVG_H = TRACK_TOP + ROW_H + 12;          // sleep / exercise / leisure / 他
   const STUDY_SVG_H = TRACK_FC_TOP + ROW_H + 12;
-  const SVG_H = mode === "sleep" ? SLEEP_SVG_H : STUDY_SVG_H;
+  const SVG_H = mode === "study" ? STUDY_SVG_H : SINGLE_SVG_H;
 
   const TOTAL_W = 1000;
   const LABEL_GUTTER = 32;        // 左端ラベル領域 (TOGGL/AWAKE/...)
@@ -1016,6 +1025,54 @@ function DayTimeline({
               </g>
             );
           })}
+          {/* Exercise: 各セッションを subject 色の固定幅 rect で配置。
+             notion_created_at の時刻を使う (= 入力 ≒ 実施時刻と仮定)。 */}
+          {mode === "exercise" && (() => {
+            const FIXED_W = 8;
+            return exerciseSessions.filter((s) => s.recorded_date === date).map((s) => {
+              const ts = s.notion_created_at ?? `${s.recorded_date}T12:00:00+09:00`;
+              const ms = new Date(ts).getTime();
+              const x = xForMs(ms) - FIXED_W / 2;
+              const palette: Record<string, string> = {
+                squat: "#10b981", "chest-press": "#ef4444", "pectoral-fly": "#f97316",
+                "low-row": "#3b82f6", "seated-leg-press": "#a855f7",
+              };
+              const fill = (s.subject && palette[s.subject]) ?? "#3b82f6";
+              return (
+                <rect key={s.source_id} x={x} y={TRACK_TOP}
+                  width={FIXED_W} height={ROW_H - 2} rx={1.5}
+                  fill={fill} opacity={0.9}>
+                  <title>{`${jstHM(ts)} ${s.subject ?? "?"} ${s.weight_kg ?? "?"}kg × ${s.reps ?? "?"}`}</title>
+                </rect>
+              );
+            });
+          })()}
+          {/* Leisure: orgasm event を behaviors 主代表色の固定幅 rect で配置 */}
+          {mode === "leisure" && (() => {
+            const FIXED_W = 8;
+            const dayStart = new Date(`${date}T00:00:00+09:00`).getTime();
+            const dayEnd = new Date(`${addDays(date, 1)}T00:00:00+09:00`).getTime();
+            return orgasmEvents.filter((e) => {
+              const ms = new Date(e.occurred_at).getTime();
+              return ms >= dayStart && ms < dayEnd;
+            }).map((e) => {
+              const ms = new Date(e.occurred_at).getTime();
+              const x = xForMs(ms) - FIXED_W / 2;
+              const primary = e.behaviors?.[0] ?? "";
+              const color = primary === "escape" ? "#ef4444"
+                : primary === "fatigue" ? "#f59e0b"
+                : primary === "curiosity" ? "#10b981"
+                : primary === "habit" ? "#a855f7"
+                : "#6b7280";
+              return (
+                <rect key={e.source_id} x={x} y={TRACK_TOP}
+                  width={FIXED_W} height={ROW_H - 2} rx={1.5}
+                  fill={color} opacity={0.9}>
+                  <title>{`${jstHM(e.occurred_at)} ${e.type ?? ""} [${e.behaviors?.join(", ") ?? ""}]`}</title>
+                </rect>
+              );
+            });
+          })()}
           {/* Sleep mode: 単一行に stage を type 色で並べる (同時並行しないので 1 row で十分) */}
           {mode === "sleep" && (() => {
             const dayStartMs = baseMs + HOUR_START * 3_600_000;
@@ -1032,7 +1089,7 @@ function DayTimeline({
               const fill = stageColor(s.type);
               const durSec = Math.round((endMs - startMs) / 1000);
               return (
-                <rect key={`${s.session_id}-${s.stage_index}`} x={x} y={SLEEP_ROW_TOP}
+                <rect key={`${s.session_id}-${s.stage_index}`} x={x} y={TRACK_TOP}
                   width={w} height={ROW_H - 2} rx={1}
                   fill={fill} opacity={0.85}>
                   <title>{`${jstHM(s.start_at)}–${jstHM(s.end_at)} ${s.type} (${fmtSec(durSec)})`}</title>
@@ -1046,11 +1103,11 @@ function DayTimeline({
             className="fill-muted-foreground" style={{ pointerEvents: "none" }}>
             TOGGL
           </text>
-          {mode === "sleep" && (
-            <text x={4} y={SLEEP_ROW_TOP + ROW_H / 2}
+          {(mode === "sleep" || mode === "exercise" || mode === "leisure") && (
+            <text x={4} y={TRACK_TOP + ROW_H / 2}
               dominantBaseline="central" fontSize={7}
               className="fill-muted-foreground" style={{ pointerEvents: "none" }}>
-              SLEEP
+              {mode === "sleep" ? "SLEEP" : mode === "exercise" ? "STR" : "EVT"}
             </text>
           )}
           {mode === "study" && (

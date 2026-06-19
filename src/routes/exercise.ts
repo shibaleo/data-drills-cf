@@ -21,13 +21,15 @@ type Row = {
   weight_kg: string | number | null;
   reps: number | null;
   volume_kg_reps: string | number | null;
+  notion_created_at: Date | null;
 };
 
 const app = new Hono<Env>()
   .get("/sessions", zValidator("query", exerciseSessionsQuerySchema), async (c) => {
     const { from, to } = c.req.valid("query");
     const rows = await neonSql<Row[]>`
-      SELECT source_id, recorded_date, subject, weight_kg, reps, volume_kg_reps
+      SELECT source_id, recorded_date, subject, weight_kg, reps, volume_kg_reps,
+             notion_created_at
       FROM data_presentation.fct_strength_session
       WHERE recorded_date BETWEEN ${from}::date AND ${to}::date
       ORDER BY recorded_date ASC, subject ASC
@@ -42,6 +44,7 @@ const app = new Hono<Env>()
         weight_kg: r.weight_kg == null ? null : Number(r.weight_kg),
         reps: r.reps,
         volume_kg_reps: r.volume_kg_reps == null ? null : Number(r.volume_kg_reps),
+        notion_created_at: r.notion_created_at instanceof Date ? r.notion_created_at.toISOString() : null,
       })),
     });
   });
