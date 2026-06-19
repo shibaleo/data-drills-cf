@@ -867,12 +867,18 @@ function DayTimeline({
   const HOUR_START = hourStart ?? (mode === "sleep" ? -12 : 0);
   const HOUR_END = hourEnd ?? (mode === "sleep" ? 12 : 24);
   const ROW_H = 16;
-  const TRACK_TOGGL_TOP = 14;
-  const TRACK_TOP = TRACK_TOGGL_TOP + ROW_H + 4;  // 計画 (Toggl) 下に 実績 (drills)
-  const TRACK_FC_TOP = TRACK_TOP + ROW_H + 6;
-  const SVG_H = mode === "sleep"
-    ? TRACK_TOGGL_TOP + ROW_H + 12  // sleep は単一 track だけ
-    : TRACK_FC_TOP + 16;
+  const TRACK_TOGGL_TOP = 14;       // row 1: Toggl (両モード共通)
+  const TRACK_TOP = TRACK_TOGGL_TOP + ROW_H + 4;   // study: answer row
+  const TRACK_FC_TOP = TRACK_TOP + ROW_H + 6;       // study: flashcard markers
+  // sleep: row 2-5 を stage 別に積む (AWAKE / LIGHT / DEEP / REM)
+  const SLEEP_STAGE_ORDER = ["AWAKE", "LIGHT", "DEEP", "REM"] as const;
+  const sleepRowY = (type: string) => {
+    const idx = SLEEP_STAGE_ORDER.indexOf(type as (typeof SLEEP_STAGE_ORDER)[number]);
+    if (idx < 0) return TRACK_TOGGL_TOP + ROW_H + 4 + SLEEP_STAGE_ORDER.length * (ROW_H + 4); // unknown は末尾
+    return TRACK_TOGGL_TOP + ROW_H + 4 + idx * (ROW_H + 4);
+  };
+  const SLEEP_SVG_H = TRACK_TOGGL_TOP + (SLEEP_STAGE_ORDER.length + 1) * (ROW_H + 4) + 8;
+  const SVG_H = mode === "sleep" ? SLEEP_SVG_H : TRACK_FC_TOP + 16;
 
   // jstHM 計算と同じ要領で「JST 0:00 of date」を起点に hour offset を計算
   const baseMs = new Date(`${date}T00:00:00+09:00`).getTime();
@@ -944,7 +950,7 @@ function DayTimeline({
               </g>
             );
           })}
-          {/* Sleep mode: 単一 track で sleep stage を type 色で描画 */}
+          {/* Sleep mode: row 2-5 に stage 別 (AWAKE/LIGHT/DEEP/REM) で帯を積む */}
           {mode === "sleep" && (() => {
             const dayStartMs = baseMs + HOUR_START * 3_600_000;
             const dayEndMs = baseMs + HOUR_END * 3_600_000;
@@ -960,7 +966,7 @@ function DayTimeline({
               const fill = stageColor(s.type);
               const durSec = Math.round((endMs - startMs) / 1000);
               return (
-                <rect key={`${s.session_id}-${s.stage_index}`} x={x} y={TRACK_TOGGL_TOP}
+                <rect key={`${s.session_id}-${s.stage_index}`} x={x} y={sleepRowY(s.type)}
                   width={w} height={ROW_H - 2} rx={1}
                   fill={fill} opacity={0.85}>
                   <title>{`${jstHM(s.start_at)}–${jstHM(s.end_at)} ${s.type} (${fmtSec(durSec)})`}</title>
@@ -968,10 +974,17 @@ function DayTimeline({
               );
             });
           })()}
-          {/* 計画: Toggl entry 帯 (上段、薄め)。
-             前日開始 / 翌日跨ぎ entry は当日視認領域 (HOUR_START–HOUR_END JST) に
-             クリップして描画する。 */}
-          {mode === "study" && (() => {
+          {/* sleep mode: 行ラベル (左端) */}
+          {mode === "sleep" && SLEEP_STAGE_ORDER.map((t) => (
+            <text key={t} x={4} y={sleepRowY(t) + ROW_H / 2}
+              dominantBaseline="central" fontSize={7}
+              className="fill-muted-foreground" style={{ pointerEvents: "none" }}>
+              {t}
+            </text>
+          ))}
+          {/* 計画: Toggl entry 帯 (上段、両モード共通)。
+             前日開始 / 翌日跨ぎ entry は視認領域 (HOUR_START–HOUR_END) にクリップ。 */}
+          {(() => {
             const dayStartMs = baseMs + HOUR_START * 3_600_000;
             const dayEndMs = baseMs + HOUR_END * 3_600_000;
             const pxPerMs = 1000 / ((HOUR_END - HOUR_START) * 3_600_000);
