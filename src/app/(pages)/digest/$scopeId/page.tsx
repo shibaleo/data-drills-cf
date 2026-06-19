@@ -17,7 +17,7 @@ import { computeNextReview } from "@/lib/srs-scoring";
 import { hmsToSeconds } from "@/lib/duration";
 import { useFlashcardsData } from "@/hooks/queries/use-flashcards";
 import { useTogglEntries, type TogglEntry } from "@/hooks/queries/use-toggl";
-import { useSleepStages } from "@/hooks/queries/use-sleep";
+import { useSleepStages, useSleepSummary, type SleepSummary } from "@/hooks/queries/use-sleep";
 import { useDigestScope } from "@/hooks/queries/use-digest-scopes";
 import { useProblemDialogs } from "@/hooks/use-problem-dialogs";
 import { usePageTitle, usePageBack } from "@/lib/page-context";
@@ -163,6 +163,7 @@ export default function DigestPage() {
   // Sleep stages: 前日と当日の範囲を一括取得 (timeline は前日 12:00–当日 12:00)。
   const sleepFrom = useMemo(() => addDays(date, -1), [date]);
   const { data: sleepStagesAll = [] } = useSleepStages(sleepFrom, date);
+  const { data: sleepSummary = null } = useSleepSummary(activeCategory === "sleep" ? date : undefined);
   const daySleepStages = useMemo(() => {
     const windowStart = new Date(`${addDays(date, -1)}T12:00:00+09:00`).getTime();
     const windowEnd = new Date(`${date}T12:00:00+09:00`).getTime();
@@ -697,7 +698,26 @@ export default function DigestPage() {
         onOpenAnswer={(problemId) => openDetail(problemId)}
       />
 
-      {/* サマリ: Due/Output (col-span-2) + Pace + Transition */}
+      {/* サマリ — タブで切替。sleep: STAGES/EFFICIENCY/RECOVERY、study: Scheduled/Pace/Transition */}
+      {activeCategory === "sleep" ? (
+        <SleepSummaryRow
+          summary={sleepSummary}
+          togglSleepMinutes={(() => {
+            const start = new Date(`${addDays(date, -1)}T12:00:00+09:00`).getTime();
+            const end = new Date(`${date}T12:00:00+09:00`).getTime();
+            let sec = 0;
+            for (const e of togglEntries) {
+              if (e.personal_category !== "Sleep") continue;
+              const s = new Date(e.started_at).getTime();
+              const dur = e.duration_seconds ?? 0;
+              const en = e.stopped_at ? new Date(e.stopped_at).getTime() : s + dur * 1000;
+              const overlap = Math.max(0, Math.min(en, end) - Math.max(s, start));
+              sec += overlap / 1000;
+            }
+            return Math.round(sec / 60);
+          })()}
+        />
+      ) : (
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <DuePlanCard
           className="col-span-2"
@@ -769,6 +789,7 @@ export default function DigestPage() {
           statuses={sortedStatuses.map((s) => ({ id: s.id, name: s.name, color: s.color ?? null, sortOrder: s.sortOrder }))}
         />
       </div>
+      )}
 
       {/* Answer log — 問題ごとに ProblemCard を mini 形式で当日 answer のみ表示。
          click → dialog UX は撤去 (Puppeteer 印刷向け)、review.content は in-place 編集可。 */}
@@ -1079,6 +1100,166 @@ function DayTimeline({
           <span className="inline-flex items-center gap-1"><span className="inline-block w-2.5 h-2 rounded-sm" style={{ background: '#06b6d4' }}/>REM</span>
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Sleep タブの lower section。STAGES (donut) / EFFICIENCY (% + Toggl 損失) /
+ * RECOVERY (HRV/RHR/呼吸数 + 7d sparkline) を横並びに。
+ */
+function SleepSummaryRow({
+  summary, togglSleepMinutes,
+}: {
+  summary: SleepSummary | null;
+  togglSleepMinutes: number;
+}) {
+  if (!summary?.current) {
+    return (
+      <div className="rounded-md border p-3 text-[11px] text-muted-foreground">
+        No sleep data for this date
+      </div>
+    );
+  }
+  const c = summary.current;
+  const stageEntries = [
+    { id: "deep", name: "Deep", color: "#1e3a8a", value: c.deep_minutes ?? 0 },
+    { id: "light", name: "Light", color: "#60a5fa", value: c.light_minutes ?? 0 },
+    { id: "rem", name: "REM", color: "#06b6d4", value: c.rem_minutes ?? 0 },
+    { id: "wake", name: "Wake", color: "#ef4444", value: c.wake_minutes ?? 0 },
+  ];
+  const stageTotal = stageEntries.reduce((s, e) => s + e.value, 0);
+  const totalMin = c.minutes_asleep ?? 0;
+  const totalHM = `${Math.floor(totalMin / 60)}h${String(totalMin % 60).padStart(2, "0")}`;
+
+  // donut
+  const SIZE = 88, R = 34, STROKE = 10;
+  const CIRC = 2 * Math.PI * R;
+  let acc = 0;
+
+  // Toggl vs Health 損失率
+  const togglMin = togglSleepMinutes;
+  const lossMin = togglMin > 0 ? togglMin - totalMin : 0;
+  const lossPct = togglMin > 0 ? (lossMin / togglMin) * 100 : null;
+
+  // 7d HRV sparkline
+  const hist = summary.history;
+  const hrvVals = hist.map((h) => h.hrv_ms).filter((v): v is number => v != null);
+  const hrvMin = hrvVals.length ? Math.min(...hrvVals) : 0;
+  const hrvMax = hrvVals.length ? Math.max(...hrvVals) : 1;
+  const hrvRange = hrvMax - hrvMin || 1;
+
+  return (
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      {/* STAGES */}
+      <div className="rounded-md border p-3 flex flex-col gap-2 col-span-2">
+        <div className="text-[10px] text-muted-foreground uppercase tracking-wide">Stages</div>
+        <div className="flex items-center gap-4 flex-1 my-auto">
+          <svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`} className="shrink-0">
+            <circle cx={SIZE/2} cy={SIZE/2} r={R} fill="none" stroke="hsl(var(--muted))" strokeWidth={STROKE}/>
+            <g transform={`rotate(-90 ${SIZE/2} ${SIZE/2})`}>
+              {stageTotal > 0 && stageEntries.map((e) => {
+                if (e.value === 0) return null;
+                const len = (e.value / stageTotal) * CIRC;
+                const dasharray = `${len} ${CIRC - len}`;
+                const dashoffset = -acc;
+                acc += len;
+                return (
+                  <circle key={e.id} cx={SIZE/2} cy={SIZE/2} r={R} fill="none"
+                    stroke={e.color} strokeWidth={STROKE}
+                    strokeDasharray={dasharray} strokeDashoffset={dashoffset}>
+                    <title>{`${e.name}: ${e.value}m`}</title>
+                  </circle>
+                );
+              })}
+            </g>
+            <text x={SIZE/2} y={SIZE/2 - 4} textAnchor="middle" dominantBaseline="central"
+              className="fill-foreground" fontSize={15} fontWeight={700}
+              style={{ fontVariantNumeric: "tabular-nums" }}>
+              {totalHM}
+            </text>
+            <text x={SIZE/2} y={SIZE/2 + 9} textAnchor="middle" dominantBaseline="central"
+              className="fill-muted-foreground" fontSize={8}>
+              asleep
+            </text>
+          </svg>
+          <div className="flex flex-col gap-1 text-xs tabular-nums min-w-0 flex-1">
+            {stageEntries.map((e) => (
+              <div key={e.id} className="flex items-center gap-1.5">
+                <span className="inline-block size-2 rounded-sm shrink-0" style={{ background: e.color }}/>
+                <span className="text-muted-foreground flex-1">{e.name}</span>
+                <span className="text-foreground font-medium">{e.value}m</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+      {/* EFFICIENCY */}
+      <div className="rounded-md border p-3 flex flex-col gap-2">
+        <div className="text-[10px] text-muted-foreground uppercase tracking-wide">Efficiency</div>
+        <div className="flex flex-col gap-2 flex-1 my-auto">
+          <div className="text-2xl font-bold tabular-nums leading-none">
+            {c.efficiency != null ? `${c.efficiency}%` : "—"}
+          </div>
+          <div className="text-[10px] text-muted-foreground tabular-nums">
+            asleep {totalMin}m / in bed {c.time_in_bed ?? "—"}m
+          </div>
+          {togglMin > 0 && (
+            <div className="border-t border-border/60 pt-1.5 mt-0.5 text-[10px]">
+              <div className="flex items-center gap-1 tabular-nums">
+                <span className="text-muted-foreground">Toggl</span>
+                <span className="text-foreground font-medium">{togglMin}m</span>
+                <span className="text-muted-foreground">→ Health</span>
+                <span className="text-foreground font-medium">{totalMin}m</span>
+              </div>
+              <div className={`tabular-nums mt-0.5 ${lossPct != null && lossPct >= 15 ? "text-amber-500" : "text-muted-foreground"}`}>
+                loss {Math.max(0, lossMin)}m{lossPct != null ? ` (${lossPct.toFixed(0)}%)` : ""}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+      {/* RECOVERY */}
+      <div className="rounded-md border p-3 flex flex-col gap-2">
+        <div className="text-[10px] text-muted-foreground uppercase tracking-wide">Recovery</div>
+        <div className="flex flex-col gap-1 flex-1 my-auto text-xs tabular-nums">
+          <div className="flex items-baseline gap-1.5">
+            <span className="text-muted-foreground w-12">HRV</span>
+            <span className="text-foreground font-semibold text-base">{c.hrv_ms != null ? c.hrv_ms.toFixed(1) : "—"}</span>
+            <span className="text-[9px] text-muted-foreground">ms</span>
+          </div>
+          <div className="flex items-baseline gap-1.5">
+            <span className="text-muted-foreground w-12">RHR</span>
+            <span className="text-foreground font-semibold">{c.rhr_bpm ?? "—"}</span>
+            <span className="text-[9px] text-muted-foreground">bpm</span>
+          </div>
+          <div className="flex items-baseline gap-1.5">
+            <span className="text-muted-foreground w-12">Breath</span>
+            <span className="text-foreground font-semibold">{c.breath_bpm != null ? c.breath_bpm.toFixed(1) : "—"}</span>
+            <span className="text-[9px] text-muted-foreground">bpm</span>
+          </div>
+          {hrvVals.length > 1 && (
+            <svg viewBox="0 0 120 24" className="w-full mt-1" preserveAspectRatio="none" style={{ height: 24 }}>
+              <polyline
+                points={hist.map((h, i) => {
+                  const v = h.hrv_ms;
+                  if (v == null) return "";
+                  const x = (i / (hist.length - 1)) * 120;
+                  const y = 4 + (1 - (v - hrvMin) / hrvRange) * 16;
+                  return `${x.toFixed(1)},${y.toFixed(1)}`;
+                }).filter(Boolean).join(" ")}
+                fill="none" stroke="#60a5fa" strokeWidth={1.2} opacity={0.7}/>
+              {hist.map((h, i) => {
+                if (h.hrv_ms == null) return null;
+                const x = (i / (hist.length - 1)) * 120;
+                const y = 4 + (1 - (h.hrv_ms - hrvMin) / hrvRange) * 16;
+                return <circle key={h.sleep_date} cx={x} cy={y} r={1.5} fill="#60a5fa"/>;
+              })}
+              <text x={1} y={22} fontSize={6} className="fill-muted-foreground">HRV 7d</text>
+            </svg>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
