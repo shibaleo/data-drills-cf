@@ -1172,7 +1172,16 @@ function SleepSummaryRow({
     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
       {/* STAGES */}
       <div className="rounded-md border p-3 flex flex-col gap-2 col-span-2">
-        <div className="text-[10px] text-muted-foreground uppercase tracking-wide">Stages</div>
+        <div className="flex items-baseline justify-between gap-2">
+          <div className="text-[10px] text-muted-foreground uppercase tracking-wide">Stages</div>
+          {(c.start_at || c.end_at) && (
+            <div className="text-[10px] text-muted-foreground tabular-nums">
+              {c.start_at ? jstHM(c.start_at) : "—"}
+              <span className="mx-1">→</span>
+              {c.end_at ? jstHM(c.end_at) : "—"}
+            </div>
+          )}
+        </div>
         <div className="flex items-center gap-4 flex-1 my-auto">
           <svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`} className="shrink-0">
             <circle cx={SIZE/2} cy={SIZE/2} r={R} fill="none" stroke="hsl(var(--muted))" strokeWidth={STROKE}/>
