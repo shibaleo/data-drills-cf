@@ -1204,38 +1204,39 @@ function SleepSummaryRow({
         </div>
       </div>
       {/* EFFICIENCY — 2 種類:
-         vs Toggl: (light+deep+rem) / toggl_in_bed = "床にいた時間のうち実睡眠だった割合"
-         vs Recorded: (awake+light+deep+rem) / (light+deep+rem) = GH 内訳の床/実睡眠 ratio (1 以上) */}
+         ① GH 内部効率 = (light+deep+rem) / (awake+light+deep+rem)
+         ② Toggl 比効率 = (light+deep+rem) / toggl_minutes (sleep + nap 含む)
+         どちらも 100% 以下 (理論値) で、低いほど中途覚醒/床上滞在が多い。 */}
       <div className="rounded-md border p-3 flex flex-col gap-2">
         <div className="text-[10px] text-muted-foreground uppercase tracking-wide">Efficiency</div>
         <div className="flex flex-col gap-2 flex-1 my-auto text-[11px]">
           {(() => {
             const sleepCore = (c.light_minutes ?? 0) + (c.deep_minutes ?? 0) + (c.rem_minutes ?? 0);
             const ghTotal = sleepCore + (c.wake_minutes ?? 0);
-            const eff1 = togglMin > 0 ? (sleepCore / togglMin) * 100 : null;
-            const eff2 = sleepCore > 0 ? (ghTotal / sleepCore) * 100 : null;
+            const effGh = ghTotal > 0 ? (sleepCore / ghTotal) * 100 : null;
+            const effToggl = togglMin > 0 ? (sleepCore / togglMin) * 100 : null;
             return (
               <>
                 <div className="flex flex-col">
                   <div className="flex items-baseline gap-1.5">
                     <span className="text-lg font-bold tabular-nums leading-none">
-                      {eff1 != null ? `${eff1.toFixed(0)}%` : "—"}
+                      {effGh != null ? `${effGh.toFixed(0)}%` : "—"}
                     </span>
-                    <span className="text-[9px] text-muted-foreground">vs Toggl</span>
+                    <span className="text-[9px] text-muted-foreground">GH internal</span>
                   </div>
                   <div className="text-[9px] text-muted-foreground tabular-nums">
-                    {sleepCore}m / {togglMin}m
+                    {sleepCore}m / {ghTotal}m
                   </div>
                 </div>
                 <div className="flex flex-col border-t border-border/60 pt-1.5">
                   <div className="flex items-baseline gap-1.5">
                     <span className="text-lg font-bold tabular-nums leading-none">
-                      {eff2 != null ? `${eff2.toFixed(0)}%` : "—"}
+                      {effToggl != null ? `${effToggl.toFixed(0)}%` : "—"}
                     </span>
-                    <span className="text-[9px] text-muted-foreground">recorded / asleep</span>
+                    <span className="text-[9px] text-muted-foreground">vs Toggl</span>
                   </div>
                   <div className="text-[9px] text-muted-foreground tabular-nums">
-                    {ghTotal}m / {sleepCore}m
+                    {sleepCore}m / {togglMin}m
                   </div>
                 </div>
                 {togglMin > 0 && (
