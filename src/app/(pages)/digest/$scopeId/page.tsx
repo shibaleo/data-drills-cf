@@ -679,6 +679,7 @@ export default function DigestPage() {
         mode={activeCategory === "sleep" ? "sleep" : "study"}
         toggl={togglEntries}
         sleepStages={daySleepStages}
+        statuses={sortedStatuses.map((s) => ({ name: s.name, color: s.color ?? null, sortOrder: s.sortOrder }))}
         answers={dayRows.map((r) => ({
           id: r.id,
           problemId: r.problemId,
@@ -688,6 +689,8 @@ export default function DigestPage() {
           durationSec: r.duration,
           statusColor: r.statusColor,
           statusName: r.statusName,
+          // 同 problem の attempt は問題ごとの当日最終 status の行に揃って積む
+          rowStatusName: todayStatusByProblem.get(r.problemId) ?? r.statusName,
         }))}
         flashcards={dayFlashcardReviews.map((r) => ({
           id: r.id,
@@ -885,7 +888,7 @@ export default function DigestPage() {
  */
 function DayTimeline({
   date, toggl, answers, flashcards, onOpenAnswer,
-  mode = "study", sleepStages = [], hourStart, hourEnd,
+  mode = "study", sleepStages = [], hourStart, hourEnd, statuses = [],
 }: {
   date: string;
   toggl: TogglEntry[];
@@ -898,6 +901,8 @@ function DayTimeline({
     durationSec: number | null;
     statusColor: string | null;
     statusName: string | null;
+    /** その problem の当日最終 status (= row 配置に使う) */
+    rowStatusName?: string | null;
   }[];
   flashcards: { id: string; quality: number; reviewedAt: string; front: string }[];
   onOpenAnswer: (problemId: string) => void;
@@ -905,13 +910,13 @@ function DayTimeline({
   sleepStages?: { session_id: string; stage_index: number; type: string; start_at: string; end_at: string }[];
   hourStart?: number;
   hourEnd?: number;
+  /** study mode で status 別行配置に使う master (sortOrder ASC で並ぶ) */
+  statuses?: { name: string; color: string | null; sortOrder: number }[];
 }) {
   const HOUR_START = hourStart ?? (mode === "sleep" ? -12 : 0);
   const HOUR_END = hourEnd ?? (mode === "sleep" ? 12 : 24);
   const ROW_H = 16;
   const TRACK_TOGGL_TOP = 14;       // row 1: Toggl (両モード共通)
-  const TRACK_TOP = TRACK_TOGGL_TOP + ROW_H + 4;   // study: answer row
-  const TRACK_FC_TOP = TRACK_TOP + ROW_H + 6;       // study: flashcard markers
   // sleep: row 2-5 を stage 別に積む (AWAKE / LIGHT / DEEP / REM)
   const SLEEP_STAGE_ORDER = ["AWAKE", "LIGHT", "DEEP", "REM"] as const;
   const sleepRowY = (type: string) => {
@@ -920,7 +925,18 @@ function DayTimeline({
     return TRACK_TOGGL_TOP + ROW_H + 4 + idx * (ROW_H + 4);
   };
   const SLEEP_SVG_H = TRACK_TOGGL_TOP + (SLEEP_STAGE_ORDER.length + 1) * (ROW_H + 4) + 8;
-  const SVG_H = mode === "sleep" ? SLEEP_SVG_H : TRACK_FC_TOP + 16;
+  // study: row 2-(N+1) を status 別 (Miss/Hard/Fair/Easy/Solid 等) に積む。
+  // 最終行 = Flashcard markers ("FC")。
+  const studyStatusOrder = [...statuses].sort((a, b) => a.sortOrder - b.sortOrder);
+  const studyRowY = (statusName: string | null | undefined) => {
+    if (!statusName) return TRACK_TOGGL_TOP + ROW_H + 4 + studyStatusOrder.length * (ROW_H + 4);
+    const idx = studyStatusOrder.findIndex((s) => s.name === statusName);
+    if (idx < 0) return TRACK_TOGGL_TOP + ROW_H + 4 + studyStatusOrder.length * (ROW_H + 4);
+    return TRACK_TOGGL_TOP + ROW_H + 4 + idx * (ROW_H + 4);
+  };
+  const TRACK_FC_TOP = TRACK_TOGGL_TOP + ROW_H + 4 + studyStatusOrder.length * (ROW_H + 4);
+  const STUDY_SVG_H = TRACK_FC_TOP + ROW_H + 12;
+  const SVG_H = mode === "sleep" ? SLEEP_SVG_H : STUDY_SVG_H;
 
   const TOTAL_W = 1000;
   const LABEL_GUTTER = 32;        // 左端ラベル領域 (TOGGL/AWAKE/...)
@@ -1032,6 +1048,21 @@ function DayTimeline({
               {t}
             </text>
           ))}
+          {mode === "study" && studyStatusOrder.map((s) => (
+            <text key={s.name} x={4} y={studyRowY(s.name) + ROW_H / 2}
+              dominantBaseline="central" fontSize={7}
+              style={{ pointerEvents: "none" }}
+              fill={s.color ?? "currentColor"}>
+              {s.name.toUpperCase()}
+            </text>
+          ))}
+          {mode === "study" && (
+            <text x={4} y={TRACK_FC_TOP + ROW_H / 2}
+              dominantBaseline="central" fontSize={7}
+              className="fill-muted-foreground" style={{ pointerEvents: "none" }}>
+              FC
+            </text>
+          )}
           {/* 計画: Toggl entry 帯 (上段、両モード共通)。
              前日開始 / 翌日跨ぎ entry は視認領域 (HOUR_START–HOUR_END) にクリップ。 */}
           {(() => {
@@ -1076,13 +1107,16 @@ function DayTimeline({
             const wPx = (dur / ((HOUR_END - HOUR_START) * 3600)) * PLOT_W;
             const w = Math.max(2, wPx); // 最小 2px
             const fill = a.statusColor ?? COLOR_FIRST_ATTEMPT;
+            // row 配置 = その problem の当日最終 status (rowStatusName)。
+            // 同一 problem の attempt は全部同じ行に揃って積まれる。
+            const y = studyRowY(a.rowStatusName ?? a.statusName);
             return (
               <g key={a.id}>
-                <rect x={x} y={TRACK_TOP} width={w} height={ROW_H - 2} rx={1.5}
+                <rect x={x} y={y} width={w} height={ROW_H - 2} rx={1.5}
                   fill={fill} opacity={0.85}
                   className="cursor-pointer"
                   onClick={() => onOpenAnswer(a.problemId)}>
-                  <title>{`${jstHM(new Date(startMs).toISOString())}–${jstHM(a.startedAt)} ${a.code} ${a.name}${dur ? ` (${fmtSec(dur)})` : ""}${a.statusName ? ` → ${a.statusName}` : ""}`}</title>
+                  <title>{`${jstHM(new Date(startMs).toISOString())}–${jstHM(a.startedAt)} ${a.code} ${a.name}${dur ? ` (${fmtSec(dur)})` : ""}${a.statusName ? ` → ${a.statusName}` : ""}${a.rowStatusName && a.rowStatusName !== a.statusName ? ` (final: ${a.rowStatusName})` : ""}`}</title>
                 </rect>
               </g>
             );
