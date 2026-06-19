@@ -1214,8 +1214,11 @@ function SleepSummaryRow({
           const effGh = ghTotal > 0 ? (sleepCore / ghTotal) * 100 : null;
           const effToggl = togglMin > 0 ? (sleepCore / togglMin) * 100 : null;
           const Row = ({
-            icon, label, pct, num, den,
-          }: { icon: React.ReactNode; label: string; pct: number | null; num: number; den: number }) => (
+            icon, label, pct, num, den, extra,
+          }: {
+            icon: React.ReactNode; label: string; pct: number | null;
+            num: number; den: number; extra?: React.ReactNode;
+          }) => (
             <div className="flex items-center gap-2.5">
               <div className="size-7 rounded-md bg-muted flex items-center justify-center text-muted-foreground shrink-0">
                 {icon}
@@ -1227,8 +1230,9 @@ function SleepSummaryRow({
                   </span>
                   <span className="text-[10px] text-muted-foreground">{label}</span>
                 </div>
-                <div className="text-[10px] text-muted-foreground tabular-nums">
-                  {num}m / {den}m
+                <div className="flex items-baseline justify-between gap-2 text-[10px] text-muted-foreground tabular-nums">
+                  <span>{num}m / {den}m</span>
+                  {extra}
                 </div>
               </div>
             </div>
@@ -1239,12 +1243,12 @@ function SleepSummaryRow({
                 pct={effGh} num={sleepCore} den={ghTotal}/>
               <div className="border-t border-border/60"/>
               <Row icon={<Timer className="size-4"/>} label="vs Toggl"
-                pct={effToggl} num={sleepCore} den={togglMin}/>
-              {togglMin > 0 && (
-                <div className={`text-[10px] tabular-nums pl-[38px] ${lossPct != null && lossPct >= 15 ? "text-amber-500" : "text-muted-foreground"}`}>
-                  loss {Math.max(0, lossMin)}m{lossPct != null ? ` (${lossPct.toFixed(0)}%)` : ""}
-                </div>
-              )}
+                pct={effToggl} num={sleepCore} den={togglMin}
+                extra={togglMin > 0 ? (
+                  <span className={lossPct != null && lossPct >= 15 ? "text-amber-500" : ""}>
+                    loss {Math.max(0, lossMin)}m{lossPct != null ? ` (${lossPct.toFixed(0)}%)` : ""}
+                  </span>
+                ) : undefined}/>
             </div>
           );
         })()}
