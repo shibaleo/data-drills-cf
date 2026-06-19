@@ -1194,29 +1194,49 @@ function SleepSummaryRow({
           </div>
         </div>
       </div>
-      {/* EFFICIENCY */}
+      {/* EFFICIENCY — 2 種類:
+         vs Toggl: (light+deep+rem) / toggl_in_bed = "床にいた時間のうち実睡眠だった割合"
+         vs Recorded: (awake+light+deep+rem) / (light+deep+rem) = GH 内訳の床/実睡眠 ratio (1 以上) */}
       <div className="rounded-md border p-3 flex flex-col gap-2">
         <div className="text-[10px] text-muted-foreground uppercase tracking-wide">Efficiency</div>
-        <div className="flex flex-col gap-2 flex-1 my-auto">
-          <div className="text-2xl font-bold tabular-nums leading-none">
-            {c.efficiency != null ? `${c.efficiency}%` : "—"}
-          </div>
-          <div className="text-[10px] text-muted-foreground tabular-nums">
-            asleep {totalMin}m / in bed {c.time_in_bed ?? "—"}m
-          </div>
-          {togglMin > 0 && (
-            <div className="border-t border-border/60 pt-1.5 mt-0.5 text-[10px]">
-              <div className="flex items-center gap-1 tabular-nums">
-                <span className="text-muted-foreground">Toggl</span>
-                <span className="text-foreground font-medium">{togglMin}m</span>
-                <span className="text-muted-foreground">→ Health</span>
-                <span className="text-foreground font-medium">{totalMin}m</span>
-              </div>
-              <div className={`tabular-nums mt-0.5 ${lossPct != null && lossPct >= 15 ? "text-amber-500" : "text-muted-foreground"}`}>
-                loss {Math.max(0, lossMin)}m{lossPct != null ? ` (${lossPct.toFixed(0)}%)` : ""}
-              </div>
-            </div>
-          )}
+        <div className="flex flex-col gap-2 flex-1 my-auto text-[11px]">
+          {(() => {
+            const sleepCore = (c.light_minutes ?? 0) + (c.deep_minutes ?? 0) + (c.rem_minutes ?? 0);
+            const ghTotal = sleepCore + (c.wake_minutes ?? 0);
+            const eff1 = togglMin > 0 ? (sleepCore / togglMin) * 100 : null;
+            const eff2 = sleepCore > 0 ? (ghTotal / sleepCore) * 100 : null;
+            return (
+              <>
+                <div className="flex flex-col">
+                  <div className="flex items-baseline gap-1.5">
+                    <span className="text-lg font-bold tabular-nums leading-none">
+                      {eff1 != null ? `${eff1.toFixed(0)}%` : "—"}
+                    </span>
+                    <span className="text-[9px] text-muted-foreground">vs Toggl</span>
+                  </div>
+                  <div className="text-[9px] text-muted-foreground tabular-nums">
+                    {sleepCore}m / {togglMin}m
+                  </div>
+                </div>
+                <div className="flex flex-col border-t border-border/60 pt-1.5">
+                  <div className="flex items-baseline gap-1.5">
+                    <span className="text-lg font-bold tabular-nums leading-none">
+                      {eff2 != null ? `${eff2.toFixed(0)}%` : "—"}
+                    </span>
+                    <span className="text-[9px] text-muted-foreground">recorded / asleep</span>
+                  </div>
+                  <div className="text-[9px] text-muted-foreground tabular-nums">
+                    {ghTotal}m / {sleepCore}m
+                  </div>
+                </div>
+                {togglMin > 0 && (
+                  <div className={`text-[9px] tabular-nums ${lossPct != null && lossPct >= 15 ? "text-amber-500" : "text-muted-foreground"}`}>
+                    loss {Math.max(0, lossMin)}m{lossPct != null ? ` (${lossPct.toFixed(0)}%)` : ""}
+                  </div>
+                )}
+              </>
+            );
+          })()}
         </div>
       </div>
       {/* RECOVERY */}
