@@ -17,6 +17,7 @@ import { computeNextReview } from "@/lib/srs-scoring";
 import { hmsToSeconds } from "@/lib/duration";
 import { useFlashcardsData } from "@/hooks/queries/use-flashcards";
 import { useTogglEntries, type TogglEntry } from "@/hooks/queries/use-toggl";
+import { useSleepStages } from "@/hooks/queries/use-sleep";
 import { useDigestScope } from "@/hooks/queries/use-digest-scopes";
 import { useProblemDialogs } from "@/hooks/use-problem-dialogs";
 import { usePageTitle, usePageBack } from "@/lib/page-context";
@@ -156,6 +157,19 @@ export default function DigestPage() {
       return s < dayEnd && en > dayStart;
     });
   }, [togglEntriesAll, date]);
+
+  // Sleep stages: 前日と当日の範囲を一括取得 (timeline は前日 12:00–当日 12:00)。
+  const sleepFrom = useMemo(() => addDays(date, -1), [date]);
+  const { data: sleepStagesAll = [] } = useSleepStages(sleepFrom, date);
+  const daySleepStages = useMemo(() => {
+    const windowStart = new Date(`${addDays(date, -1)}T12:00:00+09:00`).getTime();
+    const windowEnd = new Date(`${date}T12:00:00+09:00`).getTime();
+    return sleepStagesAll.filter((s) => {
+      const a = new Date(s.start_at).getTime();
+      const b = new Date(s.end_at).getTime();
+      return a < windowEnd && b > windowStart;
+    });
+  }, [sleepStagesAll, date]);
 
   const dayFlashcardReviews = useMemo(() => {
     return fcReviews
@@ -654,10 +668,14 @@ export default function DigestPage() {
         })}
       </div>
 
-      {/* Timeline (全タブ共通の 1 日時間軸ビュー、計画=Toggl / 実績=Drills) */}
+      {/* Timeline (タブ共通の 1 日時間軸ビュー)。
+         study: 0:00–24:00 of date、toggl + answer + flashcard。
+         sleep: prev 12:00 → today 12:00、sleep stage のみ。 */}
       <DayTimeline
         date={date}
+        mode={activeCategory === "sleep" ? "sleep" : "study"}
         toggl={togglEntries}
+        sleepStages={daySleepStages}
         answers={dayRows.map((r) => ({
           id: r.id,
           problemId: r.problemId,
@@ -819,12 +837,13 @@ export default function DigestPage() {
 }
 
 /**
- * Day timeline — 1日の時間軸ビュー (answer 帯 + flashcard マーカー)
- * 左右の hour 軸は 5h-24h 固定 (= 起床〜深夜帯)。データに合わせて拡張可能。
- * Toggl 連携時はこの行の下に同じ時間軸で勉強ブロックを重ねる予定。
+ * Day timeline — 1日の時間軸ビュー。
+ * mode="study" (default): toggl + answer + flashcard、軸 = JST 0:00–24:00 of date
+ * mode="sleep": sleep stages のみ、軸 = JST 前日 12:00 – 当日 12:00 (= -12〜+12h)
  */
 function DayTimeline({
   date, toggl, answers, flashcards, onOpenAnswer,
+  mode = "study", sleepStages = [], hourStart, hourEnd,
 }: {
   date: string;
   toggl: TogglEntry[];
@@ -840,14 +859,20 @@ function DayTimeline({
   }[];
   flashcards: { id: string; quality: number; reviewedAt: string; front: string }[];
   onOpenAnswer: (problemId: string) => void;
+  mode?: "study" | "sleep";
+  sleepStages?: { session_id: string; stage_index: number; type: string; start_at: string; end_at: string }[];
+  hourStart?: number;
+  hourEnd?: number;
 }) {
-  const HOUR_START = 0;
-  const HOUR_END = 24;
+  const HOUR_START = hourStart ?? (mode === "sleep" ? -12 : 0);
+  const HOUR_END = hourEnd ?? (mode === "sleep" ? 12 : 24);
   const ROW_H = 16;
   const TRACK_TOGGL_TOP = 14;
   const TRACK_TOP = TRACK_TOGGL_TOP + ROW_H + 4;  // 計画 (Toggl) 下に 実績 (drills)
   const TRACK_FC_TOP = TRACK_TOP + ROW_H + 6;
-  const SVG_H = TRACK_FC_TOP + 16;
+  const SVG_H = mode === "sleep"
+    ? TRACK_TOGGL_TOP + ROW_H + 12  // sleep は単一 track だけ
+    : TRACK_FC_TOP + 16;
 
   // jstHM 計算と同じ要領で「JST 0:00 of date」を起点に hour offset を計算
   const baseMs = new Date(`${date}T00:00:00+09:00`).getTime();
@@ -857,7 +882,20 @@ function DayTimeline({
     return t * totalW;
   };
 
-  const hasData = answers.length > 0 || flashcards.length > 0 || toggl.length > 0;
+  // sleep stage 色
+  const stageColor = (type: string): string => {
+    switch (type) {
+      case "AWAKE": return "#ef4444";
+      case "LIGHT": return "#60a5fa";
+      case "DEEP":  return "#1e3a8a";
+      case "REM":   return "#06b6d4";
+      default:      return "#888";
+    }
+  };
+
+  const hasData = mode === "sleep"
+    ? sleepStages.length > 0
+    : (answers.length > 0 || flashcards.length > 0 || toggl.length > 0);
 
   // Toggl entry の自前 project_color を使う。null の時のみ category 別 fallback。
   const coarseColor: Record<string, string> = {
@@ -871,13 +909,20 @@ function DayTimeline({
     return (e.coarse_personal_category && coarseColor[e.coarse_personal_category]) ?? "#888";
   };
 
+  const hourLabel = (h: number) => ((h % 24) + 24) % 24;
+  const axisRangeLabel = mode === "sleep"
+    ? `prev ${hourLabel(HOUR_START)}:00 → ${hourLabel(HOUR_END)}:00 JST`
+    : `${HOUR_START}:00 – ${HOUR_END}:00 JST`;
+
   return (
     <div className="rounded-md border p-3 space-y-1">
       <div className="text-xs font-semibold flex items-center gap-1.5">
         <Clock className="size-3.5 text-muted-foreground"/>
         Timeline
-        <span className="text-[10px] font-normal text-muted-foreground ml-1">{HOUR_START}:00 – {HOUR_END}:00 JST</span>
-        <span className="text-[9px] font-normal text-muted-foreground ml-auto">Top: Planned (Toggl) / Bottom: Actual (drills)</span>
+        <span className="text-[10px] font-normal text-muted-foreground ml-1">{axisRangeLabel}</span>
+        {mode === "study" && (
+          <span className="text-[9px] font-normal text-muted-foreground ml-auto">Top: Planned (Toggl) / Bottom: Actual (drills)</span>
+        )}
       </div>
       {!hasData ? (
         <div className="text-[11px] text-muted-foreground py-2">No activity on this date</div>
@@ -893,16 +938,40 @@ function DayTimeline({
                   stroke="hsl(var(--border))" strokeWidth={major ? 0.8 : 0.4} opacity={major ? 0.6 : 0.3}/>
                 {major && (
                   <text x={x + 2} y={10} fontSize={8} className="fill-muted-foreground" textAnchor="start">
-                    {h}
+                    {hourLabel(h)}
                   </text>
                 )}
               </g>
             );
           })}
+          {/* Sleep mode: 単一 track で sleep stage を type 色で描画 */}
+          {mode === "sleep" && (() => {
+            const dayStartMs = baseMs + HOUR_START * 3_600_000;
+            const dayEndMs = baseMs + HOUR_END * 3_600_000;
+            const pxPerMs = 1000 / ((HOUR_END - HOUR_START) * 3_600_000);
+            return sleepStages.map((s) => {
+              const startMs = new Date(s.start_at).getTime();
+              const endMs = new Date(s.end_at).getTime();
+              const effStart = Math.max(startMs, dayStartMs);
+              const effEnd = Math.min(endMs, dayEndMs);
+              if (effEnd <= effStart) return null;
+              const x = (effStart - dayStartMs) * pxPerMs;
+              const w = Math.max(1, (effEnd - effStart) * pxPerMs);
+              const fill = stageColor(s.type);
+              const durSec = Math.round((endMs - startMs) / 1000);
+              return (
+                <rect key={`${s.session_id}-${s.stage_index}`} x={x} y={TRACK_TOGGL_TOP}
+                  width={w} height={ROW_H - 2} rx={1}
+                  fill={fill} opacity={0.85}>
+                  <title>{`${jstHM(s.start_at)}–${jstHM(s.end_at)} ${s.type} (${fmtSec(durSec)})`}</title>
+                </rect>
+              );
+            });
+          })()}
           {/* 計画: Toggl entry 帯 (上段、薄め)。
              前日開始 / 翌日跨ぎ entry は当日視認領域 (HOUR_START–HOUR_END JST) に
              クリップして描画する。 */}
-          {(() => {
+          {mode === "study" && (() => {
             const dayStartMs = baseMs + HOUR_START * 3_600_000;
             const dayEndMs = baseMs + HOUR_END * 3_600_000;
             const pxPerMs = 1000 / ((HOUR_END - HOUR_START) * 3_600_000);
@@ -935,7 +1004,7 @@ function DayTimeline({
           {/* Answer 帯 — createdAt は「回答完了 (= 記録時刻)」なので
              帯は [createdAt - dur, createdAt] の範囲で描く (= 解答中の実時間)。
              duration が無いものは点表示。 */}
-          {answers.map((a) => {
+          {mode === "study" && answers.map((a) => {
             const endMs = new Date(a.startedAt).getTime();  // 実は createdAt
             const dur = a.durationSec ?? 0;
             const startMs = endMs - dur * 1000;
@@ -956,7 +1025,7 @@ function DayTimeline({
             );
           })}
           {/* Flashcard マーカー (quality で色) */}
-          {flashcards.map((f) => {
+          {mode === "study" && flashcards.map((f) => {
             const x = xForMs(new Date(f.reviewedAt).getTime(), 1000);
             const color = f.quality >= 4 ? "#10b981" : f.quality >= 3 ? "#f59e0b" : "#ef4444";
             return (
@@ -969,14 +1038,24 @@ function DayTimeline({
           })}
         </svg>
       )}
-      {/* 凡例 (実績側のみ。Toggl 上段は project 色を直接使うので別途凡例不要) */}
-      <div className="flex items-center gap-3 text-[9px] text-muted-foreground flex-wrap">
-        <span className="font-medium text-foreground">Actual:</span>
-        <span className="inline-flex items-center gap-1"><span className="inline-block w-2.5 h-2 rounded-sm bg-violet-500"/>Answer</span>
-        <span className="inline-flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-full bg-emerald-500"/>Flashcard Q≥4</span>
-        <span className="inline-flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-full bg-amber-500"/>Q3</span>
-        <span className="inline-flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-full bg-red-500"/>Q≤2</span>
-      </div>
+      {/* 凡例 */}
+      {mode === "study" ? (
+        <div className="flex items-center gap-3 text-[9px] text-muted-foreground flex-wrap">
+          <span className="font-medium text-foreground">Actual:</span>
+          <span className="inline-flex items-center gap-1"><span className="inline-block w-2.5 h-2 rounded-sm bg-violet-500"/>Answer</span>
+          <span className="inline-flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-full bg-emerald-500"/>Flashcard Q≥4</span>
+          <span className="inline-flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-full bg-amber-500"/>Q3</span>
+          <span className="inline-flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-full bg-red-500"/>Q≤2</span>
+        </div>
+      ) : (
+        <div className="flex items-center gap-3 text-[9px] text-muted-foreground flex-wrap">
+          <span className="font-medium text-foreground">Stages:</span>
+          <span className="inline-flex items-center gap-1"><span className="inline-block w-2.5 h-2 rounded-sm" style={{ background: '#ef4444' }}/>Awake</span>
+          <span className="inline-flex items-center gap-1"><span className="inline-block w-2.5 h-2 rounded-sm" style={{ background: '#60a5fa' }}/>Light</span>
+          <span className="inline-flex items-center gap-1"><span className="inline-block w-2.5 h-2 rounded-sm" style={{ background: '#1e3a8a' }}/>Deep</span>
+          <span className="inline-flex items-center gap-1"><span className="inline-block w-2.5 h-2 rounded-sm" style={{ background: '#06b6d4' }}/>REM</span>
+        </div>
+      )}
     </div>
   );
 }
