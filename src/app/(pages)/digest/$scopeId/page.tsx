@@ -800,8 +800,15 @@ export default function DigestPage() {
       </div>
       )}
 
-      {/* Answer log — 問題ごとに ProblemCard を mini 形式で当日 answer のみ表示。
-         click → dialog UX は撤去 (Puppeteer 印刷向け)、review.content は in-place 編集可。 */}
+      {/* タブで切替: study → Answer log、sleep → Dream log placeholder */}
+      {activeCategory === "sleep" ? (
+        <div className="rounded-md border p-3 space-y-2">
+          <div className="text-xs font-semibold">Dream log</div>
+          <div className="text-[11px] text-muted-foreground py-2">
+            記録機能はまだ未実装です。
+          </div>
+        </div>
+      ) : (
       <div className="space-y-3">
         <div className="text-xs font-semibold">Answer log ({dayRows.length})</div>
         {dayRows.length === 0 ? (
@@ -824,6 +831,7 @@ export default function DigestPage() {
           ))
         )}
       </div>
+      )}
 
       {/* Flashcards 今日 */}
       <div className="rounded-md border p-3 space-y-2">
