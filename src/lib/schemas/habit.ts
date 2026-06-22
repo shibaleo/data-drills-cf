@@ -12,6 +12,7 @@ export const habitCreateInputSchema = z.object({
   id: z.string().uuid().optional(),
   name: z.string().min(1),
   cadence,
+  category_id: z.string().uuid().nullable().optional(),
   toggl_description_patterns: patterns,
   sort_order: z.number().int().nonnegative().optional(),
   is_active: z.boolean().optional(),
@@ -20,6 +21,7 @@ export const habitCreateInputSchema = z.object({
 export const habitUpdateInputSchema = z.object({
   name: z.string().min(1).optional(),
   cadence: cadence.optional(),
+  category_id: z.string().uuid().nullable().optional(),
   toggl_description_patterns: patterns.optional(),
   sort_order: z.number().int().nonnegative().optional(),
   is_active: z.boolean().optional(),

@@ -6,6 +6,7 @@ export type HabitRow = RpcData<typeof rpc.api.v1.habits["$get"]>["data"][number]
 type HabitCreatePayload = {
   name: string;
   cadence: "daily" | "weekly";
+  category_id?: string | null;
   toggl_description_patterns: string[];
   sort_order?: number;
   is_active?: boolean;

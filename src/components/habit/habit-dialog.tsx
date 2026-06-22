@@ -13,11 +13,13 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import type { HabitRow } from "@/hooks/queries/use-habits";
+import type { HabitCategoryRow } from "@/hooks/queries/use-habit-categories";
 import { useTogglHabitCandidates } from "@/hooks/queries/use-toggl-habit-candidates";
 
 export type HabitFormPayload = {
   name: string;
   cadence: "daily" | "weekly";
+  category_id: string | null;
   toggl_description_patterns: string[];
 };
 
@@ -25,6 +27,8 @@ type Props = {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   item: HabitRow | null;
+  categories: HabitCategoryRow[];
+  onManageCategories?: () => void;
   onSave: (payload: HabitFormPayload) => Promise<void>;
   onDelete?: () => void;
 };
@@ -37,13 +41,14 @@ function patternFromDescription(desc: string): string {
   return `^${escapeRegex(head)}(:|$)`;
 }
 
-export function HabitDialog({ open, onOpenChange, item, onSave, onDelete }: Props) {
+export function HabitDialog({ open, onOpenChange, item, categories, onManageCategories, onSave, onDelete }: Props) {
   const isCreate = item === null;
   const candidatesQuery = useTogglHabitCandidates();
   const candidates = candidatesQuery.data ?? [];
 
   const [name, setName] = useState("");
   const [cadence, setCadence] = useState<"daily" | "weekly">("daily");
+  const [categoryId, setCategoryId] = useState<string>("");  // "" = no category (null)
   const [patterns, setPatterns] = useState<string[]>([]);
   const [filter, setFilter] = useState("");
   const [saving, setSaving] = useState(false);
@@ -81,6 +86,7 @@ export function HabitDialog({ open, onOpenChange, item, onSave, onDelete }: Prop
     if (!open) return;
     setName(item?.name ?? "");
     setCadence((item?.cadence as "daily" | "weekly") ?? "daily");
+    setCategoryId(item?.categoryId ?? "");
     setPatterns(item?.togglDescriptionPatterns ?? []);
     setFilter("");
     setError(null);
@@ -90,12 +96,12 @@ export function HabitDialog({ open, onOpenChange, item, onSave, onDelete }: Prop
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-lg max-h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>{isCreate ? "New habit" : "Edit habit"}</DialogTitle>
           <DialogDescription className="sr-only">Habit details</DialogDescription>
         </DialogHeader>
-        <div className="space-y-3">
+        <div className="space-y-3 overflow-y-auto flex-1 -mx-6 px-6">
           <div className="space-y-1.5">
             <Label>Name</Label>
             <Input
@@ -104,16 +110,42 @@ export function HabitDialog({ open, onOpenChange, item, onSave, onDelete }: Prop
               placeholder="e.g. bath"
             />
           </div>
-          <div className="space-y-1.5">
-            <Label>Cadence</Label>
-            <select
-              value={cadence}
-              onChange={(e) => setCadence(e.target.value as "daily" | "weekly")}
-              className="w-full h-9 px-2 text-sm border rounded bg-background"
-            >
-              <option value="daily">daily</option>
-              <option value="weekly">weekly</option>
-            </select>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>Cadence</Label>
+              <select
+                value={cadence}
+                onChange={(e) => setCadence(e.target.value as "daily" | "weekly")}
+                className="w-full h-9 px-2 text-sm border rounded bg-background"
+              >
+                <option value="daily">daily</option>
+                <option value="weekly">weekly</option>
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <Label>Category</Label>
+                {onManageCategories && (
+                  <button
+                    type="button"
+                    onClick={onManageCategories}
+                    className="text-[11px] text-muted-foreground hover:text-foreground hover:underline"
+                  >
+                    Manage…
+                  </button>
+                )}
+              </div>
+              <select
+                value={categoryId}
+                onChange={(e) => setCategoryId(e.target.value)}
+                className="w-full h-9 px-2 text-sm border rounded bg-background"
+              >
+                <option value="">(none)</option>
+                {categories.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </div>
           </div>
 
           <div className="space-y-1.5">
@@ -237,6 +269,7 @@ export function HabitDialog({ open, onOpenChange, item, onSave, onDelete }: Prop
                 await onSave({
                   name: name.trim(),
                   cadence,
+                  category_id: categoryId === "" ? null : categoryId,
                   toggl_description_patterns: trimmedPatterns,
                 });
               } catch (e) {

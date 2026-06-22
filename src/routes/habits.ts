@@ -32,6 +32,7 @@ const app = new Hono<Env>()
       userId,
       name: body.name,
       cadence: body.cadence,
+      categoryId: body.category_id ?? null,
       togglDescriptionPatterns: body.toggl_description_patterns,
       sortOrder: body.sort_order ?? 0,
       isActive: body.is_active ?? true,
@@ -57,6 +58,7 @@ const app = new Hono<Env>()
     const updates: Record<string, unknown> = { updatedAt: new Date() };
     if (body.name !== undefined) updates.name = body.name;
     if (body.cadence !== undefined) updates.cadence = body.cadence;
+    if (body.category_id !== undefined) updates.categoryId = body.category_id;
     if (body.toggl_description_patterns !== undefined) {
       updates.togglDescriptionPatterns = body.toggl_description_patterns;
     }

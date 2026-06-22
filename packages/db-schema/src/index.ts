@@ -439,6 +439,7 @@ export const habit = pgTable("habit", {
   userId: uuid("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   cadence: text("cadence").notNull(),                    // 'daily' | 'weekly'
+  categoryId: uuid("category_id"),                        // FK habit_category.id (SET NULL on delete)
   togglDescriptionPatterns: text("toggl_description_patterns").array().notNull().default([]),
   sortOrder: integer("sort_order").notNull().default(0),
   isActive: boolean("is_active").notNull().default(true),
@@ -446,4 +447,16 @@ export const habit = pgTable("habit", {
 }, (t) => [
   uniqueIndex("habit_user_name_key").on(t.userId, t.name),
   index("habit_user_active_idx").on(t.userId, t.isActive),
+  index("habit_user_category_idx").on(t.userId, t.categoryId),
+]);
+
+// habit_category — habit の UI grouping 用 master (他 master と同じ流儀)
+export const habitCategory = pgTable("habit_category", {
+  id: id(),
+  userId: uuid("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  sortOrder: integer("sort_order").notNull().default(0),
+  ...timestamps(),
+}, (t) => [
+  uniqueIndex("habit_category_user_name_key").on(t.userId, t.name),
 ]);

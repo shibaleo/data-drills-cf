@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { Plus } from "lucide-react";
+import { Plus, FolderCog } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { HabitGrid } from "@/components/habit/habit-grid";
 import { HabitDialog } from "@/components/habit/habit-dialog";
+import { HabitCategoriesDialog } from "@/components/habit/habit-categories-dialog";
 import { ManualSyncButton } from "@/components/habit/manual-sync-button";
 import { usePageTitle } from "@/lib/page-context";
 import {
@@ -18,6 +19,10 @@ import {
   useHabitCells,
   useInvalidateHabitCells,
 } from "@/hooks/queries/use-habit-cells";
+import {
+  useHabitCategories,
+  useReorderHabitCategories,
+} from "@/hooks/queries/use-habit-categories";
 
 function todayISO(): string {
   return new Date().toISOString().slice(0, 10);
@@ -33,6 +38,10 @@ export default function HabitsPage() {
   const deleteHabit = useDeleteHabit();
   const reorderHabits = useReorderHabits();
 
+  const categoriesQuery = useHabitCategories();
+  const categories = categoriesQuery.data ?? [];
+  const reorderCategories = useReorderHabitCategories();
+
   const cellsQuery = useHabitCells();
   const invalidateCells = useInvalidateHabitCells();
   const today = cellsQuery.data?.today ?? todayISO();
@@ -40,6 +49,7 @@ export default function HabitsPage() {
   const colors = cellsQuery.data?.colors ?? {};
 
   const [dialogState, setDialogState] = useState<{ item: HabitRow | null } | null>(null);
+  const [categoriesOpen, setCategoriesOpen] = useState(false);
 
   const syncedAtSec = (() => {
     const iso = cellsQuery.data?.synced_at;
@@ -60,6 +70,16 @@ export default function HabitsPage() {
             <Plus className="size-3.5" />
             Add habit
           </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => setCategoriesOpen(true)}
+            className="gap-1.5 h-7"
+          >
+            <FolderCog className="size-3.5" />
+            Categories
+          </Button>
           <div className="ml-auto">
             <ManualSyncButton
               lastSyncedAt={syncedAtSec}
@@ -70,6 +90,7 @@ export default function HabitsPage() {
 
         <HabitGrid
           habits={habits}
+          categories={categories}
           cells={cells}
           colors={colors}
           today={today}
@@ -78,6 +99,7 @@ export default function HabitsPage() {
             if (item) setDialogState({ item });
           }}
           onReorder={(ids) => reorderHabits.mutate(ids)}
+          onReorderCategories={(ids) => reorderCategories.mutate(ids)}
         />
       </div>
 
@@ -85,6 +107,8 @@ export default function HabitsPage() {
         open={dialogState !== null}
         onOpenChange={(o) => { if (!o) setDialogState(null); }}
         item={dialogState?.item ?? null}
+        categories={categories}
+        onManageCategories={() => setCategoriesOpen(true)}
         onSave={async (payload) => {
           if (dialogState?.item) {
             await updateHabit.mutateAsync({ id: dialogState.item.id, payload });
@@ -103,6 +127,12 @@ export default function HabitsPage() {
           await invalidateCells();
           setDialogState(null);
         } : undefined}
+      />
+
+      <HabitCategoriesDialog
+        open={categoriesOpen}
+        onOpenChange={setCategoriesOpen}
+        categories={categories}
       />
     </div>
   );

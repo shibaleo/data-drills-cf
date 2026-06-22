@@ -30,6 +30,7 @@ import fields from "@/routes/fields";
 import reviewTypes from "@/routes/review-types";
 import scopes from "@/routes/scopes";
 import habits from "@/routes/habits";
+import habitCategories from "@/routes/habit-categories";
 import habitFresh from "@/routes/habit-fresh";
 
 /* ── V1 API sub-app ──
@@ -87,6 +88,7 @@ const v1 = new Hono<Env>()
   .route("/review-types", reviewTypes)
   .route("/scopes", scopes)
   .route("/habits", habits)
+  .route("/habit-categories", habitCategories)
   .route("/habit-fresh", habitFresh)
   // /me endpoint — return authenticated user info
   .get("/me", (c) => {
