@@ -25,8 +25,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import type { HabitRow } from "@/hooks/queries/use-habits";
 import type { HabitCell } from "@/hooks/queries/use-habit-cells";
-import type { HabitCandidate } from "@/hooks/queries/use-toggl-habit-candidates";
-import { buildCandidateMap, displayFor } from "@/lib/habit-display";
+import { displayFor } from "@/lib/habit-display";
 import { CELL, GAP, STEP } from "@/lib/chart-constants";
 
 // row 高さ。横方向 STEP=16 (cell 14 + gap 2) より縦に余裕を持たせて密度を抑える。
@@ -44,7 +43,7 @@ const STREAK_W = 64;
 type Props = {
   habits: HabitRow[];
   cells: HabitCell[];
-  candidates: HabitCandidate[];
+  colors: Record<string, string>;
   today: string;
   pastDays?: number;
   futureDays?: number;
@@ -102,14 +101,13 @@ function recentRatio(
 export function HabitGrid({
   habits,
   cells,
-  candidates,
+  colors,
   today,
   pastDays = 30,
   futureDays = 7,
   onEditHabit,
   onReorder,
 }: Props) {
-  const candidateMap = useMemo(() => buildCandidateMap(candidates), [candidates]);
   const cellMaps = useMemo(() => indexCells(cells), [cells]);
 
   const dates = useMemo(() => {
@@ -153,7 +151,7 @@ export function HabitGrid({
             strategy={verticalListSortingStrategy}
           >
             {habits.map((h) => {
-              const d = displayFor(h, candidateMap);
+              const d = displayFor(h, colors);
               const cellMap = cellMaps.get(h.id);
               const ratio = recentRatio(cellMap, h.cadence, today);
               return (

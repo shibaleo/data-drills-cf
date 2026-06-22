@@ -425,20 +425,25 @@ export const goalMilestone = pgTable("goal_milestone", {
 // マッチルール: (toggl_project, toggl_description) の完全一致タプル。Toggl の
 // description は canonical な文字列 (例 "brush teeth") なので regex は不要。
 
-// Pure form (2026-06-15): name / category_color / minutes_estimate は drop。
-// 表示用の name / color / 所要時間は warehouse の fct_toggl_time_entries から
-// 都度 lookup する。habit は「ユーザ意図 = どの Toggl pair を追跡するか + cadence」
-// のみ保持する。
+// Grouped form (2026-06-22): habit を「複数の正規表現で grouping した 1 つの習慣」
+// に拡張。name (表示名) + toggl_description_patterns text[] を持ち、各要素は
+// 正規表現 (case-insensitive)。entry.description がいずれかにマッチすれば hit、
+// project は問わない (cross-project grouping を許容)。
+// 例: habit { name: "bath", patterns: ["^shower(:|$)", "^sauna(:|$)",
+//      "^spa(:|$)", "^bath(:|$)"] } → "shower: shave my hair" も "sauna" (Wellness
+//      project) も全部拾える。
+// 表示色は habit-fresh ルートで「直近 hit した entry の project_color の最頻値」
+// として動的算出する (DB に色は持たない)。
 export const habit = pgTable("habit", {
   id: id(),
   userId: uuid("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
   cadence: text("cadence").notNull(),                    // 'daily' | 'weekly'
-  togglProject: text("toggl_project").notNull(),         // Toggl project_name (match key)
-  togglDescription: text("toggl_description").notNull(), // Toggl description (match key)
+  togglDescriptionPatterns: text("toggl_description_patterns").array().notNull().default([]),
   sortOrder: integer("sort_order").notNull().default(0),
   isActive: boolean("is_active").notNull().default(true),
   ...timestamps(),
 }, (t) => [
-  uniqueIndex("habit_user_match_key").on(t.userId, t.togglProject, t.togglDescription),
+  uniqueIndex("habit_user_name_key").on(t.userId, t.name),
   index("habit_user_active_idx").on(t.userId, t.isActive),
 ]);

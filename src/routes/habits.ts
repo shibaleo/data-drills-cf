@@ -1,9 +1,10 @@
 /**
  * /api/v1/habits — recurrent habits CRUD。
  *
- * Pure form (2026-06-15): habit は (toggl_project, toggl_description) + cadence +
- * sort_order + is_active のみを持つ。表示用の name / color / 所要時間は warehouse
- * の fct_toggl_time_entries から都度 lookup する。
+ * Grouped form (2026-06-22): habit は (name, toggl_project, toggl_description_patterns[])
+ * + cadence + sort_order + is_active を持つ。表示色や所要時間は warehouse の
+ * fct_toggl_time_entries から都度 lookup する。マッチ判定 (entry → habit) は
+ * habit-fresh ルートで OR-of-regex を適用する。
  */
 
 import { Hono } from "hono";
@@ -29,9 +30,9 @@ const app = new Hono<Env>()
     const body = c.req.valid("json");
     const values = {
       userId,
+      name: body.name,
       cadence: body.cadence,
-      togglProject: body.toggl_project,
-      togglDescription: body.toggl_description,
+      togglDescriptionPatterns: body.toggl_description_patterns,
       sortOrder: body.sort_order ?? 0,
       isActive: body.is_active ?? true,
       ...(body.id ? { id: body.id } : {}),
@@ -54,9 +55,11 @@ const app = new Hono<Env>()
     const userId = c.get("authResult").userId;
     const body = c.req.valid("json");
     const updates: Record<string, unknown> = { updatedAt: new Date() };
+    if (body.name !== undefined) updates.name = body.name;
     if (body.cadence !== undefined) updates.cadence = body.cadence;
-    if (body.toggl_project !== undefined) updates.togglProject = body.toggl_project;
-    if (body.toggl_description !== undefined) updates.togglDescription = body.toggl_description;
+    if (body.toggl_description_patterns !== undefined) {
+      updates.togglDescriptionPatterns = body.toggl_description_patterns;
+    }
     if (body.sort_order !== undefined) updates.sortOrder = body.sort_order;
     if (body.is_active !== undefined) updates.isActive = body.is_active;
     const [row] = await db.update(habit).set(updates)

@@ -18,7 +18,6 @@ import {
   useHabitCells,
   useInvalidateHabitCells,
 } from "@/hooks/queries/use-habit-cells";
-import { useTogglHabitCandidates } from "@/hooks/queries/use-toggl-habit-candidates";
 
 function todayISO(): string {
   return new Date().toISOString().slice(0, 10);
@@ -34,13 +33,11 @@ export default function HabitsPage() {
   const deleteHabit = useDeleteHabit();
   const reorderHabits = useReorderHabits();
 
-  const candidatesQuery = useTogglHabitCandidates();
-  const candidates = candidatesQuery.data ?? [];
-
   const cellsQuery = useHabitCells();
   const invalidateCells = useInvalidateHabitCells();
   const today = cellsQuery.data?.today ?? todayISO();
   const cells = cellsQuery.data?.data ?? [];
+  const colors = cellsQuery.data?.colors ?? {};
 
   const [dialogState, setDialogState] = useState<{ item: HabitRow | null } | null>(null);
 
@@ -74,7 +71,7 @@ export default function HabitsPage() {
         <HabitGrid
           habits={habits}
           cells={cells}
-          candidates={candidates}
+          colors={colors}
           today={today}
           onEditHabit={(id) => {
             const item = habits.find((h) => h.id === id) ?? null;
@@ -100,7 +97,7 @@ export default function HabitsPage() {
           setDialogState(null);
         }}
         onDelete={dialogState?.item ? async () => {
-          if (!confirm(`Delete habit "${dialogState.item?.togglDescription}"?`)) return;
+          if (!confirm(`Delete habit "${dialogState.item?.name}"?`)) return;
           await deleteHabit.mutateAsync(dialogState.item!.id);
           toast.success("Habit deleted");
           await invalidateCells();

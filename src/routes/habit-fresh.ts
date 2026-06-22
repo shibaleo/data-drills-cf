@@ -46,6 +46,7 @@ function todayJSTCalendar(): string {
 
 type EntryRow = {
   project_name: string | null;
+  project_color: string | null;
   description: string | null;
   started_at: Date;
   synced_at: Date | null;
@@ -112,22 +113,29 @@ const app = new Hono<Env>()
       .where(and(eq(habit.userId, userId), eq(habit.isActive, true)));
 
     if (habits.length === 0) {
-      return c.json({ data: [] as Cell[], synced_at: null, today });
+      return c.json({
+        data: [] as Cell[],
+        colors: {} as Record<string, string>,
+        synced_at: null,
+        today,
+        past_from: pastFrom,
+        future_to: futureTo,
+      });
     }
 
-    const projects = Array.from(new Set(habits.map((h) => h.togglProject)));
     const fetchFrom = addDays(pastFrom, -1);
     const fetchTo = addDays(today, 2);
     const sleepFetchTo = addDays(fetchTo, 2);
 
-    // 3. entries + sleep 境界 を並列 fetch
+    // 3. entries + sleep 境界 を並列 fetch (project でフィルタしない: マッチは regex SSOT)
     const [entries, sleeps] = await Promise.all([
       neonSql<EntryRow[]>`
-        SELECT project_name, description, started_at, synced_at
+        SELECT project_name, project_color, description, started_at, synced_at
         FROM data_presentation.fct_toggl_time_entries
-        WHERE project_name = ANY(${projects}::text[])
-          AND started_at >= (${fetchFrom}::date)::timestamp AT TIME ZONE 'Asia/Tokyo'
+        WHERE started_at >= (${fetchFrom}::date)::timestamp AT TIME ZONE 'Asia/Tokyo'
           AND started_at <  (${fetchTo}::date)::timestamp AT TIME ZONE 'Asia/Tokyo'
+          AND description IS NOT NULL
+          AND description <> ''
       `,
       neonSql<SleepBoundary[]>`
         SELECT sleep_date, start_at
@@ -143,17 +151,29 @@ const app = new Hono<Env>()
     const sleepStartMs = sleeps.map((s) => s.start_at.getTime());
     const sleepDates = sleeps.map((s) => s.sleep_date);
 
-    // 5. (project, description) → habitId
-    const matchToHabit = new Map<string, string>();
+    // 5. habit ごとに patterns[] を OR で 1 個の RegExp に pre-compile (case-insensitive)。
+    //    壊れた pattern は skip (DB に入る前に zod で validate 済だが safety net)。
+    type Compiled = { habitId: string; re: RegExp };
+    const compiled: Compiled[] = [];
     for (const h of habits) {
-      matchToHabit.set(`${h.togglProject}|${h.togglDescription}`, h.id);
+      if (!h.togglDescriptionPatterns || h.togglDescriptionPatterns.length === 0) continue;
+      const combined = h.togglDescriptionPatterns.map((p) => `(?:${p})`).join("|");
+      let re: RegExp;
+      try { re = new RegExp(combined, "i"); } catch { continue; }
+      compiled.push({ habitId: h.id, re });
     }
 
-    // 6. (habitId, logicalDate) → maxSyncedAt の集計
+    // 6. 全 entry × 全 habit regex を走査して (habitId, logicalDate) で集計。
+    //    1 entry が複数 habit にマッチしうる (登録ミス) ので最初の hit を採用。
+    //    habit ごとに color (= 直近マッチ entry の project_color の最頻値) を併せて算出。
     const agg = new Map<string, { habitId: string; date: string; maxSyncedAt: Date | null }>();
+    const colorVotes = new Map<string, Map<string, number>>();  // habitId → (color → count)
     for (const e of entries) {
-      if (!e.project_name || !e.description) continue;
-      const habitId = matchToHabit.get(`${e.project_name}|${e.description}`);
+      if (!e.description) continue;
+      let habitId: string | undefined;
+      for (const { habitId: hid, re } of compiled) {
+        if (re.test(e.description)) { habitId = hid; break; }
+      }
       if (!habitId) continue;
       const logicalDate = logicalDateOf(e, sleepStartMs, sleepDates);
       if (logicalDate < pastFrom || logicalDate > today) continue;
@@ -164,6 +184,22 @@ const app = new Hono<Env>()
       } else if (e.synced_at && (!slot.maxSyncedAt || e.synced_at > slot.maxSyncedAt)) {
         slot.maxSyncedAt = e.synced_at;
       }
+      if (e.project_color) {
+        let votes = colorVotes.get(habitId);
+        if (!votes) { votes = new Map(); colorVotes.set(habitId, votes); }
+        votes.set(e.project_color, (votes.get(e.project_color) ?? 0) + 1);
+      }
+    }
+
+    // habit ごとに最頻 color を決定 (タイは出現順 = Map 走査順)
+    const colors: Record<string, string> = {};
+    for (const [hid, votes] of colorVotes) {
+      let best: string | null = null;
+      let bestN = -1;
+      for (const [color, n] of votes) {
+        if (n > bestN) { best = color; bestN = n; }
+      }
+      if (best) colors[hid] = best;
     }
 
     const cells: Cell[] = [];
@@ -191,6 +227,7 @@ const app = new Hono<Env>()
 
     return c.json({
       data: cells,
+      colors,
       synced_at: maxSyncedAt ? maxSyncedAt.toISOString() : null,
       today,
       past_from: pastFrom,
