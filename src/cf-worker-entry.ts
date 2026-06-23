@@ -1,6 +1,7 @@
 /// <reference types="@cloudflare/workers-types" />
 import app from "@/lib/hono-app";
 import { withRequestDb } from "@/lib/db";
+import { withRequestNeon } from "@/lib/neon-db";
 
 interface Env {
   ASSETS: Fetcher;
@@ -35,12 +36,13 @@ export default {
         // POST/PUT/DELETE はリクエスト body を一度読むと再利用できないため retry 不可。
         // GET / HEAD のみ retry し、それ以外は素直にエラーを返す。
         const canRetry = request.method === "GET" || request.method === "HEAD";
+        const run = () => withRequestDb(() => withRequestNeon(() => app.fetch(request, env, ctx)));
         try {
-          return (await withRequestDb(() => app.fetch(request, env, ctx))) as Response;
+          return (await run()) as Response;
         } catch (e) {
           const msg = e instanceof Error ? `${e.message} ${e.cause instanceof Error ? e.cause.message : ""}` : String(e);
           if (canRetry && msg.includes("Network connection lost")) {
-            return (await withRequestDb(() => app.fetch(request, env, ctx))) as Response;
+            return (await run()) as Response;
           }
           return new Response(JSON.stringify({ error: msg }), {
             status: 500,
@@ -48,7 +50,7 @@ export default {
           });
         }
       }
-      return app.fetch(request, env, ctx);
+      return withRequestNeon(() => app.fetch(request, env, ctx));
     }
 
     // Everything else → static assets (with SPA fallback)

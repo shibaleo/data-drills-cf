@@ -4,35 +4,70 @@
  * data-drills 本体の Supabase ([@/lib/db]) とは別の物理 DB なので、
  * 専用 postgres.js クライアントをここで管理する。
  *
- * 用途は今のところ Toggl time entries (data_presentation.fct_toggl_time_entries)
- * の参照のみ。drizzle スキーマは噛ませず、生 SQL ファクトリ的に sql テンプレートで叩く。
- *
  * 接続戦略:
- *  - cf 本番 / vite dev のどちらも withRequestDb の ALS scope に乗らない (= 別 DB なので
- *    request 単位の管理対象外)。 process Symbol cache でモジュール 1 個分共有。
+ *  - CF Workers: per-request client (ALS scope) で生成、リクエスト終了で close。
+ *    CF Workers は request 境界をまたぐ I/O オブジェクト再利用を許さない
+ *    ("Cannot perform I/O on behalf of a different request") のため必須。
+ *  - vite dev / Node 環境: withRequestNeon scope の外側でも動かせるよう、
+ *    fallback として process Symbol cache に module 単位の client を 1 個持つ。
  *  - Neon は pooler endpoint 経由なので prepare: false にしておく (transaction pooler 安全)。
  */
 import postgres from "postgres";
+import { AsyncLocalStorage } from "node:async_hooks";
 import { env } from "@/lib/env";
 
 type Sql = ReturnType<typeof postgres>;
+
+interface NeonRequestStore {
+  client: Sql | null;
+}
+
+const als = new AsyncLocalStorage<NeonRequestStore>();
+
+/** Wrap a request handler — request scope に Neon client storage を用意。
+ *  終了時に client を close (CF Workers の I/O 境界に合わせる)。 */
+export async function withRequestNeon<T>(fn: () => T | Promise<T>): Promise<T> {
+  const store: NeonRequestStore = { client: null };
+  try {
+    return await als.run(store, fn);
+  } finally {
+    if (store.client) {
+      store.client.end({ timeout: 0 }).catch(() => {});
+    }
+  }
+}
+
+// Node 環境 fallback。vite middleware や bg job など withRequestNeon の外側で呼ばれた時に使う。
 type Cached = { client?: Sql };
 const NEON_CACHE_KEY = Symbol.for("data-drills.neonClient");
 const procGlobal = process as unknown as { [k: symbol]: Cached };
 const cached: Cached = (procGlobal[NEON_CACHE_KEY] ??= {});
 
+function createClient(): Sql {
+  const url = env.NEON_DATABASE_URL;
+  if (!url) throw new Error("NEON_DATABASE_URL is not set");
+  return postgres(url, {
+    // digest ページは sleep stages + summary + toggl entries + habit-fresh など
+    // 並列発火するので、プールを 2 → 6 に拡張。Neon free でも余裕。
+    // CF Workers per-request scope では実質 6 まで使うことは稀。
+    max: 6,
+    idle_timeout: 20,
+    connect_timeout: 10,
+    ssl: "require",
+    prepare: false,
+    // fetch_types: false → 接続直後の型 OID 取得クエリをスキップ (workerd で間欠失敗)
+    fetch_types: false,
+  });
+}
+
 function getNeonClient(): Sql {
-  if (!cached.client) {
-    const url = env.NEON_DATABASE_URL;
-    if (!url) throw new Error("NEON_DATABASE_URL is not set");
-    cached.client = postgres(url, {
-      max: 2,
-      idle_timeout: 20,
-      connect_timeout: 10,
-      ssl: "require",
-      prepare: false,
-    });
+  const store = als.getStore();
+  if (store) {
+    if (!store.client) store.client = createClient();
+    return store.client;
   }
+  // ALS scope 外 (= local dev fallback)
+  if (!cached.client) cached.client = createClient();
   return cached.client;
 }
 
@@ -45,7 +80,6 @@ export const neonSql: Sql = new Proxy(
   {
     apply(_, __, args: Parameters<Sql>) {
       const sql = getNeonClient();
-      // postgres.js の sql は callable で sql`...` のタグドテンプレート
       return (sql as unknown as (...args: Parameters<Sql>) => unknown).apply(sql, args);
     },
     get(_, prop) {

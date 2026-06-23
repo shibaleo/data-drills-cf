@@ -24,6 +24,7 @@ export function useSleepStages(from: string | undefined, to: string | undefined)
     },
     enabled,
     staleTime: 60 * 1000,
+    meta: { persist: true },
   });
 }
 
@@ -38,5 +39,6 @@ export function useSleepSummary(date: string | undefined) {
     },
     enabled,
     staleTime: 60 * 1000,
+    meta: { persist: true },
   });
 }

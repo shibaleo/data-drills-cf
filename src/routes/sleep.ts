@@ -123,43 +123,46 @@ const app = new Hono<Env>()
    */
   .get("/summary", zValidator("query", sleepSummaryQuerySchema), async (c) => {
     const { date } = c.req.valid("query");
-    const curRows = await neonSql<SummaryCurrentRow[]>`
-      SELECT
-        fhs.sleep_date,
-        fhs.start_at, fhs.end_at,
-        fhs.minutes_asleep, fhs.minutes_awake, fhs.time_in_bed,
-        fhs.efficiency,
-        fhs.deep_minutes, fhs.light_minutes, fhs.rem_minutes, fhs.wake_minutes,
-        hrv.average_hrv_ms AS hrv_ms,
-        rhr.resting_heart_rate AS rhr_bpm,
-        (SELECT AVG(breaths_per_minute)
-           FROM data_warehouse.stg_google_health__respiratory_rate_sleep_summary
-           WHERE sample_time::date = fhs.sleep_date) AS breath_bpm
-      FROM data_presentation.fct_health_sleep fhs
-      LEFT JOIN data_warehouse.stg_google_health__daily_heart_rate_variability hrv
-        ON hrv.date::date = fhs.sleep_date
-      LEFT JOIN data_warehouse.stg_google_health__daily_resting_heart_rate rhr
-        ON rhr.date::date = fhs.sleep_date
-      WHERE fhs.sleep_date = ${date}::date AND fhs.sleep_type = 'STAGES'
-      ORDER BY fhs.duration_seconds DESC NULLS LAST
-      LIMIT 1
-    `;
-    const histRows = await neonSql<SummaryHistRow[]>`
-      SELECT
-        fhs.sleep_date,
-        fhs.minutes_asleep,
-        fhs.efficiency,
-        hrv.average_hrv_ms AS hrv_ms,
-        rhr.resting_heart_rate AS rhr_bpm
-      FROM data_presentation.fct_health_sleep fhs
-      LEFT JOIN data_warehouse.stg_google_health__daily_heart_rate_variability hrv
-        ON hrv.date::date = fhs.sleep_date
-      LEFT JOIN data_warehouse.stg_google_health__daily_resting_heart_rate rhr
-        ON rhr.date::date = fhs.sleep_date
-      WHERE fhs.sleep_date BETWEEN (${date}::date - 6) AND ${date}::date
-        AND fhs.sleep_type = 'STAGES'
-      ORDER BY fhs.sleep_date ASC
-    `;
+    // 当日の詳細と直近 7d trend は互いに独立なので並列実行。
+    const [curRows, histRows] = await Promise.all([
+      neonSql<SummaryCurrentRow[]>`
+        SELECT
+          fhs.sleep_date,
+          fhs.start_at, fhs.end_at,
+          fhs.minutes_asleep, fhs.minutes_awake, fhs.time_in_bed,
+          fhs.efficiency,
+          fhs.deep_minutes, fhs.light_minutes, fhs.rem_minutes, fhs.wake_minutes,
+          hrv.average_hrv_ms AS hrv_ms,
+          rhr.resting_heart_rate AS rhr_bpm,
+          (SELECT AVG(breaths_per_minute)
+             FROM data_warehouse.stg_google_health__respiratory_rate_sleep_summary
+             WHERE sample_time::date = fhs.sleep_date) AS breath_bpm
+        FROM data_presentation.fct_health_sleep fhs
+        LEFT JOIN data_warehouse.stg_google_health__daily_heart_rate_variability hrv
+          ON hrv.date::date = fhs.sleep_date
+        LEFT JOIN data_warehouse.stg_google_health__daily_resting_heart_rate rhr
+          ON rhr.date::date = fhs.sleep_date
+        WHERE fhs.sleep_date = ${date}::date AND fhs.sleep_type = 'STAGES'
+        ORDER BY fhs.duration_seconds DESC NULLS LAST
+        LIMIT 1
+      `,
+      neonSql<SummaryHistRow[]>`
+        SELECT
+          fhs.sleep_date,
+          fhs.minutes_asleep,
+          fhs.efficiency,
+          hrv.average_hrv_ms AS hrv_ms,
+          rhr.resting_heart_rate AS rhr_bpm
+        FROM data_presentation.fct_health_sleep fhs
+        LEFT JOIN data_warehouse.stg_google_health__daily_heart_rate_variability hrv
+          ON hrv.date::date = fhs.sleep_date
+        LEFT JOIN data_warehouse.stg_google_health__daily_resting_heart_rate rhr
+          ON rhr.date::date = fhs.sleep_date
+        WHERE fhs.sleep_date BETWEEN (${date}::date - 6) AND ${date}::date
+          AND fhs.sleep_type = 'STAGES'
+        ORDER BY fhs.sleep_date ASC
+      `,
+    ]);
     const cur = curRows[0] ?? null;
     return c.json({
       data: {

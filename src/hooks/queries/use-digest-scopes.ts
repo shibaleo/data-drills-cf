@@ -38,6 +38,9 @@ export function useDigestScope(id: string | undefined) {
       return adaptDetail(json.data);
     },
     enabled: !!id,
+    // localStorage に永続化 (PersistedQueryProvider が拾う)。
+    // ページ再来訪時に瞬時に前回データで描画 → 背景で fresh fetch → 差替。
+    meta: { persist: true },
   });
 }
 
