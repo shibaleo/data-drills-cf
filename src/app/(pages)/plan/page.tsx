@@ -30,8 +30,6 @@ import { assembleOverlay } from "@/lib/answer-history-overlay";
 import { ScopePlanRightPanel } from "@/components/scope-plan-right-panel";
 import { ScopeFSRSOverridePanel } from "@/components/scope-fsrs-override-panel";
 import { BlockLegend, type LegendEntry } from "@/components/block-legend";
-import { COLOR_PLANNED } from "@/lib/block-color";
-import { STATUS_PHASE } from "@/lib/status-phases";
 import { useAnswerHistoryList } from "@/hooks/queries/use-answer-history";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -397,34 +395,43 @@ export default function PlanPage() {
   const isShownFlag = (k: "overflow" | "overBudget") => !hiddenAllocFlags.has(k);
 
   const legendEntries: LegendEntry[] = useMemo(() => [
-    // 評価群 (ordinal): Miss → Solid
+    // 評価群 (ordinal): New → Miss → ... → Solid。
+    // sortOrder=0 の "New" pill は status master の no-grade slot で、
+    // チャート上の allocator First/Planned ブロックと同じ意味を表す。
+    // クリック時は table 行 hide-set + allocator hide-set を両方トグルして一貫化。
     ...statuses
-      .filter((s) => availableStatuses.includes(s.name))
-      .map<LegendEntry>((s) => ({
-        kind: "fill",
-        label: s.name,
-        color: s.color ?? "#888",
-        active: isShownStatus(s.name),
-        onClick: () =>
-          setHiddenLastStatuses((prev) => {
-            const next = new Set(prev);
-            if (next.has(s.name)) next.delete(s.name);
-            else next.add(s.name);
-            return next;
-          }),
-      })),
-    { kind: "divider" },
-    // 評価なし phase (past First + future Planned 同色、1 トグル)
-    {
-      kind: "fill",
-      label: STATUS_PHASE.UNANSWERED_LABEL,
-      color: COLOR_PLANNED,
-      active: isShownKind("First") && isShownKind("Planned"),
-      onClick: () => {
-        const shown = isShownKind("First") && isShownKind("Planned");
-        setHiddenAllocKinds(shown ? new Set(["First", "Planned"]) : new Set());
-      },
-    },
+      .filter((s) => availableStatuses.includes(s.name) || (s.sortOrder === 0 && (isShownKind("First") || isShownKind("Planned"))))
+      .map<LegendEntry>((s) => {
+        const isUnratedSlot = s.sortOrder === 0;
+        const activeStatus = isShownStatus(s.name);
+        const activeAlloc = isShownKind("First") && isShownKind("Planned");
+        const active = isUnratedSlot ? (activeStatus && activeAlloc) : activeStatus;
+        return {
+          kind: "fill",
+          label: s.name,
+          color: s.color ?? "#888",
+          active,
+          onClick: () => {
+            if (isUnratedSlot) {
+              const turningOff = active;
+              setHiddenLastStatuses((prev) => {
+                const next = new Set(prev);
+                if (turningOff) next.add(s.name);
+                else next.delete(s.name);
+                return next;
+              });
+              setHiddenAllocKinds(turningOff ? new Set(["First", "Planned"]) : new Set());
+            } else {
+              setHiddenLastStatuses((prev) => {
+                const next = new Set(prev);
+                if (next.has(s.name)) next.delete(s.name);
+                else next.add(s.name);
+                return next;
+              });
+            }
+          },
+        };
+      }),
     { kind: "divider" },
     // メタ群: Planned に被せる警告 (ring)
     {

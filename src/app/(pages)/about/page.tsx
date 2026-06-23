@@ -134,8 +134,11 @@ export default function AboutPage() {
     [statuses],
   );
 
-  // First status (lowest sortOrder) for "incorrect" description
-  const firstStatus = statuses[0];
+  // First graded status (= sorted[1])。sortOrder 契約: sorted[0] は no-grade slot。
+  const firstStatus = useMemo(() => {
+    const sorted = statuses.slice().sort((a, b) => a.sortOrder - b.sortOrder);
+    return sorted[1] ?? sorted[0];
+  }, [statuses]);
 
   return (
     <div className="p-4 md:p-6 max-w-3xl mx-auto">

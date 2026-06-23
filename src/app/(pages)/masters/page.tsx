@@ -47,13 +47,6 @@ import {
 // Phase 6: 内部の `Project` シンボルは masters page 内のみの local alias として残す。
 type Project = Field;
 import {
-  useStatusesList,
-  useCreateStatus,
-  useUpdateStatus,
-  useDeleteStatus,
-  useReorderStatuses,
-} from "@/hooks/queries/use-statuses";
-import {
   useSubjectsList,
   useCreateSubject,
   useUpdateSubject,
@@ -67,33 +60,6 @@ import {
   useDeleteLevel,
   useReorderLevels,
 } from "@/hooks/queries/use-levels";
-
-/* ── Statuses (global) ── */
-
-function StatusesSection() {
-  const { data: statuses = [], isLoading } = useStatusesList();
-  const create = useCreateStatus();
-  const update = useUpdateStatus();
-  const remove = useDeleteStatus();
-  const reorder = useReorderStatuses();
-  return (
-    <MasterList
-      title="Statuses"
-      entityName="Status"
-      hasColor
-      items={statuses}
-      loading={isLoading}
-      onCreate={(p: MasterSavePayload) =>
-        create.mutateAsync({ code: p.code, name: p.name, color: p.color ?? null })
-      }
-      onUpdate={(id, p: MasterSavePayload) =>
-        update.mutateAsync({ id, payload: { code: p.code, name: p.name, color: p.color ?? null } })
-      }
-      onDelete={(id) => remove.mutateAsync(id)}
-      onReorder={(ids) => reorder.mutateAsync(ids)}
-    />
-  );
-}
 
 /* ── Per-project subjects/levels ── */
 
@@ -352,13 +318,9 @@ export default function MastersPage() {
         <div className="text-center py-12 text-muted-foreground">Loading...</div>
       ) : (
         <div className="space-y-6">
-          {/* Global section */}
-          <div>
-            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Global</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <StatusesSection />
-            </div>
-          </div>
+          {/* Note: Status master は framework 仕様 (FSRS grade) として固定。
+              編集 UI は撤去 (2026-06-23)。rename したい場合は DB UPDATE で対応。
+              sort_order = 0 は no-grade slot ("New" 等) で contract として保証する。 */}
 
           {/* Per-project sections (sortable) */}
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>

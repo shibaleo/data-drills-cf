@@ -108,7 +108,9 @@ function useTagMap() {
 }
 
 const DEFAULT_FORM: AnswerFormData = {
-  subject: '', level: '', code: '', duration: '', status: 'Miss', reviews: [],
+  // status は openBlank / openForProblem で statuses[1] (first graded) を後から差し込む。
+  // ここは形だけの placeholder ('' 許容)。
+  subject: '', level: '', code: '', duration: '', status: '', reviews: [],
 }
 
 /** Shape returned by useAnswerForm / useEditAnswerForm */
@@ -176,12 +178,14 @@ export function useAnswerForm(fieldId: string | null, onSaved: (problemId: strin
     setOrigSubject('')
     setOrigLevel('')
     setOrigCode('')
+    const sortedStatuses = statuses.slice().sort((a, b) => a.sortOrder - b.sortOrder)
+    const firstGraded = sortedStatuses[1]?.name ?? sortedStatuses[0]?.name ?? ''
     form.reset({
       subject: subjects[0]?.id ?? '',
       level: levels[0]?.id ?? '',
       code: '',
       duration: '',
-      status: defaults?.status ?? 'Miss',
+      status: defaults?.status ?? firstGraded,
       reviews: [],
     })
     setOpen(true)
@@ -301,11 +305,13 @@ export function useEditAnswerForm(fieldId: string | null, onSaved: (problemId: s
     setOrigSubject(prob.subject_id)
     setOrigLevel(prob.level_id)
     setOrigCode(prob.code)
+    const sortedStatuses = statuses.slice().sort((a, b) => a.sortOrder - b.sortOrder)
+    const firstGraded = sortedStatuses[1]?.name ?? sortedStatuses[0]?.name ?? ''
     form.reset({
       subject: prob.subject_id,
       level: prob.level_id,
       code: prob.code,
-      status: answer.status ?? 'Miss',
+      status: answer.status ?? firstGraded,
       duration: answer.duration ?? '',
       reviews: answer.reviews.map((r) => ({
         id: r.id,
