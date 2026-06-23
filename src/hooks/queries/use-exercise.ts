@@ -18,5 +18,6 @@ export function useExerciseSessions(from: string | undefined, to: string | undef
     },
     enabled,
     staleTime: 60 * 1000,
+    meta: { persist: true },
   });
 }

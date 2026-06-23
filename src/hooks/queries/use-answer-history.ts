@@ -22,5 +22,6 @@ export function useAnswerHistoryList(fieldId?: string | undefined, asOf?: string
     },
     // 全 answer を返す重い endpoint。再 fetch を抑制
     staleTime: 5 * 60_000,
+    meta: { persist: true },
   });
 }

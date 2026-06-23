@@ -23,6 +23,7 @@ export function useFlashcardsData(fieldId: string | undefined) {
       return json.data;
     },
     enabled: !!fieldId,
+    meta: { persist: true },
   });
   const reviews = useQuery({
     queryKey: flashcardsKeys.reviews(),
@@ -31,6 +32,7 @@ export function useFlashcardsData(fieldId: string | undefined) {
       return json.data;
     },
     enabled: !!fieldId,
+    meta: { persist: true },
   });
   const topics = useQuery({
     queryKey: fieldId ? flashcardsKeys.topics(fieldId) : flashcardsKeys.all,

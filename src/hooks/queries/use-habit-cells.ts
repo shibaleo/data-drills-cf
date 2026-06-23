@@ -24,6 +24,7 @@ export function useHabitCells() {
       return json;
     },
     staleTime: 5 * 60_000,
+    meta: { persist: true },
   });
 }
 

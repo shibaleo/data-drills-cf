@@ -18,5 +18,6 @@ export function useOrgasmEvents(from: string | undefined, to: string | undefined
     },
     enabled,
     staleTime: 60 * 1000,
+    meta: { persist: true },
   });
 }

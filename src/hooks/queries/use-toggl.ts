@@ -48,5 +48,6 @@ export function useTogglEntries(
     enabled,
     // DWH は数分単位の集計バッチで更新。digest 切替で頻繁に refetch 不要。
     staleTime: 60 * 1000,
+    meta: { persist: true },
   });
 }
