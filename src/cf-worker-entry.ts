@@ -28,7 +28,7 @@ export default {
 
     // API routes → Hono
     // 本番 (Hyperdrive あり) のみ per-request DB client。ローカル dev は globalThis 共有 client を使うため
-    // withRequestDb をスキップする (毎リクエスト postgres client を作って .end() すると Supabase 接続上限を消費する)
+    // withRequestDb をスキップする (毎リクエスト postgres client を作って .end() すると Neon 接続上限を消費する)
     if (url.pathname.startsWith("/api/")) {
       if (env.HYPERDRIVE) {
         // postgres.js + Hyperdrive で間欠的に "Network connection lost" が出るので

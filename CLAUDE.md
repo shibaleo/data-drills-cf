@@ -9,7 +9,9 @@
 ```
 CF Pages (React + Vite SPA, TanStack Router)
   └─ CF Worker (Hono API)
-       ├─ Supabase PostgreSQL (トランザクション DB)
+       ├─ Neon PostgreSQL × 2
+       │    ├─ トランザクション DB (data_drills schema、DATABASE_URL)
+       │    └─ DWH (data_warehouse/data_presentation、NEON_DATABASE_URL)
        ├─ Render Docker (PDF 処理サービス, services/pdf/)
        └─ Clerk (認証)
 ```
@@ -26,7 +28,7 @@ CF Pages (React + Vite SPA, TanStack Router)
 | Validation     | Zod (shared), `@hono/zod-validator`, `drizzle-zod`       |
 | API            | Hono on CF Workers (`AppType` + RPC client `src/lib/rpc-client.ts`) |
 | ORM            | Drizzle                                                  |
-| DB             | Supabase PostgreSQL                                      |
+| DB             | Neon PostgreSQL (data_drills schema)                     |
 | Auth           | Clerk                                                    |
 | PDF            | Render Docker service (services/pdf/)                    |
 

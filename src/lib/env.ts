@@ -11,7 +11,7 @@
  */
 
 export const env = {
-  /** Supabase PostgreSQL 接続文字列。Drizzle / postgres-js が読む。 */
+  /** Neon PostgreSQL (data_drills schema) の OLTP 接続文字列。Drizzle / postgres-js が読む。 */
   get DATABASE_URL(): string {
     const v = process.env.DATABASE_URL;
     if (!v) throw new Error("DATABASE_URL is not set");

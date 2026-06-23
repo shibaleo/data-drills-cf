@@ -1,7 +1,7 @@
 /**
  * Neon DWH 接続 (read-only)。
  *
- * data-drills 本体の Supabase ([@/lib/db]) とは別の物理 DB なので、
+ * data-drills 本体の OLTP Neon ([@/lib/db]) とは別の物理 DB (DWH 専用) なので、
  * 専用 postgres.js クライアントをここで管理する。
  *
  * 接続戦略:

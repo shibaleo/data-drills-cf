@@ -44,8 +44,8 @@ function honoDevServer(): Plugin {
           } as RequestInit);
 
           // local dev は ALS scope に入らず、db/index.ts fallback path の
-          // シングルトン client (max=3) を共有する。これで burst でも Supabase
-          // session pool 15 を超える接続を持たない (postgres.js 内で queue)。
+          // シングルトン client (max=2) を共有する。これで burst でも Neon の
+          // 接続上限を圧迫せず queue で捌ける (postgres.js 内で queue)。
           // ungraceful kill 時のゾンビ対策は db/index.ts の cleanup handler 側で対応。
           const response: Response = await app.fetch(request);
 
