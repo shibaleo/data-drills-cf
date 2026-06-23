@@ -1696,29 +1696,30 @@ function CompactTransitionMatrix({
   rows: { prevStatusName: string | null; statusName: string | null }[];
   statuses: { id: string; name: string; color: string | null; sortOrder: number }[];
 }) {
-  const FIRST_LABEL = STATUS_PHASE.UNANSWERED_LABEL;
+  // 2026-06-23〜: status master に "New" (sortOrder=0) が入ったので、合成 FIRST_LABEL 行は撤去。
+  // prevStatusName が null の時は master 上の "New" に落とす (sorted の先頭)。
+  const noGradeName = statuses[0]?.name ?? STATUS_PHASE.UNANSWERED_LABEL;
   const { matrix, rowTotals } = useMemo(() => {
     const m: Record<string, Record<string, number>> = {};
     const totals: Record<string, number> = {};
-    const labels = [FIRST_LABEL, ...statuses.map((s) => s.name)];
-    for (const from of labels) {
-      m[from] = {};
-      for (const s of statuses) m[from][s.name] = 0;
-      totals[from] = 0;
+    for (const from of statuses) {
+      m[from.name] = {};
+      for (const s of statuses) m[from.name][s.name] = 0;
+      totals[from.name] = 0;
     }
     for (const r of rows) {
       const to = r.statusName;
       if (!to) continue;
-      const from = r.prevStatusName ?? FIRST_LABEL;
+      const from = r.prevStatusName ?? noGradeName;
       if (!m[from]) continue;
       m[from][to] = (m[from][to] ?? 0) + 1;
       totals[from]++;
     }
     return { matrix: m, rowTotals: totals };
-  }, [rows, statuses]);
+  }, [rows, statuses, noGradeName]);
 
   const colorByName = new Map(statuses.map((s) => [s.name, s.color ?? "#888"]));
-  const rowLabels = [FIRST_LABEL, ...statuses.map((s) => s.name)];
+  const rowLabels = statuses.map((s) => s.name);
   const initial = (n: string) => n.charAt(0);
 
   return (
@@ -1738,7 +1739,7 @@ function CompactTransitionMatrix({
             {/* 行ラベル (pill 列) */}
             <div className="flex flex-col" style={{ gap: GAP, paddingTop: HEADER_H }}>
               {rowLabels.map((from) => {
-                const fromColor = from === FIRST_LABEL ? COLOR_FIRST_ATTEMPT : colorByName.get(from) ?? "#888";
+                const fromColor = colorByName.get(from) ?? "#888";
                 return (
                   <div key={from} className="flex items-center" style={{ height: CELL }}>
                     <OpaqueTag name={from} color={fromColor}/>
@@ -1794,10 +1795,9 @@ function CompactTransitionMatrix({
 function statusOrderWithUnrated(
   statuses: { id: string; name: string; color?: string | null; sortOrder: number }[],
 ): { id: string; name: string; color: string }[] {
-  return [
-    { id: "_unrated", name: STATUS_PHASE.UNANSWERED_LABEL, color: UNRATED_COLOR },
-    ...statuses.map((s) => ({ id: s.id, name: s.name, color: s.color ?? "hsl(var(--muted-foreground))" })),
-  ];
+  // 2026-06-23〜: master "New" (sortOrder=0) が既に no-grade slot を担うので
+  // 合成 _unrated エントリは撤去。
+  return statuses.map((s) => ({ id: s.id, name: s.name, color: s.color ?? "hsl(var(--muted-foreground))" }));
 }
 
 type DonutEntry = { id: string; name: string; color: string; n: number };

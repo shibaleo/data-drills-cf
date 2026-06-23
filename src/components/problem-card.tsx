@@ -10,7 +10,7 @@ import { parseDuration, fmtDiff, secondsToHms } from '@/lib/duration'
 import { toJSTDate, jstDayDiff, todayJST } from '@/lib/date-utils'
 import { computeForgettingInfo } from '@/lib/forgetting-curve'
 import { computeNextReview } from '@/lib/srs-scoring'
-import { useLookup } from '@/hooks/use-field'
+import { useField, useLookup } from '@/hooks/use-field'
 import { useSubjects, useLevels, useFields } from '@/hooks/queries/use-field-data'
 import { Markdown } from '@/components/markdown'
 import { MarkdownEditor } from '@/components/markdown-editor'
@@ -149,20 +149,76 @@ export function ProblemCard({
   const { data: fields = [] } = useFields()
   const field = fields.find((f) => f.id === p.field_id) ?? null
   const lookup = useLookup(subjects, levels)
+  const { statuses } = useField()
+  const noGradeName = statuses[0]?.name ?? 'New'
+  const noGradeColor = statuses[0]?.color ?? '#94a3b8'
+
+  /** answer 1 行の meta bar (date | ml-auto | edit | duration | % | diff)。
+   *  problem dialog (= dateFilter なし) と digest answer log (= dateFilter あり)
+   *  の prev pill で共通使用。 */
+  function renderAnswerMetaBar({
+    date, duration, prevDuration, editControl,
+  }: {
+    date: string | null
+    duration: string | null
+    prevDuration: string | null
+    editControl?: React.ReactNode
+  }) {
+    const cur = parseDuration(duration)
+    const pre = parseDuration(prevDuration)
+    const stTime = p.standard_time
+    const pctNode = (() => {
+      if (!stTime || cur === null) return null
+      const pct = Math.round((cur / stTime) * 100)
+      return (
+        <span className={`text-[10px] tabular-nums ${pct <= 100 ? 'text-green-400' : 'text-red-400'}`}>
+          {pct}%
+        </span>
+      )
+    })()
+    const diffNode = (() => {
+      if (cur === null || pre === null || cur - pre === 0) return <span className="w-12" />
+      const diff = cur - pre
+      const faster = diff < 0
+      return (
+        <span className={`inline-flex w-12 items-center justify-end gap-0.5 ${faster ? 'text-green-400' : 'text-red-400'}`}>
+          {faster ? <ArrowDown className="size-3" /> : <ArrowUp className="size-3" />}
+          <span className="text-[10px] tabular-nums">{fmtDiff(diff)}</span>
+        </span>
+      )
+    })()
+    return (
+      <div className="flex items-center gap-2 text-xs">
+        <span className="text-foreground/60">{date ? toJSTDate(date) : '-'}</span>
+        <div className="ml-auto flex items-center gap-2">
+          {editControl}
+          <span className="text-foreground/60">{duration ?? ''}</span>
+          {pctNode}
+          {diffNode}
+        </div>
+      </div>
+    )
+  }
   const answersAll = [...p.answers].sort(
     (a, b) => (b.date ?? '').localeCompare(a.date ?? '') || (b.created_at ?? '').localeCompare(a.created_at ?? ''),
   )
-  const answers = dateFilter
+  // フィルタ: dateFilter なし (problem dialog) は全件、ありなら今日分 + 直前 1 件を context として末尾に足す。
+  // problem dialog / digest answer log の違いはこのフィルタだけで、render は共通。
+  const todaysAnswers = dateFilter
     ? answersAll.filter((a) => a.date === dateFilter)
     : answersAll
-  // dateFilter 時のコンテキスト: 表示対象 (= 今日分) の直前の 1 entry。
-  // sparkline / timeline 終端に勾配の起点として描く (情報量を失わないため)。
   const prevAnswer = (() => {
-    if (!dateFilter || answers.length === 0) return null
-    const bottomToday = answers[answers.length - 1]
+    if (!dateFilter || todaysAnswers.length === 0) return null
+    const bottomToday = todaysAnswers[todaysAnswers.length - 1]
     const idx = answersAll.findIndex((a) => a.id === bottomToday.id)
     return idx >= 0 ? answersAll[idx + 1] ?? null : null
   })()
+  const answers = prevAnswer ? [...todaysAnswers, prevAnswer] : todaysAnswers
+  // bottom New pill: prev (cross-day context) が「直前の解答」を担っているならそれで十分なので不要。
+  // prev が無い時のみ「これが初回」を視覚化する placeholder として出す。
+  //  - problem dialog (no filter): prev は無いので、最古解答の下に New (回答 0 件でも)
+  //  - digest answer log: prev 無し = 履歴の起点なので New
+  const showInitialPlaceholder = !prevAnswer
   // sparkline 用 entries (ASC)。dateFilter 時は今日分 + prev、そうでない時は全件。
   const sparklineEntries = (() => {
     const base = answers.slice().reverse().map((a) => ({
@@ -344,11 +400,12 @@ export function ProblemCard({
           </div>
         )}
 
-        {/* Answers — timeline style */}
-        {answers.length > 0 && (
+        {/* Answers — timeline style。answers が 0 件でも showInitialPlaceholder=true の時は
+           New pill 単独行を描くため render する。 */}
+        {(answers.length > 0 || showInitialPlaceholder) && (
           <div ref={timelineRef} className="relative ml-5">
-            {/* Continuous vertical timeline line。prev pill がある時は最下端まで伸ばす */}
-            <div className={`absolute left-[-1px] -translate-x-1/2 top-3 w-0.5 bg-border ${prevAnswer ? 'bottom-3' : 'bottom-[18px]'}`} />
+            {/* Continuous vertical timeline line。bottom New placeholder がある時は最下端まで伸ばす */}
+            <div className={`absolute left-[-1px] -translate-x-1/2 top-3 w-0.5 bg-border ${showInitialPlaceholder ? 'bottom-3' : 'bottom-[18px]'}`} />
             {answers.map((a, i) => {
               const reviews = [...a.reviews].sort(
                 (x, y) => (x.created_at ?? '').localeCompare(y.created_at ?? ''),
@@ -379,37 +436,11 @@ export function ProblemCard({
                     >
                       {a.status ? <StatusTag status={a.status} color={lookup.statusColor(a.status)} opaque /> : <span className="inline-block size-2 rounded-full bg-foreground/40" />}
                     </div>
-                    <div className="flex items-center gap-2 text-xs">
-                      <span className="text-foreground/60">{a.date ? toJSTDate(a.date) : '-'}</span>
-                      <span className="ml-auto text-foreground/60">{a.duration ?? ''}</span>
-                      {(() => {
-                        if (!p.standard_time) return null
-                        const sec = parseDuration(a.duration)
-                        if (sec === null) return null
-                        const pct = Math.round((sec / p.standard_time) * 100)
-                        return (
-                          <span className={`text-[10px] tabular-nums ${pct <= 100 ? 'text-green-400' : 'text-red-400'}`}>
-                            {pct}%
-                          </span>
-                        )
-                      })()}
-                      {(() => {
-                        const prev = answers[i + 1]
-                        const cur = parseDuration(a.duration)
-                        const pre = parseDuration(prev?.duration)
-                        if (cur === null || pre === null || cur - pre === 0) {
-                          return <span className="w-12" />
-                        }
-                        const diff = cur - pre
-                        const faster = diff < 0
-                        return (
-                          <span className={`inline-flex w-12 items-center justify-end gap-0.5 ${faster ? 'text-green-400' : 'text-red-400'}`}>
-                            {faster ? <ArrowDown className="size-3" /> : <ArrowUp className="size-3" />}
-                            <span className="text-[10px] tabular-nums">{fmtDiff(diff)}</span>
-                          </span>
-                        )
-                      })()}
-                      {editableReviews ? (
+                    {(() => {
+                      // 直前 = リスト内の次 (DESC なので i+1)。answers 末尾に cross-day の
+                      // prevAnswer が含まれている (dateFilter モード時) ので fallback 不要。
+                      const prevForDiff = answers[i + 1] ?? null
+                      const editControl = editableReviews ? (
                         unlockedAnswerId === a.id ? (
                           <span className="inline-flex items-center print:hidden">
                             <button type="button"
@@ -446,9 +477,16 @@ export function ProblemCard({
                         >
                           <Pencil className="size-3" />
                         </button>
-                      )}
-                    </div>
-                    {reviews.map((rv) => (
+                      )
+                      return renderAnswerMetaBar({
+                        date: a.date,
+                        duration: a.duration,
+                        prevDuration: prevForDiff?.duration ?? null,
+                        editControl,
+                      })
+                    })()}
+                    {/* cross-day prev (context 行) は review を隠す: 日付スコープ外の情報を mix しない。 */}
+                    {a.id !== prevAnswer?.id && reviews.map((rv) => (
                       <ReviewBlock key={rv.id}
                         review={rv}
                         unlocked={editableReviews === true && unlockedAnswerId === a.id}
@@ -462,17 +500,13 @@ export function ProblemCard({
                 </div>
               )
             })}
-            {/* prev state (= 表示対象の直前) pill。dateFilter で過去が削られた
-               時に「どこから始まったか」を timeline 終端に提示する。 */}
-            {prevAnswer && (
-              <div className="relative pl-9 pt-1">
-                <div className="absolute left-[-1px] -translate-x-1/2 top-2.5 -translate-y-1/2 whitespace-nowrap">
-                  {prevAnswer.status
-                    ? <StatusTag status={prevAnswer.status} color={lookup.statusColor(prevAnswer.status)} opaque />
-                    : <span className="inline-block size-2 rounded-full bg-foreground/40" />}
-                </div>
-                <div className="text-xs text-foreground/60">
-                  {prevAnswer.date ? toJSTDate(prevAnswer.date) : '-'}
+            {/* 「これが初回 (= 直前の回答無し)」を視覚化する placeholder。meta bar は無し。
+               wrapper に高さを持たせて pill を vertical center に置き、timeline 線の終端と
+               pill の中心を一致させる (= 下の action row と被らない)。 */}
+            {showInitialPlaceholder && (
+              <div className="relative pl-9 h-6">
+                <div className="absolute left-[-1px] -translate-x-1/2 top-1/2 -translate-y-1/2 whitespace-nowrap">
+                  <StatusTag status={noGradeName} color={noGradeColor} opaque />
                 </div>
               </div>
             )}
