@@ -35,8 +35,9 @@ const CELL_OFFSET_Y = (ROW_H - CELL) / 2;
 
 const HEADER_H = 28;
 
-// sticky 左カラム幅 (= grip 20 + gap 8 + color 14 + gap 8 + label 140 + pr 8) = 198px
-const HEADER_LEFT_PAD = 20 + 8 + 14 + 8 + 140 + 8;
+// sticky 左カラム幅 (= grip 20 + gap 8 + color 14 + gap 8 + label 100 + pr 8) = 158px
+const HEADER_LEFT_PAD = 20 + 8 + 14 + 8 + 100 + 8;
+const LABEL_WIDTH = 100;
 
 // streak 列の固定幅
 const STREAK_W = 64;
@@ -175,6 +176,23 @@ export function HabitGrid({
 
   const sections = useMemo(() => partition(habits, categories), [habits, categories]);
 
+  // SortableContext の items prop は参照が変わると dnd-kit が drag transition を見失うため memo 必須。
+  // habit 順序 = sections の習慣を flatten した順 (= 表示順)。
+  const habitIds = useMemo(
+    () => sections.flatMap((s) => s.groups.flatMap((g) => g.habits.map((h) => h.id))),
+    [sections],
+  );
+  // cadence section ごとに、その中で並び替え可能な category id 群。
+  const categoryIdsPerCadence = useMemo(() => {
+    const m = new Map<string, string[]>();
+    for (const sec of sections) {
+      m.set(sec.cadence, sec.groups
+        .filter((g) => g.categoryId)
+        .map((g) => `cat:${sec.cadence}:${g.categoryId}`));
+    }
+    return m;
+  }, [sections]);
+
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
   );
@@ -229,7 +247,7 @@ export function HabitGrid({
           onDragEnd={handleDragEnd}
         >
           <SortableContext
-            items={habits.map((h) => h.id)}
+            items={habitIds}
             strategy={verticalListSortingStrategy}
           >
             {sections.map((sec) => (
@@ -238,9 +256,7 @@ export function HabitGrid({
                   <CadenceSection label={sec.cadence === "daily" ? "Daily" : "Weekly"} />
                 )}
                 <SortableContext
-                  items={sec.groups
-                    .filter((g) => g.categoryId)
-                    .map((g) => `cat:${sec.cadence}:${g.categoryId}`)}
+                  items={categoryIdsPerCadence.get(sec.cadence) ?? []}
                   strategy={verticalListSortingStrategy}
                 >
                   {sec.groups.map((g) => {
@@ -551,7 +567,7 @@ function SortableHabitRow({
           type="button"
           onClick={onClickLabel}
           className="text-sm text-left text-foreground/90 hover:text-foreground hover:underline truncate"
-          style={{ width: 140 }}
+          style={{ width: LABEL_WIDTH }}
           title="Edit habit"
         >
           {label}

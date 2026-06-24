@@ -21,6 +21,8 @@
  */
 
 import { Hono } from "hono";
+import { zValidator } from "@hono/zod-validator";
+import { z } from "zod";
 import { db } from "@/lib/db";
 import { habit } from "@/lib/db/schema";
 import { and, eq } from "drizzle-orm";
@@ -29,8 +31,13 @@ import type { AuthResult } from "@/lib/auth";
 
 type Env = { Variables: { authResult: AuthResult } };
 
-const PAST_DAYS = 30;
+const DEFAULT_PAST_DAYS = 30;
+const MAX_PAST_DAYS = 365;
 const FUTURE_DAYS = 7;
+
+const querySchema = z.object({
+  past_days: z.coerce.number().int().positive().max(MAX_PAST_DAYS).optional(),
+});
 
 function addDays(s: string, n: number): string {
   const d = new Date(`${s}T00:00:00Z`);
@@ -91,7 +98,9 @@ function logicalDateOf(entry: EntryRow, sleepStartMs: number[], sleepDates: Date
 }
 
 const app = new Hono<Env>()
-  .get("/", async (c) => {
+  .get("/", zValidator("query", querySchema), async (c) => {
+    const { past_days } = c.req.valid("query");
+    const PAST_DAYS = past_days ?? DEFAULT_PAST_DAYS;
     const userId = c.get("authResult").userId;
 
     // 1. 論理今日 = 最新の main sleep の sleep_date。24h 以上前なら未 sync と判定。

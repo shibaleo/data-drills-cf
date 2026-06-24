@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, FolderCog } from "lucide-react";
+import { Plus, FolderCog, ChevronLeft } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { HabitGrid } from "@/components/habit/habit-grid";
@@ -42,7 +42,10 @@ export default function HabitsPage() {
   const categories = categoriesQuery.data ?? [];
   const reorderCategories = useReorderHabitCategories();
 
-  const cellsQuery = useHabitCells();
+  // 過去日数。+30d ボタンで段階的に拡張。
+  const [pastDays, setPastDays] = useState(30);
+
+  const cellsQuery = useHabitCells(pastDays);
   const invalidateCells = useInvalidateHabitCells();
   const today = cellsQuery.data?.today ?? todayISO();
   const cells = cellsQuery.data?.data ?? [];
@@ -80,7 +83,18 @@ export default function HabitsPage() {
             <FolderCog className="size-3.5" />
             Categories
           </Button>
-          <div className="ml-auto">
+          <div className="ml-auto flex items-center gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => setPastDays((d) => d + 30)}
+              className="gap-1.5 h-7 text-xs"
+              title="過去 30 日分を追加表示"
+            >
+              <ChevronLeft className="size-3.5" />
+              +30d ({pastDays}d)
+            </Button>
             {/* cooldown は localStorage で全ページ共有。server の cells.synced_at が新しければ採用。 */}
             <WarehouseSyncButton
               target="toggl"
@@ -96,6 +110,7 @@ export default function HabitsPage() {
           cells={cells}
           colors={colors}
           today={today}
+          pastDays={pastDays}
           onEditHabit={(id) => {
             const item = habits.find((h) => h.id === id) ?? null;
             if (item) setDialogState({ item });
