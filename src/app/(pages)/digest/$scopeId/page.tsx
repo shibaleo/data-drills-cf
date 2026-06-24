@@ -1005,9 +1005,13 @@ function DayTimeline({
     }
   };
 
-  const hasData = mode === "sleep"
-    ? sleepStages.length > 0
-    : (answers.length > 0 || flashcards.length > 0 || toggl.length > 0);
+  // Toggl は全モード共通で render するので、各 mode 固有のソースとの OR で判定する。
+  // (sleep mode で sleep stages 空 + Toggl あり、のような状況で timeline 全体が隠れていたのを修正)
+  const hasData = toggl.length > 0
+    || (mode === "sleep" && sleepStages.length > 0)
+    || (mode === "exercise" && exerciseSessions.length > 0)
+    || (mode === "leisure" && orgasmEvents.length > 0)
+    || (mode === "study" && (answers.length > 0 || flashcards.length > 0));
 
   // Toggl entry の自前 project_color を使う。null の時のみ category 別 fallback。
   const coarseColor: Record<string, string> = {

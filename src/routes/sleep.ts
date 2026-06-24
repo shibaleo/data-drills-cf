@@ -75,6 +75,10 @@ const app = new Hono<Env>()
    */
   .get("/stages", zValidator("query", sleepStagesQuerySchema), async (c) => {
     const { from, to } = c.req.valid("query");
+    // STAGES と CLASSIC を両方拾う。CLASSIC は古い Google Health 仕様だが、
+    // stages JSON のフォーマットは同じ (type/startTime/endTime) なので render は同形。
+    // 夜によって STAGES だったり CLASSIC だったりするので、両対応で常にタイムラインが
+    // 出るようにする。
     const rows = await neonSql<StageRow[]>`
       SELECT
         data_point_id AS session_id,
@@ -83,7 +87,7 @@ const app = new Hono<Env>()
         stages
       FROM data_warehouse.stg_google_health__sleep
       WHERE sleep_date BETWEEN ${from}::date AND ${to}::date
-        AND sleep_type = 'STAGES'
+        AND sleep_type IN ('STAGES', 'CLASSIC')
       ORDER BY start_time ASC
     `;
     const out: {
