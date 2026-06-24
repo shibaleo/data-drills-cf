@@ -10,6 +10,8 @@ type Props = {
   lastSyncedAt?: number;
   /** クールダウン秒。Worker 側 KV throttle と一致させる。 */
   cooldownSec?: number;
+  /** Button のラベル。デフォルトは "Refresh"。 */
+  label?: string;
 };
 
 const DEFAULT_COOLDOWN = 240;  // 4 min
@@ -24,6 +26,7 @@ export function ManualSyncButton({
   onSync,
   lastSyncedAt,
   cooldownSec = DEFAULT_COOLDOWN,
+  label = "Refresh",
 }: Props) {
   const [busy, setBusy] = useState(false);
   const now = Math.floor(Date.now() / 1000);
@@ -55,7 +58,7 @@ export function ManualSyncButton({
         className="gap-1.5"
       >
         <RefreshCw className={cn("size-3.5", busy && "animate-spin")} />
-        {remaining > 0 ? `${remaining}s` : "Refresh"}
+        {remaining > 0 ? `${remaining}s` : label}
       </Button>
     </div>
   );

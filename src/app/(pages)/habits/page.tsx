@@ -23,6 +23,7 @@ import {
   useHabitCategories,
   useReorderHabitCategories,
 } from "@/hooks/queries/use-habit-categories";
+import { useWarehouseSync } from "@/hooks/queries/use-warehouse-sync";
 
 function todayISO(): string {
   return new Date().toISOString().slice(0, 10);
@@ -41,6 +42,7 @@ export default function HabitsPage() {
   const categoriesQuery = useHabitCategories();
   const categories = categoriesQuery.data ?? [];
   const reorderCategories = useReorderHabitCategories();
+  const warehouseSync = useWarehouseSync();
 
   const cellsQuery = useHabitCells();
   const invalidateCells = useInvalidateHabitCells();
@@ -81,9 +83,24 @@ export default function HabitsPage() {
             Categories
           </Button>
           <div className="ml-auto">
+            {/* warehouse の Toggl raw を最新化 → habit cells を自動 invalidate (hook 側)。
+                ボタンの cooldown は 4min で連打防止。GAS 側にも LockService 重複防止あり。 */}
             <ManualSyncButton
               lastSyncedAt={syncedAtSec}
-              onSync={async () => { await invalidateCells(); }}
+              label="Sync Toggl"
+              onSync={async () => {
+                try {
+                  const r = await warehouseSync.mutateAsync({ target: "toggl" });
+                  if (r.ok) {
+                    const synced = typeof r.synced === "number" ? `: ${r.synced} rows` : "";
+                    toast.success(`Synced toggl${synced}`);
+                  } else {
+                    toast.warning(`Sync skipped: ${r.error ?? "already running"}`);
+                  }
+                } catch (e) {
+                  toast.error(e instanceof Error ? e.message : "sync failed");
+                }
+              }}
             />
           </div>
         </div>
