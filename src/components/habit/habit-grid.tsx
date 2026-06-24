@@ -276,7 +276,11 @@ export function HabitGrid({
   }
 
   return (
-    <div className="overflow-x-auto" ref={scrollRef} onScroll={handleScroll}>
+    <div
+      className="overflow-x-auto overscroll-x-contain"
+      ref={scrollRef}
+      onScroll={handleScroll}
+    >
       <div style={{ minWidth: gridWidth + HEADER_LEFT_PAD + STREAK_W }}>
         <DateHeader dates={dates} todayIdx={todayIdx} gridWidth={gridWidth} />
 
