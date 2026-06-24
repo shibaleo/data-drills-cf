@@ -277,7 +277,7 @@ export function HabitGrid({
 
   return (
     <div
-      className="overflow-x-auto overscroll-x-contain"
+      className="overflow-x-scroll overscroll-x-contain"
       ref={scrollRef}
       onScroll={handleScroll}
     >

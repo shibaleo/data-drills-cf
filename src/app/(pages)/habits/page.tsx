@@ -42,8 +42,9 @@ export default function HabitsPage() {
   const categories = categoriesQuery.data ?? [];
   const reorderCategories = useReorderHabitCategories();
 
-  // 過去日数。+30d ボタンで段階的に拡張。
-  const [pastDays, setPastDays] = useState(30);
+  // 過去日数。初期値を 90 にして viewport を必ず超えさせる (= scroll bar が常に出る
+  // + 左端 swipe が browser back に直行するのを防ぐ)。infinite-scroll で 30 ずつ拡張。
+  const [pastDays, setPastDays] = useState(90);
 
   const cellsQuery = useHabitCells(pastDays);
   const invalidateCells = useInvalidateHabitCells();
