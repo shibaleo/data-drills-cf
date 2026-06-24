@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, FolderCog, ChevronLeft } from "lucide-react";
+import { Plus, FolderCog } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { HabitGrid } from "@/components/habit/habit-grid";
@@ -83,18 +83,7 @@ export default function HabitsPage() {
             <FolderCog className="size-3.5" />
             Categories
           </Button>
-          <div className="ml-auto flex items-center gap-2">
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() => setPastDays((d) => d + 30)}
-              className="gap-1.5 h-7 text-xs"
-              title="過去 30 日分を追加表示"
-            >
-              <ChevronLeft className="size-3.5" />
-              +30d ({pastDays}d)
-            </Button>
+          <div className="ml-auto">
             {/* cooldown は localStorage で全ページ共有。server の cells.synced_at が新しければ採用。 */}
             <WarehouseSyncButton
               target="toggl"
@@ -117,6 +106,7 @@ export default function HabitsPage() {
           }}
           onReorder={(ids) => reorderHabits.mutate(ids)}
           onReorderCategories={(ids) => reorderCategories.mutate(ids)}
+          onLoadMorePast={() => setPastDays((d) => Math.min(d + 30, 365))}
         />
       </div>
 

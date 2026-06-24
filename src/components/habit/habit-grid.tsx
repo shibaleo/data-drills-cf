@@ -6,7 +6,7 @@
  * row は @dnd-kit/sortable で並べ替え可能 (drag handle は hover で表示)。
  */
 
-import { useMemo } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { GripVertical, GripHorizontal } from "lucide-react";
 import {
   DndContext,
@@ -53,6 +53,8 @@ type Props = {
   onEditHabit?: (id: string) => void;
   onReorder?: (ids: string[]) => void;
   onReorderCategories?: (ids: string[]) => void;
+  /** 横スクロールが左端に達した時に呼ばれる。pastDays を増やす想定。 */
+  onLoadMorePast?: () => void;
 };
 
 function addDays(s: string, n: number): string {
@@ -160,8 +162,45 @@ export function HabitGrid({
   onEditHabit,
   onReorder,
   onReorderCategories,
+  onLoadMorePast,
 }: Props) {
   const cellMaps = useMemo(() => indexCells(cells), [cells]);
+
+  // 横スクロール container。infinite-scroll 風に左端到達で onLoadMorePast を kick。
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const prevPastDaysRef = useRef(pastDays);
+  const loadingRef = useRef(false);
+  const initialScrollDoneRef = useRef(false);
+
+  // pastDays が増えた直後: 視覚位置を保つため scrollLeft を追加幅ぶん右に補正。
+  // (新しい cells が左に prepend されたぶんを相殺、ユーザの視界はそのまま)
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    if (pastDays > prevPastDaysRef.current) {
+      const added = (pastDays - prevPastDaysRef.current) * STEP;
+      el.scrollLeft += added;
+    }
+    prevPastDaysRef.current = pastDays;
+    loadingRef.current = false;
+  }, [pastDays]);
+
+  // 初期描画時は今日 (右端) が見える位置にする。
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el || initialScrollDoneRef.current) return;
+    el.scrollLeft = el.scrollWidth;
+    initialScrollDoneRef.current = true;
+  }, [habits.length, pastDays]);
+
+  function handleScroll(e: React.UIEvent<HTMLDivElement>) {
+    if (!onLoadMorePast || loadingRef.current) return;
+    // 左端から 30px 以内に到達したら次の 30 日を読み込む。
+    if (e.currentTarget.scrollLeft <= 30) {
+      loadingRef.current = true;
+      onLoadMorePast();
+    }
+  }
 
   const dates = useMemo(() => {
     const out: string[] = [];
@@ -237,7 +276,7 @@ export function HabitGrid({
   }
 
   return (
-    <div className="overflow-x-auto">
+    <div className="overflow-x-auto" ref={scrollRef} onScroll={handleScroll}>
       <div style={{ minWidth: gridWidth + HEADER_LEFT_PAD + STREAK_W }}>
         <DateHeader dates={dates} todayIdx={todayIdx} gridWidth={gridWidth} />
 
