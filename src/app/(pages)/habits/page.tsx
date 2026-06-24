@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, FolderCog } from "lucide-react";
+import { Plus, FolderCog, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { HabitGrid } from "@/components/habit/habit-grid";
@@ -84,7 +84,13 @@ export default function HabitsPage() {
             <FolderCog className="size-3.5" />
             Categories
           </Button>
-          <div className="ml-auto">
+          <div className="ml-auto flex items-center gap-2">
+            {cellsQuery.isFetching && (
+              <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                <Loader2 className="size-3.5 animate-spin" />
+                Loading…
+              </span>
+            )}
             {/* cooldown は localStorage で全ページ共有。server の cells.synced_at が新しければ採用。 */}
             <WarehouseSyncButton
               target="toggl"

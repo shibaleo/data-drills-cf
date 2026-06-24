@@ -1,4 +1,4 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { rpc, unwrap, type RpcData } from "@/lib/rpc-client";
 
 export type HabitFreshResponse = RpcData<typeof rpc.api.v1["habit-fresh"]["$get"]>;
@@ -32,6 +32,8 @@ export function useHabitCells(pastDays?: number) {
     },
     staleTime: 5 * 60_000,
     meta: { persist: true },
+    // pastDays が変わった時に前回データを保持したまま refetch (= 既存セルを消さない)。
+    placeholderData: keepPreviousData,
   });
 }
 
