@@ -91,10 +91,12 @@ export default function DigestPage() {
   const activeTogglCategories = activeTab.togglCategories;
 
   // 現在の active tab に対応する warehouse sync target を返す。
-  // sleep → google_health (Health 同期)、exercise → notion (筋トレ DB)、その他 → toggl。
-  const syncTargetForTab: SyncTarget = activeCategory === "sleep" ? "google_health"
+  // sleep → google_health (Health 同期)、exercise → notion (筋トレ DB)。
+  // toggl 系 tab は API rate limit が狭く、time-based trigger に任せる方が安全なので
+  // 暴発防止で UI ボタンを非表示にする (null を返して conditional render で抑制)。
+  const syncTargetForTab: SyncTarget | null = activeCategory === "sleep" ? "google_health"
     : activeCategory === "exercise" ? "notion"
-    : "toggl";
+    : null;
   const warehouseSync = useWarehouseSync();
   useEffect(() => { setCurrentScopeId(scopeId); }, [scopeId, setCurrentScopeId]);
 
@@ -676,28 +678,30 @@ export default function DigestPage() {
           <span className="text-foreground font-medium ml-1">{weekly.totalSec > 0 ? fmtSec(weekly.totalSec) : "—"}</span> ·
           <span className="text-foreground font-medium ml-1">{weekly.activeDays}</span>/7 active
         </span>
-        {/* warehouse on-demand sync — 現在の active tab に対応する source を kick */}
-        <button type="button"
-          onClick={async () => {
-            try {
-              const r = await warehouseSync.mutateAsync({ target: syncTargetForTab });
-              if (r.ok) {
-                const synced = typeof r.synced === "number" ? `: ${r.synced} rows` : "";
-                toast.success(`Synced ${syncTargetForTab}${synced}`);
-              } else {
-                // ok=false: 重複実行ロック等の recoverable な拒否
-                toast.warning(`Sync skipped: ${r.error ?? "already running"}`);
+        {/* warehouse on-demand sync — toggl 系 (= 暴発防止で非表示) 以外の tab でだけ出す */}
+        {syncTargetForTab && (
+          <button type="button"
+            onClick={async () => {
+              try {
+                const r = await warehouseSync.mutateAsync({ target: syncTargetForTab });
+                if (r.ok) {
+                  const synced = typeof r.synced === "number" ? `: ${r.synced} rows` : "";
+                  toast.success(`Synced ${syncTargetForTab}${synced}`);
+                } else {
+                  // ok=false: 重複実行ロック等の recoverable な拒否
+                  toast.warning(`Sync skipped: ${r.error ?? "already running"}`);
+                }
+              } catch (e) {
+                toast.error(e instanceof Error ? e.message : "sync failed");
               }
-            } catch (e) {
-              toast.error(e instanceof Error ? e.message : "sync failed");
-            }
-          }}
-          disabled={warehouseSync.isPending}
-          className="inline-flex items-center gap-1 h-7 px-2 rounded-md border text-[10px] text-muted-foreground hover:text-foreground hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed"
-          title={`Sync ${syncTargetForTab} from data-warehouse`}>
-          <RefreshCw className={`size-3 ${warehouseSync.isPending ? "animate-spin" : ""}`}/>
-          Sync {syncTargetForTab}
-        </button>
+            }}
+            disabled={warehouseSync.isPending}
+            className="inline-flex items-center gap-1 h-7 px-2 rounded-md border text-[10px] text-muted-foreground hover:text-foreground hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed"
+            title={`Sync ${syncTargetForTab} from data-warehouse`}>
+            <RefreshCw className={`size-3 ${warehouseSync.isPending ? "animate-spin" : ""}`}/>
+            Sync {syncTargetForTab}
+          </button>
+        )}
       </div>
 
       {/* 生活軸タブ (Toggl personal_category 別) */}
