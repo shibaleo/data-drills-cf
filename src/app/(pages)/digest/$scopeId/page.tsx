@@ -5,7 +5,7 @@ import { COLOR_FIRST_ATTEMPT } from "@/lib/block-color";
 import { STATUS_PHASE } from "@/lib/status-phases";
 import { Markdown } from "@/components/markdown";
 import { tetrisCellClass, tetrisEmptyClass, TETRIS_RX, TETRIS_STROKE, TETRIS_STROKE_OPACITY, TETRIS_STROKE_WIDTH } from "@/components/tetris-cell";
-import { ChevronLeft, ChevronRight, Clock, ChevronDown, ChevronUp, Layers, ArrowUpRight, HeartPulse, Timer, RefreshCw } from "lucide-react";
+import { ChevronLeft, ChevronRight, Clock, ChevronDown, ChevronUp, Layers, ArrowUpRight, HeartPulse, Timer } from "lucide-react";
 import { Link, useParams, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useField } from "@/hooks/use-field";
@@ -21,7 +21,8 @@ import { useSleepStages, useSleepSummary, type SleepSummary } from "@/hooks/quer
 import { useExerciseSessions, type StrengthSession } from "@/hooks/queries/use-exercise";
 import { useOrgasmEvents, type OrgasmEvent } from "@/hooks/queries/use-leisure";
 import { useDigestScope } from "@/hooks/queries/use-digest-scopes";
-import { useWarehouseSync, type SyncTarget } from "@/hooks/queries/use-warehouse-sync";
+import type { SyncTarget } from "@/hooks/queries/use-warehouse-sync";
+import { WarehouseSyncButton } from "@/components/warehouse-sync-button";
 import { toast } from "sonner";
 import { useProblemDialogs } from "@/hooks/use-problem-dialogs";
 import { usePageTitle, usePageBack } from "@/lib/page-context";
@@ -97,7 +98,6 @@ export default function DigestPage() {
   const syncTargetForTab: SyncTarget | null = activeCategory === "sleep" ? "google_health"
     : activeCategory === "exercise" ? "notion"
     : null;
-  const warehouseSync = useWarehouseSync();
   useEffect(() => { setCurrentScopeId(scopeId); }, [scopeId, setCurrentScopeId]);
 
   // scope_id 指定で server-side filter (cross-field 対応)
@@ -680,27 +680,7 @@ export default function DigestPage() {
         </span>
         {/* warehouse on-demand sync — toggl 系 (= 暴発防止で非表示) 以外の tab でだけ出す */}
         {syncTargetForTab && (
-          <button type="button"
-            onClick={async () => {
-              try {
-                const r = await warehouseSync.mutateAsync({ target: syncTargetForTab });
-                if (r.ok) {
-                  const synced = typeof r.synced === "number" ? `: ${r.synced} rows` : "";
-                  toast.success(`Synced ${syncTargetForTab}${synced}`);
-                } else {
-                  // ok=false: 重複実行ロック等の recoverable な拒否
-                  toast.warning(`Sync skipped: ${r.error ?? "already running"}`);
-                }
-              } catch (e) {
-                toast.error(e instanceof Error ? e.message : "sync failed");
-              }
-            }}
-            disabled={warehouseSync.isPending}
-            className="inline-flex items-center gap-1 h-7 px-2 rounded-md border text-[10px] text-muted-foreground hover:text-foreground hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed"
-            title={`Sync ${syncTargetForTab} from data-warehouse`}>
-            <RefreshCw className={`size-3 ${warehouseSync.isPending ? "animate-spin" : ""}`}/>
-            Sync {syncTargetForTab}
-          </button>
+          <WarehouseSyncButton target={syncTargetForTab} />
         )}
       </div>
 

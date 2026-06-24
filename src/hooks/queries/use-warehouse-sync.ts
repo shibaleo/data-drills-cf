@@ -10,6 +10,7 @@
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@clerk/react";
+import { toast } from "sonner";
 import { ApiError } from "@/lib/api-client";
 
 export type SyncTarget = "toggl" | "google_health" | "notion" | "zaim" | "tanita";
@@ -81,7 +82,18 @@ export function useWarehouseSync() {
     },
     onSuccess: (data, { target }) => {
       // ok=true (完走) の時だけ cache invalidate。ok=false (重複拒否) は再 fetch 不要。
-      if (data.ok) invalidateTargets(qc, target);
+      if (data.ok) {
+        invalidateTargets(qc, target);
+        const synced = typeof data.synced === "number" ? `: ${data.synced} rows` : "";
+        toast.success(`Synced ${target}${synced}`);
+      } else {
+        // ok=false: 重複実行ロック等の recoverable な拒否
+        toast.warning(`Sync skipped: ${data.error ?? "already running"}`);
+      }
+    },
+    onError: (e) => {
+      // 5xx / 401 等は throw されてここに来る
+      toast.error(e instanceof Error ? e.message : "sync failed");
     },
   });
 }
