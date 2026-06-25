@@ -7,13 +7,9 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { MarkdownEditor } from "@/components/markdown-editor";
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
-import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from "@/components/ui/dialog";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { ApiError } from "@/lib/api-client";
 import { useField } from "@/hooks/use-field";
 import { useMasterField } from "@/hooks/use-master-field";
@@ -91,7 +87,7 @@ export default function FlashcardsPage() {
   const { statuses } = useField();
   const { field } = useMasterField();
   const fieldId = field?.id;
-  const { cards: rawCards, reviews, topics, isLoading } = useFlashcardsData(fieldId);
+  const { cards: rawCards, reviews, isLoading } = useFlashcardsData(fieldId);
   const createCard = useCreateFlashcard(fieldId);
   const updateCard = useUpdateFlashcard(fieldId);
   const deleteCard = useDeleteFlashcard(fieldId);
@@ -103,7 +99,6 @@ export default function FlashcardsPage() {
   const [editItem, setEditItem] = useState<FlashcardRow | null>(null);
   const [formFront, setFormFront] = useState("");
   const [formBack, setFormBack] = useState("");
-  const [formTopicId, setFormTopicId] = useState("__none__");
 
   // Inline reveal state
   const [revealedIds, setRevealedIds] = useState<Set<string>>(new Set());
@@ -132,7 +127,6 @@ export default function FlashcardsPage() {
     setEditItem(null);
     setFormFront("");
     setFormBack("");
-    setFormTopicId("__none__");
     setDialogOpen(true);
   }
 
@@ -140,7 +134,6 @@ export default function FlashcardsPage() {
     setEditItem(card);
     setFormFront(card.front);
     setFormBack(card.back);
-    setFormTopicId("__none__");
     setDialogOpen(true);
   }
 
@@ -152,7 +145,6 @@ export default function FlashcardsPage() {
     const base = {
       front: formFront.trim(),
       back: formBack.trim(),
-      topic_id: formTopicId === "__none__" ? null : formTopicId,
     };
     const onDone = {
       onSuccess: () => {
@@ -221,7 +213,6 @@ export default function FlashcardsPage() {
           {cards.map((card) => {
             const info = cardRetention(card.reviews, now);
             const revealed = revealedIds.has(card.id);
-            const topic = undefined as { id: string; name: string; color: string | null } | undefined;
             return (
               <FlipCard
                 key={card.id}
@@ -229,11 +220,7 @@ export default function FlashcardsPage() {
                 front={
                   <Card className="h-full flex flex-col py-4">
                     <CardContent className="flex flex-col flex-1 gap-3">
-                      {/* Header: topic + edit/delete */}
                       <div className="flex items-center gap-2 text-xs flex-wrap">
-                        {topic && (
-                          <Badge variant="outline" className="text-xs">{topic.name}</Badge>
-                        )}
                         <div className="ml-auto flex items-center gap-1">
                           <button
                             type="button"
@@ -282,9 +269,6 @@ export default function FlashcardsPage() {
                   <Card className="py-4">
                     <CardContent className="space-y-3">
                       <div className="flex items-center gap-2 text-xs flex-wrap">
-                        {topic && (
-                          <Badge variant="outline" className="text-xs">{topic.name}</Badge>
-                        )}
                         <div className="ml-auto flex items-center gap-1">
                           <button
                             type="button"
@@ -360,16 +344,6 @@ export default function FlashcardsPage() {
                 onChange={setFormBack}
                 placeholder="答え・解説"
               />
-            </div>
-            <div className="grid gap-2">
-              <Label>トピック</Label>
-              <Select value={formTopicId} onValueChange={setFormTopicId}>
-                <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">なし</SelectItem>
-                  {topics.map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
             </div>
           </div>
           <DialogFooter>

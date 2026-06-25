@@ -4,13 +4,11 @@ import type { FlashcardCreateInput, FlashcardUpdateInput } from "@/lib/schemas/f
 
 export type FlashcardRow = RpcData<typeof rpc.api.v1.flashcards.$get>["data"][number];
 export type FlashcardReviewRow = RpcData<typeof rpc.api.v1["flashcard-reviews"]["$get"]>["data"][number];
-export type TopicItem = RpcData<typeof rpc.api.v1.fields[":id"]["topics"]["$get"]>["data"][number];
 
 export const flashcardsKeys = {
   all: ["flashcards"] as const,
   cards: (fieldId: string) => [...flashcardsKeys.all, "cards", fieldId] as const,
   reviews: () => [...flashcardsKeys.all, "reviews"] as const,
-  topics: (fieldId: string) => ["flashcards", "topics", fieldId] as const,
 };
 
 export function useFlashcardsData(fieldId: string | undefined) {
@@ -34,22 +32,10 @@ export function useFlashcardsData(fieldId: string | undefined) {
     enabled: !!fieldId,
     meta: { persist: true },
   });
-  const topics = useQuery({
-    queryKey: fieldId ? flashcardsKeys.topics(fieldId) : flashcardsKeys.all,
-    queryFn: async () => {
-      const json = await unwrap(
-        rpc.api.v1.fields[":id"].topics.$get({ param: { id: fieldId! } }),
-      );
-      return json.data;
-    },
-    enabled: !!fieldId,
-    staleTime: 5 * 60_000,
-  });
   return {
     cards: cards.data ?? [],
     reviews: reviews.data ?? [],
-    topics: topics.data ?? [],
-    isLoading: cards.isLoading || reviews.isLoading || topics.isLoading,
+    isLoading: cards.isLoading || reviews.isLoading,
   };
 }
 

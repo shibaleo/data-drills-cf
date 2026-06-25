@@ -14,7 +14,6 @@ import { fieldCreateInputSchema, fieldUpdateInputSchema } from "@/lib/schemas/fi
 import { reorderInputSchema } from "@/lib/schemas/common";
 import fieldSubjects from "@/routes/field-subjects";
 import fieldLevels from "@/routes/field-levels";
-import fieldTopics from "@/routes/field-topics";
 import type { AuthResult } from "@/lib/auth";
 
 type Env = { Variables: { authResult: AuthResult } };
@@ -80,7 +79,6 @@ const app = new Hono<Env>()
     return c.json({ data: row });
   })
   .route("/:id/subjects", fieldSubjects)
-  .route("/:id/levels", fieldLevels)
-  .route("/:id/topics", fieldTopics);
+  .route("/:id/levels", fieldLevels);
 
 export default app;

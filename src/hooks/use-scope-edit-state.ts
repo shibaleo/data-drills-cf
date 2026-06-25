@@ -31,7 +31,6 @@ type ProblemRow = {
   field_id?: string | null;
   subject_id?: string | null;
   level_id?: string | null;
-  topic_id?: string | null;
   answers: { date: string }[];
 };
 
@@ -161,7 +160,6 @@ export function useScopeEditState(args: {
           field_id: p.field_id ?? "",
           subject_id: p.subject_id || null,
           level_id: p.level_id || null,
-          topic_id: p.topic_id ?? null,
           first_answer_date: firstAns,
         };
       })

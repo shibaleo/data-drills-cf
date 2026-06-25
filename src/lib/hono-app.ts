@@ -12,7 +12,6 @@ import reviews from "@/routes/reviews";
 import apiKeys from "@/routes/api-keys";
 import users from "@/routes/users";
 import statuses from "@/routes/statuses";
-import reviewTags from "@/routes/review-tags";
 import problemFiles from "@/routes/problem-files";
 import problemsList from "@/routes/problems-list";
 import srs from "@/routes/srs";
@@ -73,7 +72,6 @@ const v1 = new Hono<Env>()
   .route("/api-keys", apiKeys)
   .route("/users", users)
   .route("/statuses", statuses)
-  .route("/review-tags", reviewTags)
   .route("/problem-files", problemFiles)
   .route("/problems-list", problemsList)
   .route("/srs", srs)

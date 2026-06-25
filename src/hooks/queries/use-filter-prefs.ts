@@ -15,7 +15,6 @@ export type ReviewPrefs = {
 export type BacklogPrefs = {
   subjectIds?: string[];
   levelIds?: string[];
-  topicIds?: string[];
   /** First (初回着手済み) を非表示 */
   hideFirst?: boolean;
   /** Planned (未着手) を非表示 */

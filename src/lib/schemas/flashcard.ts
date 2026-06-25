@@ -4,7 +4,6 @@ export const flashcardCreateInputSchema = z.object({
   id: z.string().uuid().optional(),
   code: z.string().min(1).optional(),
   field_id: z.string().uuid(),
-  topic_id: z.string().uuid().nullish(),
   front: z.string().min(1),
   back: z.string().min(1),
 });
@@ -12,7 +11,6 @@ export const flashcardCreateInputSchema = z.object({
 export const flashcardUpdateInputSchema = z.object({
   front: z.string().min(1).optional(),
   back: z.string().min(1).optional(),
-  topic_id: z.string().uuid().nullish(),
 });
 export type FlashcardCreateInput = z.infer<typeof flashcardCreateInputSchema>;
 export type FlashcardUpdateInput = z.infer<typeof flashcardUpdateInputSchema>;

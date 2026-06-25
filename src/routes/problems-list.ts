@@ -179,7 +179,6 @@ const app = new Hono<Env>()
         name: p.name ?? "",
         subject_id: p.subjectId ?? "",
         level_id: p.levelId ?? "",
-        topic_id: null as string | null,
         checkpoint: p.checkpoint,
         standard_time: p.standardTime ?? null,
         body_md: p.bodyMd ?? null,

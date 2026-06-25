@@ -61,7 +61,6 @@ export function useUpdateProblem(fieldId: string | undefined) {
       if (payload.checkpoint !== undefined) patch.checkpoint = payload.checkpoint ?? null;
       if (payload.subject_id !== undefined) patch.subject_id = payload.subject_id ?? "";
       if (payload.level_id !== undefined) patch.level_id = payload.level_id ?? "";
-      if (payload.topic_id !== undefined) patch.topic_id = payload.topic_id ?? null;
       if (payload.standard_time !== undefined) patch.standard_time = payload.standard_time ?? null;
       qc.setQueryData<ProblemWithAnswers[]>(key, (old) =>
         old?.map((p) => (p.id === id ? { ...p, ...patch } : p)),

@@ -144,10 +144,6 @@ pdf-core は両 wrapper に workspace dep として参照される (`@data-drill
 - TypeScript の generic narrowing 制限を回避するための cast
 - `isErrorBody` ガードで runtime 保証済み、意図的な妥協として維持
 
-#### 9. (完了) Phase 6: option C → option B の内部 rename
-- 2026-06-09 commit `5b8a0da` で完了。SQL migration `006_phase6_rename.sql` 適用済 (Neon)、schema.ts/routes/hooks 全 rename 済
-- 残存していた `project_id` / `currentProject` / `projectId` 引数は撤去 (Toggl 固有概念と masters 内 alias のみ意図的温存)
-
 ## Conventions
 
 - Language: TypeScript

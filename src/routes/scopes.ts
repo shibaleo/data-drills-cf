@@ -200,7 +200,6 @@ const app = new Hono<Env>()
           field_id: m.fieldId,
           subject_id: m.subjectId,
           level_id: m.levelId,
-          topic_id: null as string | null,
           first_answer_date: firstAnswers.get(m.id) ?? null,
         })),
         subjects: subjects.map((s) => ({

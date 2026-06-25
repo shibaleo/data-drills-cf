@@ -33,7 +33,6 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Filter, SlidersHorizontal, ArrowLeft, Archive, Save, RotateCcw, Loader2, Download, History, ListFilter, MoreVertical, Check, X } from "lucide-react";
 import { AsOfControls } from "@/components/as-of-controls";
-import { useTopicsList } from "@/hooks/queries/use-topics";
 import { usePageTitle, useHeaderSlot, usePageBack } from "@/lib/page-context";
 import { toast } from "sonner";
 import { usePdfExport } from "@/hooks/use-pdf-export";
@@ -56,8 +55,6 @@ export default function ScopeDetailPage() {
   const { data, isLoading } = useScopeDetail(scopeId);
   const revisionsQuery = useScopeHistory(scopeId);
   const archive = useDeleteScope();
-  // Phase 3c: 並走する新 scope エンティティから status_stabilities を読み書き。
-  // 旧 backlog テーブルが Phase 4 で削除されるまでは並列に保持する。
   const scopeQuery = useScope(scopeId);
   const scopeRevisionsQuery = useScopeRevisions(scopeId);
 
@@ -100,7 +97,6 @@ export default function ScopeDetailPage() {
   const [overflowOnly, setOverflowOnly] = useState(false);
   const [filterSubjects, setFilterSubjects] = useState<Set<string>>(new Set());
   const [filterLevels, setFilterLevels] = useState<Set<string>>(new Set());
-  const [filterTopics, setFilterTopics] = useState<Set<string>>(new Set());
   const [hiddenLayerIds, setHiddenLayerIds] = useState<Set<string>>(new Set());
   const {
     selected: exportSelected,
@@ -112,7 +108,6 @@ export default function ScopeDetailPage() {
     upstream: exportUpstream,
     exportPdf,
   } = usePdfExport("backlog");
-  const { data: topics = [] } = useTopicsList(scopeFieldId ?? undefined);
 
   // Filter prefs persistence
   const filterPrefsQuery = useFilterPrefs(scopeId);
@@ -125,7 +120,6 @@ export default function ScopeDetailPage() {
     if (p) {
       setFilterSubjects(new Set(p.subjectIds ?? []));
       setFilterLevels(new Set(p.levelIds ?? []));
-      setFilterTopics(new Set(p.topicIds ?? []));
       setHideFirst(!!p.hideFirst);
       setHideFuture(!!p.hideFuture);
       setOverflowOnly(!!p.overflowOnly);
@@ -139,7 +133,6 @@ export default function ScopeDetailPage() {
     const snapshot = JSON.stringify({
       s: [...filterSubjects].sort(),
       l: [...filterLevels].sort(),
-      t: [...filterTopics].sort(),
       hideFirst, hideFuture, overflowOnly,
       h: [...hiddenLayerIds].sort(),
     });
@@ -154,13 +147,12 @@ export default function ScopeDetailPage() {
       backlog: {
         subjectIds: [...filterSubjects],
         levelIds: [...filterLevels],
-        topicIds: [...filterTopics],
         hideFirst, hideFuture, overflowOnly,
         hiddenLayerIds: [...hiddenLayerIds],
       },
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filterSubjects, filterLevels, filterTopics, hideFirst, hideFuture, overflowOnly, hiddenLayerIds]);
+  }, [filterSubjects, filterLevels, hideFirst, hideFuture, overflowOnly, hiddenLayerIds]);
 
   const qc = useQueryClient();
   const allProblems = useProblemsList(scopeFieldId ?? undefined).data ?? [];
@@ -268,7 +260,6 @@ export default function ScopeDetailPage() {
   function passesDisplayFilter(m: ScopeMember): boolean {
     if (filterSubjects.size > 0 && (!m.subject_id || !filterSubjects.has(m.subject_id))) return false;
     if (filterLevels.size > 0 && (!m.level_id || !filterLevels.has(m.level_id))) return false;
-    if (filterTopics.size > 0 && (!m.topic_id || !filterTopics.has(m.topic_id))) return false;
     if (hideFirst && m.first_answer_date) return false;
     if (hideFuture && !m.first_answer_date) return false;
     if (overflowOnly && !allocByProblemId.get(m.id)?.overflow) return false;
@@ -291,7 +282,7 @@ export default function ScopeDetailPage() {
   const visibleAllocated = allocated.filter((a) => visibleIds.has(a.problemId));
 
   const activeFilterCount =
-    filterSubjects.size + filterLevels.size + filterTopics.size
+    filterSubjects.size + filterLevels.size
     + (hideFirst ? 1 : 0) + (hideFuture ? 1 : 0) + (overflowOnly ? 1 : 0);
 
   async function onConfirm() {
@@ -487,15 +478,11 @@ export default function ScopeDetailPage() {
                   <FilterSection label="Level" items={levels.map((l) => ({ value: l.id, label: l.name }))}
                     selected={filterLevels} onChange={setFilterLevels}/>
                 )}
-                {topics.length > 0 && (
-                  <FilterSection label="Topic" items={topics.map((t) => ({ value: t.id, label: t.name }))}
-                    selected={filterTopics} onChange={setFilterTopics}/>
-                )}
                 {activeFilterCount > 0 && (
                   <button type="button"
                     className="text-[10px] text-muted-foreground hover:text-foreground w-full text-center pt-1"
                     onClick={() => {
-                      setFilterSubjects(new Set()); setFilterLevels(new Set()); setFilterTopics(new Set());
+                      setFilterSubjects(new Set()); setFilterLevels(new Set());
                       setHideFirst(false); setHideFuture(false); setOverflowOnly(false);
                     }}>Clear all</button>
                 )}
