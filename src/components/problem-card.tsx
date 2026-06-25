@@ -103,8 +103,8 @@ interface ProblemCardProps {
   onCheck: (problem: ProblemWithAnswers) => void
   /** Called when the edit (pencil) button on the problem header is clicked */
   onEditProblem: (problem: Problem) => void
-  /** Called when the edit (pencil) button on an answer timeline entry is clicked */
-  onEditAnswer: (answer: AnswerWithReviews, problem: ProblemWithAnswers) => void
+  /** Called when the edit (pencil) button on an answer timeline entry is clicked. Ignored when editableReviews=true. */
+  onEditAnswer?: (answer: AnswerWithReviews, problem: ProblemWithAnswers) => void
   /** Called when the delete button is clicked. If omitted, the delete button is hidden. */
   onDelete?: (id: string) => void
   /** Called after a PDF is linked via Drive Picker. If omitted, PDF section is hidden. */
@@ -387,11 +387,7 @@ export function ProblemCard({
               </div>
             </div>
           </div>
-        ) : (
-          <div className="flex items-center overflow-visible">
-            <span className="text-[10px] text-muted-foreground">未回答</span>
-          </div>
-        )}
+        ) : null}
 
         {/* Checkpoint */}
         {!hideCheckpoint && p.checkpoint && (
@@ -405,7 +401,7 @@ export function ProblemCard({
         {(answers.length > 0 || showInitialPlaceholder) && (
           <div ref={timelineRef} className="relative ml-5">
             {/* Continuous vertical timeline line。bottom New placeholder がある時は最下端まで伸ばす */}
-            <div className={`absolute left-[-1px] -translate-x-1/2 top-3 w-0.5 bg-border ${showInitialPlaceholder ? 'bottom-3' : 'bottom-[18px]'}`} />
+            <div className={`absolute left-[-1px] -translate-x-1/2 top-3 w-0.5 bg-border ${showInitialPlaceholder ? 'bottom-2' : 'bottom-[18px]'}`} />
             {answers.map((a, i) => {
               const reviews = [...a.reviews].sort(
                 (x, y) => (x.created_at ?? '').localeCompare(y.created_at ?? ''),
@@ -468,7 +464,7 @@ export function ProblemCard({
                             <Pencil className="size-3" />
                           </button>
                         )
-                      ) : (
+                      ) : onEditAnswer ? (
                         <button
                           type="button"
                           onClick={() => onEditAnswer(a, p)}
@@ -477,7 +473,7 @@ export function ProblemCard({
                         >
                           <Pencil className="size-3" />
                         </button>
-                      )
+                      ) : null
                       return renderAnswerMetaBar({
                         date: a.date,
                         duration: a.duration,
@@ -504,7 +500,7 @@ export function ProblemCard({
                wrapper に高さを持たせて pill を vertical center に置き、timeline 線の終端と
                pill の中心を一致させる (= 下の action row と被らない)。 */}
             {showInitialPlaceholder && (
-              <div className="relative pl-9 h-6">
+              <div className="relative pl-9 h-4">
                 <div className="absolute left-[-1px] -translate-x-1/2 top-1/2 -translate-y-1/2 whitespace-nowrap">
                   <StatusTag status={noGradeName} color={noGradeColor} opaque />
                 </div>

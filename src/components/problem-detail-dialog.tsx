@@ -1,7 +1,7 @@
 "use client";
 
 import { X } from "lucide-react";
-import { ProblemCard, type ProblemWithAnswers, type AnswerWithReviews } from "@/components/problem-card";
+import { ProblemCard, type ProblemWithAnswers } from "@/components/problem-card";
 import type { Problem } from "@/lib/types";
 import {
   Dialog, DialogContent, DialogClose, DialogHeader, DialogTitle, DialogDescription,
@@ -13,10 +13,11 @@ interface ProblemDetailDialogProps {
   problem: ProblemWithAnswers | null;
   now: Date;
   onEditProblem: (problem: Problem) => void;
-  onEditAnswer: (answer: AnswerWithReviews, problem: ProblemWithAnswers) => void;
   onCheck: (problem: ProblemWithAnswers) => void;
   onDelete?: (id: string) => void;
   onPdfLinked?: (problemId: string) => void;
+  /** review 保存後の invalidate callback */
+  onReviewSaved?: () => void;
 }
 
 export function ProblemDetailDialog({
@@ -25,10 +26,10 @@ export function ProblemDetailDialog({
   problem,
   now,
   onEditProblem,
-  onEditAnswer,
   onCheck,
   onDelete,
   onPdfLinked,
+  onReviewSaved,
 }: ProblemDetailDialogProps) {
   if (!problem) return null;
 
@@ -46,10 +47,11 @@ export function ProblemDetailDialog({
           problem={problem}
           now={now}
           onEditProblem={onEditProblem}
-          onEditAnswer={onEditAnswer}
           onCheck={onCheck}
           onDelete={onDelete}
           onPdfLinked={onPdfLinked}
+          editableReviews
+          onReviewSaved={onReviewSaved}
           bare
         />
       </DialogContent>

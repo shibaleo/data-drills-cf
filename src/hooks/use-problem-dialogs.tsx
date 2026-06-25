@@ -5,11 +5,11 @@ import { toast } from "sonner";
 import { ApiError } from "@/lib/api-client";
 import { rpc, unwrap } from "@/lib/rpc-client";
 import { useSubjects, useLevels } from "@/hooks/queries/use-field-data";
-import { useAnswerForm, useEditAnswerForm } from "@/hooks/use-answer-form";
+import { useAnswerForm } from "@/hooks/use-answer-form";
 import { ProblemDetailDialog } from "@/components/problem-detail-dialog";
 import { ProblemEditDialog } from "@/components/problem-edit-dialog";
 import { AnswerDialog } from "@/components/answer-dialog";
-import type { ProblemWithAnswers, AnswerWithReviews } from "@/components/problem-card";
+import type { ProblemWithAnswers } from "@/components/problem-card";
 import type { Problem } from "@/lib/types";
 
 /**
@@ -50,7 +50,6 @@ export function useProblemDialogs({
 
   // Answer forms
   const answerForm = useAnswerForm(fieldId, () => { notifyAndRefresh(); });
-  const editForm = useEditAnswerForm(fieldId, () => { notifyAndRefresh(); });
 
   const openDetail = useCallback((problemId: string) => {
     setDetailProblemId(problemId);
@@ -98,16 +97,13 @@ export function useProblemDialogs({
           problem={detailProblem}
           now={now}
           onEditProblem={handleEditProblem}
-          onEditAnswer={(answer, problem) => {
-            setDetailOpen(false);
-            editForm.openFor(answer, problem);
-          }}
           onCheck={(problem) => {
             setDetailOpen(false);
             answerForm.openForProblem(problem as Problem & { answers: { date: string | null; status: string | null }[] });
           }}
           onDelete={handleDeleteProblem}
           onPdfLinked={() => notifyAndRefresh()}
+          onReviewSaved={notifyAndRefresh}
         />
 
         <ProblemEditDialog
@@ -147,27 +143,11 @@ export function useProblemDialogs({
           onSave={answerForm.save}
         />
 
-        <AnswerDialog
-          open={editForm.open}
-          onOpenChange={editForm.setOpen}
-          title="解答を編集"
-          fieldId={fieldId}
-          subjects={subjects}
-          levels={levels}
-          form={editForm.form}
-          reviewsField={editForm.reviewsField}
-          codeSuggestions={editForm.codeSuggestions}
-          checkpointMap={editForm.checkpointMap}
-          nameMap={editForm.nameMap}
-          saveLabel="保存"
-          onSave={editForm.save}
-        />
-
       </>
     );
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fieldId, detailOpen, detailProblem, editDialogOpen, editProblem,
-      answerForm, editForm, subjects, levels, handleEditProblem, handleDeleteProblem,
+      answerForm, subjects, levels, handleEditProblem, handleDeleteProblem,
       notifyAndRefresh, openCreate]);
 
   return { openDetail, openCreate, openEdit, renderDialogs };
