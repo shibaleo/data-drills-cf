@@ -602,7 +602,11 @@ export const TetrisChartCore = forwardRef<TetrisChartHandle, TetrisChartProps>(f
                   });
                 })()}
                 {(() => {
-                  const diff = axisIdx >= 0 ? colIdx - axisIdx : 0;
+                  // axisToday が visible range 外でも day-diff で正しく刻むため、
+                  // 配列 index 差ではなく実際の日数差で計算する。
+                  const diff = Math.round(
+                    (new Date(`${date}T00:00:00Z`).getTime() - new Date(`${axisToday}T00:00:00Z`).getTime()) / 86400000,
+                  );
                   if (diff % 7 !== 0) return null;
                   const d = new Date(`${date}T12:00:00`);
                   return (
@@ -612,7 +616,9 @@ export const TetrisChartCore = forwardRef<TetrisChartHandle, TetrisChartProps>(f
                   );
                 })()}
                 {(() => {
-                  const diff = axisIdx >= 0 ? colIdx - axisIdx : 0;
+                  const diff = Math.round(
+                    (new Date(`${date}T00:00:00Z`).getTime() - new Date(`${axisToday}T00:00:00Z`).getTime()) / 86400000,
+                  );
                   if (diff % 7 !== 0) return null;
                   const label = formatRelDay(diff);
                   return (
