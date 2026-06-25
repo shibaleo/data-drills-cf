@@ -70,7 +70,85 @@ display "Roadmap" / internal "plan" のミスマッチ。2026-06-25 に **放置
 
 ---
 
-## 5. その他細かい古い情報源
+## 5. `Planned` / `Unrated` / `First` は本来 `New` に統一すべき
+
+### 背景
+
+answer_status master の `sortOrder = 0` slot は **"New" (no-grade)** として contract 化済 (2026-06-23, memory: `project_status_master_frozen.md`)。つまり「評価なし」を表す **status 名は `New` 1 つだけ**。
+
+ところが過去の rename ([docs/status-name-refactor.md](docs/status-name-refactor.md)) が中途半端で、コード内に `Planned` / `Unrated` / `First` という旧名の文字列リテラルが残存している。
+
+### 概念整理
+
+「評価なし」状態には実は **2 軸の直交分解** が必要:
+
+- **status 軸 (評価軸)**: `New` (= no-grade)。1 種類のみ。
+- **時間軸 (位置軸)**: past (= 過去側、actuals overlay) / future (= 未来側、allocator 投影)
+
+過去の rename はこの 2 軸を混同して、「時間軸の値」を「status 軸の値」として命名してしまった:
+
+| 過去の名前 | 本来の分解 |
+|---|---|
+| `Planned` | status = `New`, 時間 = future |
+| `First` | status = `New`, 時間 = past (= 初回着手済) |
+| `Unrated` | status = `New`, 時間 = past (= `First` と同義の旧名) |
+
+色は時間軸方向で意図的に分けている (`COLOR_PLANNED` = 鮮やかな purple-400, `COLOR_FIRST_ATTEMPT` = past 用に淡い purple-300)。これは UX 上必要な distinction だが、**status 名ではなく時間軸の属性**として表現すべき。
+
+### 残存箇所
+
+#### status 名としての文字列リテラル
+
+| 場所 | 内容 |
+|---|---|
+| [src/lib/status-phases.ts:17-18](src/lib/status-phases.ts#L17-L18) | `ALLOC_KIND_PAST: "First"`, `ALLOC_KIND_FUTURE: "Planned"` — allocator kind の文字列定数 (本来は `kind` の識別子と status 名を分離すべき) |
+| [src/hooks/queries/use-filter-prefs.ts:29,38](src/hooks/queries/use-filter-prefs.ts#L29) | `hiddenAllocKinds?: ("First" \| "Planned")[]` 永続化型、コメント `("First" + 各 status name)` |
+| [src/app/(pages)/plan/page.tsx:130,300-308,376-440](src/app/(pages)/plan/page.tsx#L130) | `hiddenAllocKinds` state + toggle で `"First"` / `"Planned"` をリテラル discriminator として使用 (~15 箇所) |
+| [src/components/status-transition-matrix.tsx:99](src/components/status-transition-matrix.tsx#L99) | `from === FIRST_LABEL` (FIRST_LABEL の実値要確認) |
+| [src/app/(pages)/scopes/$scopeId/page.tsx:648](src/app/(pages)/scopes/$scopeId/page.tsx#L648) | `<SimpleSortHeader label="First" sortKey="first" ...>` — テーブル列見出し (display 露出) |
+
+#### color 定数名
+
+| 場所 | 内容 |
+|---|---|
+| [src/lib/block-color.ts:22-23](src/lib/block-color.ts#L22-L23) | `COLOR_PLANNED`, `COLOR_FIRST_ATTEMPT` — 定数名が旧 status 名。意味は「No-grade × future の色」「No-grade × past の色」 |
+| [src/lib/answer-history-overlay.ts](src/lib/answer-history-overlay.ts), plan/page.tsx 等 | `COLOR_PLANNED` / `COLOR_FIRST_ATTEMPT` を多数 import |
+| [src/components/cycle-time-stats.tsx:2](src/components/cycle-time-stats.tsx#L2) | JSDoc: "Unrated → Solid に達するまでの日数" (display 露出) |
+
+#### display 露出 (UI に表示されているもの)
+
+| 場所 | 内容 |
+|---|---|
+| [src/app/(pages)/about/page.tsx:172,211-219](src/app/(pages)/about/page.tsx#L172) | About ページの説明テーブル: `Planned` / `Unrated` / `Over budget (Planned 塗り + ...)` 等の語が散在 |
+| [src/app/(pages)/digest/$scopeId/page.tsx:1024,1971](src/app/(pages)/digest/$scopeId/page.tsx#L1024) | "Top: Planned (Toggl) / Bottom: Actual (drills)" 等 (← この "Planned" は Toggl の "予定" 時間の意味で、status 名とは別概念。要文脈再判定) |
+| [src/components/status-transition-matrix.tsx:1710,1814,1920,2048,2071](src/components/status-transition-matrix.tsx#L1710), [src/app/(pages)/scopes/page.tsx:213](src/app/(pages)/scopes/page.tsx#L213) | JSDoc / コメント: `Unrated`, `Planned/First/Miss/Rough/Fluent/Done` 等の旧名列挙 |
+| [src/app/(pages)/scopes/$scopeId/page.tsx:648](src/app/(pages)/scopes/$scopeId/page.tsx#L648) | テーブル列ヘッダ "First" |
+
+#### docs
+
+- [docs/status-name-refactor.md](docs/status-name-refactor.md) — 旧 rename の handoff。`"Unrated" → "New"` を 4 ファイルで rename したと書いてあるが、その後の rename ratchet が止まっている。
+
+### 観察
+
+- **`UNANSWERED_LABEL: "New"` ([status-phases.ts:16](src/lib/status-phases.ts#L16))** は正しい一元化済の legend label。
+- **`ALLOC_KIND_PAST: "First"`, `ALLOC_KIND_FUTURE: "Planned"`** は `kind` 識別子の **値** に status 名と同じ string を混在させているのが問題の核。識別子の **キー** (例: `"past"` / `"future"`) と status 名 (常に `"New"`) を分ければ 2 軸が綺麗に分解できる。
+- color 定数 `COLOR_PLANNED` / `COLOR_FIRST_ATTEMPT` も意味的には `COLOR_NEW_FUTURE` / `COLOR_NEW_PAST` 等。
+- display 露出している "Planned" / "Unrated" / "First" は **すべて誤** (status 名としては存在しないので "New" にすべき)。ただし digest の "Top: Planned (Toggl)" の `Planned` は Toggl の予定時間文脈なので別概念 (= 偶発的 collision)。
+- filter-prefs DB key の `("First" | "Planned")[]` は永続化されているので migration が要る (= 既存 prefs 捨てる or 変換)。
+
+### 着手するなら
+
+1. `STATUS_PHASE.ALLOC_KIND_PAST/FUTURE` の値を `"past"` / `"future"` 等の time-axis 識別子に変更し、status 名としての `"First"` / `"Planned"` を全廃。
+2. `COLOR_PLANNED` → `COLOR_NEW_FUTURE`, `COLOR_FIRST_ATTEMPT` → `COLOR_NEW_PAST` に rename。
+3. plan/page.tsx の `hiddenAllocKinds` state + filter-prefs persistence の値を `("past" | "future")[]` に migrate。
+4. display 露出 (about ページ, テーブル列ヘッダ, JSDoc) を `New` に置換。
+5. digest の `"Planned (Toggl)"` は Toggl 文脈なので独立、影響無し。
+
+影響範囲は中。filter-prefs migration があるので段階的にやる必要あり。
+
+---
+
+## 6. その他細かい古い情報源
 
 - [src/router.tsx:27](src/router.tsx#L27) — "Phase 3b: backlog → scopes リネーム" コメント。Phase 4 完了で陳腐化。
 - [src/routes/scopes.ts:9,142,401](src/routes/scopes.ts#L9) — "Phase 4 で削除する" / "Phase 4 で goal_layer.backlog_id が drop されるまでは" 等の TODO。すべて Phase 4 完了済で陳腐。
@@ -83,7 +161,9 @@ display "Roadmap" / internal "plan" のミスマッチ。2026-06-25 に **放置
 
 | 優先 | 項目 | 着手条件 |
 |---|---|---|
-| HIGH | Phase 4 系古コメント除去 (#5) | コストほぼ 0、価値: 新規読者の混乱回避 |
+| HIGH | Phase 4 系古コメント除去 (#6) | コストほぼ 0、価値: 新規読者の混乱回避 |
+| HIGH | display 露出している `Planned`/`Unrated`/`First` を `New` に置換 (#5) | About ページ + テーブル列ヘッダ等。即可 |
+| MID | `STATUS_PHASE.ALLOC_KIND_*` の値を `"past"/"future"` に変更 + COLOR 定数 rename (#5) | filter-prefs DB key migration が要 |
 | MID | `BacklogPrefs` / `"backlog"` filter-prefs key rename → `"scope"` 等 | DB migration が必要 (既存 prefs を捨てる or 移行) |
 | MID | `usePdfExport("backlog")` 識別子 rename | DB に保存される値ではない、影響範囲は中 |
 | MID | "Archive this backlog?" 文言 → "Archive this scope?" | display 露出、即可 |
