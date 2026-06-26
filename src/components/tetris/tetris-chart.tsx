@@ -277,10 +277,12 @@ export const TetrisChartCore = forwardRef<TetrisChartHandle, TetrisChartProps>(f
   }, [items, overlayItems, statusRankByName]);
 
   const { dates, todayIdx } = useMemo(() => {
+    // milestone は range 計算から除外: filter で items が絞られても milestone date
+    // でチャート左端が引っ張られると右端 (= 直近) しか item が無い時に大きな
+    // 空白が出るため。milestones は items range 内に落ちた時のみ描画される。
     const allDates = [
       today,
       ...items.map((i) => i.date),
-      ...milestones.map((m) => m.date),
       ...(overlayItems ?? []).map((o) => o.date),
     ];
     const minDate = allDates.reduce((a, b) => (a < b ? a : b), today);
@@ -291,7 +293,7 @@ export const TetrisChartCore = forwardRef<TetrisChartHandle, TetrisChartProps>(f
     let d = rangeStart;
     while (d <= rangeEnd) { ds.push(d); d = addDays(d, 1); }
     return { dates: ds, todayIdx: ds.indexOf(today) };
-  }, [items, milestones, overlayItems, today]);
+  }, [items, overlayItems, today]);
   const axisIdx = dates.indexOf(axisToday);
 
   const didInitScroll = useRef(false);
@@ -670,8 +672,10 @@ export const TetrisChartCore = forwardRef<TetrisChartHandle, TetrisChartProps>(f
             const layerLineWidth = layer.line_width ?? 1.5;
             const layerLineDash = layer.line_style === "dashed" ? "4 3" : layer.line_style === "dotted" ? "1 3" : undefined;
             const idx = dates.indexOf(ms.date);
-            const colIdx = idx >= 0 ? idx : Math.max(0, Math.round((new Date(`${ms.date}T00:00:00Z`).getTime() - new Date(`${dates[0]}T00:00:00Z`).getTime()) / 86400000));
-            const cx = colIdx * STEP + CELL / 2;
+            // range 外の milestone は描画しない (= filter で items が絞られた時に
+            // 左端へ重なって描画される問題を避ける)。filter 解除で復活する。
+            if (idx < 0) return null;
+            const cx = idx * STEP + CELL / 2;
             const rowY = layerYById.get(layer.id) ?? MS_TOP_PAD;
             // ピン非表示 or layer 個別非表示時は、すべてグリッド最上段から (= today 破線と同じ開始位置)
             const lineY1 = (!_showPins || hidden) ? TOP_AXIS_H : rowY;
