@@ -11,7 +11,7 @@
  * 旧称: BacklogChart (2026-06-15 改名)。BacklogChart は domain 概念としての
  * "backlog" を表していたが、UI の本質は tetris 視覚化なので rename した。
  */
-import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState, type ReactNode } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Hash, CalendarDays, Trash2, Eye, EyeOff, GripVertical } from "lucide-react";
 import {
   DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent,
@@ -303,6 +303,24 @@ export const TetrisChartCore = forwardRef<TetrisChartHandle, TetrisChartProps>(f
     const todayX = todayIdx * STEP;
     scrollRef.current.scrollLeft = todayX - scrollRef.current.clientWidth / 3;
   }, [todayIdx]);
+
+  // dates が変わった時 (filter 変更や range 動的更新) に、viewport の left edge が
+  // 指していた日付を新 dates 内で再探索して scrollLeft を補正する。
+  // これで filter 操作してもユーザーが見ていた block 位置が画面上で動かない。
+  const prevDatesRef = useRef<string[] | null>(null);
+  useLayoutEffect(() => {
+    const container = scrollRef.current;
+    const prev = prevDatesRef.current;
+    prevDatesRef.current = dates;
+    if (!container || !prev || prev === dates || !didInitScroll.current) return;
+    const oldIdx = Math.floor(container.scrollLeft / STEP);
+    const anchorDate = prev[oldIdx];
+    if (!anchorDate) return;
+    const newIdx = dates.indexOf(anchorDate);
+    if (newIdx < 0) return;
+    const offset = container.scrollLeft - oldIdx * STEP;
+    container.scrollLeft = newIdx * STEP + offset;
+  }, [dates]);
 
   useImperativeHandle(ref, () => ({
     getCenterDate() {
