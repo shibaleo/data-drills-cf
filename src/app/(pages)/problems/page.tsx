@@ -3,14 +3,8 @@
 import { useCallback, useMemo, useState } from "react";
 import { Plus, Search, LayoutGrid, List as ListIcon, Eye, EyeOff, FileText, X } from "lucide-react";
 import { AgGridReact } from "ag-grid-react";
-import {
-  AllCommunityModule,
-  ModuleRegistry,
-  themeQuartz,
-  type ColDef,
-  type ICellRendererParams,
-  type RowClickedEvent,
-} from "ag-grid-community";
+import type { ColDef, ICellRendererParams, RowClickedEvent } from "ag-grid-community";
+import { agGridTheme } from "@/components/ag-grid-theme";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -32,30 +26,6 @@ import { useProblemsList } from "@/hooks/queries/use-problems";
 import { useSubjects, useLevels } from "@/hooks/queries/use-field-data";
 import { useProblemDialogs } from "@/hooks/use-problem-dialogs";
 import { usePageTitle } from "@/lib/page-context";
-
-ModuleRegistry.registerModules([AllCommunityModule]);
-
-const agGridTheme = themeQuartz.withParams({
-  fontFamily: "inherit",
-  fontSize: 13,
-  headerFontWeight: 600,
-  rowHeight: 28,
-  headerHeight: 30,
-  cellHorizontalPadding: 10,
-  borderRadius: 6,
-  backgroundColor: "hsl(var(--card))",
-  foregroundColor: "hsl(var(--foreground))",
-  headerBackgroundColor: "hsl(var(--muted))",
-  headerTextColor: "hsl(var(--foreground))",
-  borderColor: "hsl(var(--border))",
-  wrapperBorder: { color: "hsl(var(--border))", style: "solid", width: 1 },
-  rowHoverColor: "hsl(var(--accent) / 0.5)",
-  selectedRowBackgroundColor: "hsl(var(--accent))",
-  oddRowBackgroundColor: "hsl(var(--card))",
-  chromeBackgroundColor: "hsl(var(--muted))",
-  inputBackgroundColor: "hsl(var(--background))",
-  inputBorder: { color: "hsl(var(--border))", style: "solid", width: 1 },
-});
 
 type ViewMode = "list" | "card";
 

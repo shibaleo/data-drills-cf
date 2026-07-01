@@ -1,6 +1,7 @@
 "use client";
 
 import type { ColumnDef } from "@tanstack/react-table";
+import type { ColDef, ICellRendererParams } from "ag-grid-community";
 import { SortHeader } from "@/components/sort-header";
 import { StatusTag } from "@/components/color-tags";
 import { OpaqueTag } from "@/components/problem-card";
@@ -13,6 +14,7 @@ export interface ScheduleRow extends Omit<SrsRow, "answerCount"> {
   standardTime: number | null;
 }
 
+/** @deprecated TanStack Table 用。AG Grid 化後は planScheduleColDefs を使う。 */
 export const planScheduleColumns: ColumnDef<ScheduleRow>[] = [
   {
     accessorKey: "lastStatus",
@@ -92,6 +94,91 @@ export const planScheduleColumns: ColumnDef<ScheduleRow>[] = [
       <span className="text-xs text-muted-foreground tabular-nums">{getValue<number>()}</span>
     ),
     size: 64,
+  },
+];
+
+/** AG Grid 用 ColDef (列幅は TanStack 版と同一)。 */
+const CENTER_CELL = "ag-cell-center";
+const CENTER_HEADER = "ag-header-center";
+
+export const planScheduleColDefs: ColDef<ScheduleRow>[] = [
+  {
+    headerName: "Status",
+    field: "lastStatus",
+    width: 70,
+    cellClass: CENTER_CELL,
+    headerClass: CENTER_HEADER,
+    cellRenderer: (p: ICellRendererParams<ScheduleRow>) => (
+      <StatusTag
+        status={p.data?.lastStatus ?? ""}
+        color={p.data?.statusColor ?? null}
+        opaque
+        className="text-[10px]"
+      />
+    ),
+  },
+  {
+    headerName: "Field",
+    field: "fieldName",
+    width: 80,
+    hide: true,
+    cellClass: CENTER_CELL,
+    headerClass: CENTER_HEADER,
+    cellRenderer: (p: ICellRendererParams<ScheduleRow>) =>
+      p.data?.fieldName ? <OpaqueTag name={p.data.fieldName} color={p.data.fieldColor ?? null} /> : null,
+  },
+  {
+    headerName: "Subject",
+    field: "subjectName",
+    width: 70,
+    cellClass: CENTER_CELL,
+    headerClass: CENTER_HEADER,
+    cellRenderer: (p: ICellRendererParams<ScheduleRow>) =>
+      p.data?.subjectName ? <OpaqueTag name={p.data.subjectName} color={p.data.subjectColor ?? null} /> : null,
+  },
+  {
+    headerName: "Level",
+    field: "levelName",
+    width: 70,
+    cellClass: CENTER_CELL,
+    headerClass: CENTER_HEADER,
+    cellRenderer: (p: ICellRendererParams<ScheduleRow>) =>
+      p.data?.levelName ? <OpaqueTag name={p.data.levelName} color={p.data.levelColor ?? null} /> : null,
+  },
+  {
+    headerName: "Code",
+    field: "code",
+    width: 64,
+    cellClass: "font-mono text-xs",
+  },
+  {
+    headerName: "Name",
+    field: "name",
+    width: 240,
+    cellClass: "text-xs",
+  },
+  {
+    headerName: "Days",
+    field: "daysUntil",
+    width: 64,
+    cellClass: "text-xs tabular-nums font-medium",
+    cellRenderer: (p: ICellRendererParams<ScheduleRow, number>) => {
+      const d = p.value ?? 0;
+      const cls = d < 0 ? "text-red-500" : d === 0 ? "text-foreground" : "text-muted-foreground";
+      return <span className={cls}>{formatRelDay(d)}</span>;
+    },
+  },
+  {
+    headerName: "Next",
+    field: "nextReview",
+    width: 100,
+    cellClass: "text-xs text-muted-foreground tabular-nums",
+  },
+  {
+    headerName: "Ans",
+    field: "reviewCount",
+    width: 64,
+    cellClass: "text-xs text-muted-foreground tabular-nums",
   },
 ];
 

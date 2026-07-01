@@ -10,14 +10,11 @@ import {
   History,
   Download,
   Filter,
+  Columns as ColumnsIcon,
 } from "lucide-react";
-import {
-  useReactTable,
-  getCoreRowModel,
-  getSortedRowModel,
-  flexRender,
-  type SortingState,
-} from "@tanstack/react-table";
+import { AgGridReact } from "ag-grid-react";
+import type { ColDef, GridReadyEvent, ICellRendererParams } from "ag-grid-community";
+import { agGridTheme } from "@/components/ag-grid-theme";
 import { useField } from "@/hooks/use-field";
 import { useSrs } from "@/hooks/queries/use-srs";
 import { useProblemsList } from "@/hooks/queries/use-problems";
@@ -32,12 +29,12 @@ import { ScopeFSRSOverridePanel } from "@/components/scope-fsrs-override-panel";
 import { BlockLegend, type LegendEntry } from "@/components/block-legend";
 import { useAnswerHistoryList } from "@/hooks/queries/use-answer-history";
 import { Button } from "@/components/ui/button";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ResizableTableShell } from "@/components/resizable-table-shell";
 import { AsOfControls } from "@/components/as-of-controls";
 import { FilterSection } from "@/components/filter-section";
-import { planScheduleColumns, toScheduleRow } from "@/components/plan-schedule-columns";
+import { planScheduleColDefs, toScheduleRow, type ScheduleRow } from "@/components/plan-schedule-columns";
 import { useScopeEditState } from "@/hooks/use-scope-edit-state";
 import { usePdfExport } from "@/hooks/use-pdf-export";
 import { PdfExportButton } from "@/components/pdf-export-button";
@@ -137,7 +134,8 @@ export default function PlanPage() {
   const [chartMaxRows, setChartMaxRows] = useState<number | null>(null);
   const [historyPanelOpen, setHistoryPanelOpen] = useState(false);
   const [hiddenLayerIds, setHiddenLayerIds] = useState<Set<string>>(new Set());
-  const [sorting, setSorting] = useState<SortingState>([{ id: "daysUntil", desc: false }]);
+  const gridApiRef = useRef<GridReadyEvent<ScheduleRow>["api"] | null>(null);
+  const [visibleCols, setVisibleCols] = useState<Record<string, boolean>>({});
   const [filterSubjects, setFilterSubjects] = useState<Set<string>>(new Set());
   const [filterLevels, setFilterLevels] = useState<Set<string>>(new Set());
   // 凡例 status pills は hide-set (空 = 全表示、入っているのが非表示)
@@ -215,8 +213,11 @@ export default function PlanPage() {
   const handleSelect = useCallback((id: string) => {
     setSelectedId((prev) => (prev === id ? null : id));
     requestAnimationFrame(() => {
-      const row = tableRef.current?.querySelector(`[data-problem-id="${id}"]`);
-      row?.scrollIntoView({ behavior: "smooth", block: "center" });
+      const api = gridApiRef.current;
+      if (api) {
+        const node = api.getRowNode(id);
+        if (node?.rowIndex != null) api.ensureIndexVisible(node.rowIndex, "middle");
+      }
     });
   }, []);
 
@@ -355,15 +356,64 @@ export default function PlanPage() {
   }, [allScheduleRows, statuses]);
   // 漏斗バッジは funnel 内のフィルタ (subject/level) と凡例 hide-set の合計。
   const activeFilterCount = filterSubjects.size + filterLevels.size + hiddenLastStatuses.size + hiddenAllocKinds.size + hiddenAllocFlags.size;
-  const table = useReactTable({
-    data: scheduleRows,
-    columns: planScheduleColumns,
-    state: { sorting },
-    onSortingChange: setSorting,
-    getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-  });
   const pdfExport = usePdfExport("plan");
+
+  const selectColDef = useMemo<ColDef<ScheduleRow>>(() => ({
+    headerName: "",
+    field: "problemId",
+    width: 40,
+    minWidth: 40,
+    maxWidth: 48,
+    sortable: false,
+    filter: false,
+    resizable: false,
+    pinned: "left",
+    cellStyle: { paddingLeft: 0, paddingRight: 0 },
+    headerClass: "ag-checkbox-header",
+    headerComponent: () => {
+      const total = scheduleRows.length;
+      const selected = pdfExport.selected.size;
+      const state: boolean | "indeterminate" = selected === 0
+        ? false
+        : selected < total
+          ? "indeterminate"
+          : true;
+      return (
+        <span className="flex items-center justify-center h-full w-full">
+          <Checkbox
+            checked={state}
+            onCheckedChange={() => {
+              if (selected > 0) pdfExport.clear();
+              else pdfExport.setAll(scheduleRows.map((r) => r.problemId));
+            }}
+          />
+        </span>
+      );
+    },
+    cellRenderer: (p: ICellRendererParams<ScheduleRow>) => {
+      const pid = p.data?.problemId;
+      if (!pid) return null;
+      return (
+        <span
+          onClick={(e) => { e.stopPropagation(); pdfExport.toggle(pid); }}
+          className="flex items-center justify-center h-full w-full"
+        >
+          <Checkbox
+            checked={pdfExport.selected.has(pid)}
+            onCheckedChange={() => pdfExport.toggle(pid)}
+            onClick={(e) => e.stopPropagation()}
+          />
+        </span>
+      );
+    },
+  }), [pdfExport, scheduleRows]);
+
+  const columnDefs = useMemo<ColDef<ScheduleRow>[]>(() => [selectColDef, ...planScheduleColDefs], [selectColDef]);
+  const defaultColDef = useMemo<ColDef>(() => ({ sortable: true, resizable: true, filter: false }), []);
+  const initialSort = useMemo(() => [{ colId: "daysUntil", sort: "asc" as const }], []);
+  const rowClassRules = useMemo(() => ({
+    "ag-row-selected-dd": (p: { data?: ScheduleRow }) => p.data?.problemId === selectedId,
+  }), [selectedId]);
   function centerDate(): string {
     return chartRef.current?.getCenterDate() ?? today;
   }
@@ -674,69 +724,65 @@ export default function PlanPage() {
       />
 
       {scheduleRows.length > 0 && (
-        <ResizableTableShell ref={tableRef}>
-          <Table className="table-fixed">
-            <TableHeader>
-              {table.getHeaderGroups().map((hg) => (
-                <TableRow key={hg.id}>
-                  <TableHead className="sticky top-0 z-10 bg-muted/80 backdrop-blur w-10 px-3">
-                    <div className="flex items-center justify-center">
-                      <input
-                        type="checkbox"
-                        className="size-3.5 accent-primary cursor-pointer"
-                        checked={pdfExport.selected.size > 0 && pdfExport.selected.size === scheduleRows.length}
-                        ref={(el) => { if (el) el.indeterminate = pdfExport.selected.size > 0 && pdfExport.selected.size < scheduleRows.length; }}
-                        onChange={() => {
-                          if (pdfExport.selected.size > 0) pdfExport.clear();
-                          else pdfExport.setAll(scheduleRows.map((r) => r.problemId));
+        <div className="relative">
+          <div className="absolute top-1 right-2 z-10">
+            <Popover>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  title="Toggle columns"
+                  className="inline-flex items-center justify-center size-5 rounded text-muted-foreground/70 hover:text-foreground hover:bg-muted"
+                >
+                  <ColumnsIcon className="size-3.5"/>
+                </button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-44 p-2 space-y-0.5">
+                <div className="text-[10px] uppercase tracking-wide text-muted-foreground px-1 pb-1">Columns</div>
+                {planScheduleColDefs.map((c) => {
+                  const id = (c.field ?? c.colId) as string;
+                  const label = c.headerName ?? id;
+                  const visible = visibleCols[id] ?? !c.hide;
+                  return (
+                    <label key={id} className="flex items-center gap-2 text-xs cursor-pointer px-1 py-0.5 rounded hover:bg-muted">
+                      <Checkbox
+                        checked={visible}
+                        onCheckedChange={(v) => {
+                          const next = v === true;
+                          setVisibleCols((prev) => ({ ...prev, [id]: next }));
+                          gridApiRef.current?.setColumnsVisible([id], next);
                         }}
                       />
-                    </div>
-                  </TableHead>
-                  {hg.headers.map((header) => (
-                    <TableHead
-                      key={header.id}
-                      className="sticky top-0 z-10 bg-muted/80 backdrop-blur"
-                      style={{ width: header.getSize() !== 150 ? header.getSize() : undefined }}
-                    >
-                      {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
-                    </TableHead>
-                  ))}
-                </TableRow>
-              ))}
-            </TableHeader>
-            <TableBody>
-              {table.getRowModel().rows.map((row) => {
-                const pid = row.original.problemId;
-                return (
-                  <TableRow
-                    key={row.id}
-                    data-problem-id={pid}
-                    className={`cursor-pointer ${pid === selectedId ? "bg-accent" : ""}`}
-                    onClick={() => pid === selectedId ? openDetail(pid) : handleSelect(pid)}
-                    onDoubleClick={() => openDetail(pid)}
-                  >
-                    <TableCell className="w-10 px-3 align-middle" onClick={(e) => e.stopPropagation()}>
-                      <div className="flex items-center justify-center">
-                        <input
-                          type="checkbox"
-                          className="size-3.5 accent-primary cursor-pointer"
-                          checked={pdfExport.selected.has(pid)}
-                          onChange={() => pdfExport.toggle(pid)}
-                        />
-                      </div>
-                    </TableCell>
-                    {row.getVisibleCells().map((cell) => (
-                      <TableCell key={cell.id} style={{ width: cell.column.getSize() !== 150 ? cell.column.getSize() : undefined }}>
-                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                      </TableCell>
-                    ))}
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </ResizableTableShell>
+                      <span>{label}</span>
+                    </label>
+                  );
+                })}
+              </PopoverContent>
+            </Popover>
+          </div>
+          <ResizableTableShell ref={tableRef}>
+            <AgGridReact<ScheduleRow>
+            theme={agGridTheme}
+            rowData={scheduleRows}
+            columnDefs={columnDefs}
+            defaultColDef={defaultColDef}
+            getRowId={(p) => p.data.problemId}
+            initialState={{ sort: { sortModel: initialSort } }}
+            rowClassRules={rowClassRules}
+            onGridReady={(e) => { gridApiRef.current = e.api; }}
+            onCellClicked={(e) => {
+              const pid = e.data?.problemId;
+              if (!pid) return;
+              // checkbox 列は toggle 専用 (row 選択 / dialog 起動と衝突させない)
+              if (e.column.getColId() === "problemId") return;
+              if (pid === selectedId) openDetail(pid);
+              else handleSelect(pid);
+            }}
+            onRowDoubleClicked={(e) => { if (e.data?.problemId) openDetail(e.data.problemId); }}
+            suppressCellFocus
+            animateRows
+            />
+          </ResizableTableShell>
+        </div>
       )}
 
       {renderDialogs()}

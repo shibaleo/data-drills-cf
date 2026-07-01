@@ -155,6 +155,27 @@
   background: hsl(var(--muted-foreground));
 }
 
+/* AG Grid: 独自 selectedId 用の行ハイライト (built-in row selection とは別軸) */
+.ag-row.ag-row-selected-dd {
+  background-color: hsl(var(--accent)) !important;
+}
+
+/* AG Grid: checkbox 列のヘッダ padding を消して行と軸を揃える */
+.ag-header-cell.ag-checkbox-header .ag-header-cell-comp-wrapper,
+.ag-header-cell.ag-checkbox-header {
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
+
+/* AG Grid: 中央寄せ用 utility (Status/Subject/Level 等の pill 列) */
+.ag-cell.ag-cell-center {
+  justify-content: center;
+  text-align: center;
+}
+.ag-header-cell.ag-header-center .ag-header-cell-label {
+  justify-content: center;
+}
+
 /* FlipCard animation */
 .flip-container {
   perspective: 800px;
