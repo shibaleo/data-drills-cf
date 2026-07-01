@@ -430,7 +430,7 @@ export const TetrisChartCore = forwardRef<TetrisChartHandle, TetrisChartProps>(f
       </div>
 
       <div ref={scrollRef} className="overflow-x-auto pb-2 flex-1 min-w-0">
-        <svg ref={svgRef} width={chartWidth} height={chartHeight} className="block touch-none"
+        <svg ref={svgRef} width={chartWidth} height={chartHeight} className="block touch-pan-x"
           onPointerDown={(e) => {
             if (!onTodayDrag) return;
             const svg = e.currentTarget;
@@ -706,7 +706,7 @@ export const TetrisChartCore = forwardRef<TetrisChartHandle, TetrisChartProps>(f
                 {lineDraggable && (
                   <line x1={cx} y1={lineY1} x2={cx} y2={chartHeight - BOTTOM_AXIS_H}
                     stroke="transparent" strokeWidth={12}
-                    style={{ cursor: "grab" }}
+                    style={{ cursor: "grab", touchAction: "none" }}
                     onPointerDown={onPinDown(ms.id) as unknown as React.PointerEventHandler<SVGLineElement>}
                     onPointerMove={onPinMove(ms.id) as unknown as React.PointerEventHandler<SVGLineElement>}
                     onPointerUp={onPinUp(ms.id) as unknown as React.PointerEventHandler<SVGLineElement>}
@@ -722,6 +722,7 @@ export const TetrisChartCore = forwardRef<TetrisChartHandle, TetrisChartProps>(f
                   <circle cx={cx} cy={rowY} r={8.1}
                     fill={layerColor} opacity={layerOpacity}
                     stroke="hsl(var(--background))" strokeWidth={2}
+                    style={onMilestoneDateChange ? { touchAction: "none" } : undefined}
                     className={onMilestoneDateChange ? "cursor-grab active:cursor-grabbing" : ""}
                     onClick={(e) => e.stopPropagation()}
                     onPointerDown={onPinDown(ms.id)}
