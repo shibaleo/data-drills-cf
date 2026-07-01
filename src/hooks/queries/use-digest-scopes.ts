@@ -16,17 +16,18 @@ function adaptDetail(d: CanonicalDetail) {
   const derivedFieldId = fieldIds && fieldIds.length > 0 ? fieldIds[0] : null;
   // useScopeDetail と queryKey を共有しているため、milestones / layers を落とすと
   // 先勝ち cache 起因で後続のフックが壊れる。adapted を superset にしておく。
+  // 永続化キャッシュから配列が欠けた shape が読まれるケースも想定し、必ず [] を保証する。
   return {
     scope: {
       ...d.scope,
       field_id: derivedFieldId,
       scope_id: d.scope.id,
     },
-    members: d.members,
-    subjects: d.subjects,
-    levels: d.levels,
-    milestones: d.milestones,
-    layers: d.layers,
+    members: d.members ?? [],
+    subjects: d.subjects ?? [],
+    levels: d.levels ?? [],
+    milestones: d.milestones ?? [],
+    layers: d.layers ?? [],
   };
 }
 

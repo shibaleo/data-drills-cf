@@ -317,11 +317,11 @@ export default function DigestPage() {
             firstAnswerDate: p.answers.find((a) => a.date <= yesterday)?.date ?? null,
           }))
           .sort((a, b) => a.code === b.code ? a.id.localeCompare(b.id) : a.code.localeCompare(b.code))
-      : d.members.map((m) => ({
+      : (d.members ?? []).map((m) => ({
           id: m.id, code: m.code, name: m.name,
           standardTimeSec: m.standard_time, firstAnswerDate: m.first_answer_date,
         }));
-    const ms: Milestone[] = d.milestones.map((m) => ({
+    const ms: Milestone[] = (d.milestones ?? []).map((m) => ({
       target: m.target, date: m.date, id: m.id, layer_id: m.layer_id,
     }));
     const allocated = allocate(
@@ -1749,10 +1749,11 @@ function CompactTransitionMatrix({
         const GAP = 1;
         const TOP_PAD = 2; // 列ラベル ↔ grid の垂直余白
         const N = statuses.length;
+        if (N === 0) return null;
         const W = N * (CELL + GAP) - GAP;
         const HEADER_H = CELL + TOP_PAD;
         // pill 数 = grid 行数 で完全一致させる (全 status を grid にも残す)
-        const H = HEADER_H + rowLabels.length * (CELL + GAP) - GAP;
+        const H = HEADER_H + Math.max(0, rowLabels.length * (CELL + GAP) - GAP);
         return (
           <div className="flex items-start gap-1.5 mt-1">
             {/* 行ラベル (pill 列) */}
