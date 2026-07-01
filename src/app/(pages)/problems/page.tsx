@@ -1,7 +1,16 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Plus, Search, LayoutGrid, List as ListIcon, Eye, EyeOff, FileText, X } from "lucide-react";
+import { AgGridReact } from "ag-grid-react";
+import {
+  AllCommunityModule,
+  ModuleRegistry,
+  themeQuartz,
+  type ColDef,
+  type ICellRendererParams,
+  type RowClickedEvent,
+} from "ag-grid-community";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -16,12 +25,37 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Markdown } from "@/components/markdown";
+import { OpaqueTag } from "@/components/problem-card";
 import { MasterFieldPicker } from "@/components/master-field-picker";
 import { useMasterField } from "@/hooks/use-master-field";
 import { useProblemsList } from "@/hooks/queries/use-problems";
 import { useSubjects, useLevels } from "@/hooks/queries/use-field-data";
 import { useProblemDialogs } from "@/hooks/use-problem-dialogs";
 import { usePageTitle } from "@/lib/page-context";
+
+ModuleRegistry.registerModules([AllCommunityModule]);
+
+const agGridTheme = themeQuartz.withParams({
+  fontFamily: "inherit",
+  fontSize: 13,
+  headerFontWeight: 600,
+  rowHeight: 28,
+  headerHeight: 30,
+  cellHorizontalPadding: 10,
+  borderRadius: 6,
+  backgroundColor: "hsl(var(--card))",
+  foregroundColor: "hsl(var(--foreground))",
+  headerBackgroundColor: "hsl(var(--muted))",
+  headerTextColor: "hsl(var(--foreground))",
+  borderColor: "hsl(var(--border))",
+  wrapperBorder: { color: "hsl(var(--border))", style: "solid", width: 1 },
+  rowHoverColor: "hsl(var(--accent) / 0.5)",
+  selectedRowBackgroundColor: "hsl(var(--accent))",
+  oddRowBackgroundColor: "hsl(var(--card))",
+  chromeBackgroundColor: "hsl(var(--muted))",
+  inputBackgroundColor: "hsl(var(--background))",
+  inputBorder: { color: "hsl(var(--border))", style: "solid", width: 1 },
+});
 
 type ViewMode = "list" | "card";
 
@@ -324,50 +358,97 @@ function ListView({
   selectedIds: Set<string>;
   onToggleSelect: (id: string) => void;
 }) {
-  return (
-    <div className="rounded-md border bg-card">
-      <ul className="divide-y">
-        {problems.map((p) => (
-          <li
-            key={p.id}
-            className="flex items-center gap-3 px-4 py-2 hover:bg-accent/40 cursor-pointer text-sm"
-            onClick={() => onOpen(p.id)}
+  const columnDefs = useMemo<ColDef<Problem>[]>(() => [
+    {
+      headerName: "",
+      field: "id",
+      width: 44,
+      minWidth: 44,
+      maxWidth: 60,
+      sortable: false,
+      filter: false,
+      resizable: false,
+      cellRenderer: (params: ICellRendererParams<Problem>) => {
+        const id = params.data?.id;
+        if (!id) return null;
+        return (
+          <span
+            onClick={(e) => { e.stopPropagation(); onToggleSelect(id); }}
+            className="flex items-center h-full"
           >
-            <span
-              onClick={(e) => { e.stopPropagation(); onToggleSelect(p.id); }}
-              className="flex items-center"
-            >
-              <Checkbox
-                checked={selectedIds.has(p.id)}
-                onCheckedChange={() => onToggleSelect(p.id)}
-                onClick={(e) => e.stopPropagation()}
-              />
-            </span>
-            <span
-              className="inline-block size-3 rounded-sm shrink-0"
-              style={{ backgroundColor: p.color ?? "#94a3b8" }}
-              aria-hidden
+            <Checkbox
+              checked={selectedIds.has(id)}
+              onCheckedChange={() => onToggleSelect(id)}
+              onClick={(e) => e.stopPropagation()}
             />
-            <span className="font-mono text-xs min-w-20 text-muted-foreground">{p.code}</span>
-            <span className="font-medium min-w-32">{p.name || "(no name)"}</span>
-            {p.subjectName && <Badge variant="outline" className="font-normal">{p.subjectName}</Badge>}
-            {p.levelName && <Badge variant="outline" className="font-normal">{p.levelName}</Badge>}
-            {p.body_md && (
-              <Badge variant="outline" className="font-normal text-emerald-600 dark:text-emerald-400">
-                MD
-              </Badge>
-            )}
-            {p.answer_md && (
-              <Badge variant="outline" className="font-normal text-sky-600 dark:text-sky-400">
-                Ans
-              </Badge>
-            )}
-            <span className="ml-auto text-xs text-muted-foreground">
-              {p.standard_time != null ? `${Math.round(p.standard_time / 60)} min` : ""}
-            </span>
-          </li>
-        ))}
-      </ul>
+          </span>
+        );
+      },
+    },
+    {
+      headerName: "Code",
+      field: "code",
+      width: 80,
+      cellClass: "font-mono text-xs text-muted-foreground",
+    },
+    {
+      headerName: "Subject",
+      field: "subjectName",
+      width: 84,
+      cellRenderer: (params: ICellRendererParams<Problem>) =>
+        params.data?.subjectName ? (
+          <OpaqueTag name={params.data.subjectName} color={params.data.subjectColor ?? null} />
+        ) : null,
+    },
+    {
+      headerName: "Level",
+      field: "levelName",
+      width: 72,
+      cellRenderer: (params: ICellRendererParams<Problem>) =>
+        params.data?.levelName ? (
+          <OpaqueTag name={params.data.levelName} color={params.data.levelColor ?? null} />
+        ) : null,
+    },
+    {
+      headerName: "Name",
+      field: "name",
+      flex: 1,
+      minWidth: 160,
+      cellClass: "font-medium",
+      valueFormatter: (p) => p.value || "(no name)",
+    },
+    {
+      headerName: "Time",
+      field: "standard_time",
+      width: 90,
+      cellClass: "text-xs text-muted-foreground",
+      valueFormatter: (p) => (p.value != null ? `${Math.round(p.value / 60)} min` : ""),
+    },
+  ], [selectedIds, onToggleSelect]);
+
+  const defaultColDef = useMemo<ColDef>(() => ({
+    sortable: true,
+    resizable: true,
+    filter: false,
+    suppressMovable: false,
+  }), []);
+
+  const onRowClicked = useCallback((e: RowClickedEvent<Problem>) => {
+    if (e.data?.id) onOpen(e.data.id);
+  }, [onOpen]);
+
+  return (
+    <div style={{ height: "calc(100vh - 180px)", minHeight: 400 }}>
+      <AgGridReact<Problem>
+        theme={agGridTheme}
+        rowData={problems}
+        columnDefs={columnDefs}
+        defaultColDef={defaultColDef}
+        getRowId={(p) => p.data.id}
+        onRowClicked={onRowClicked}
+        animateRows
+        suppressCellFocus
+      />
     </div>
   );
 }
