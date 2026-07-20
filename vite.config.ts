@@ -1,4 +1,4 @@
-import "dotenv/config";
+import dotenv from "dotenv";
 import { defineConfig, type Plugin, type ViteDevServer } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
@@ -68,7 +68,14 @@ function honoDevServer(): Plugin {
   };
 }
 
-export default defineConfig({
+export default defineConfig(({ command }) => {
+  // dev (vite serve) のみ .env を process.env に流し込む。honoDevServer が
+  // in-process で走らせる Hono API が DATABASE_URL 等を process.env 経由で読むため。
+  // build 時には呼ばない: dotenv が .env を process.env に入れると、Vite は
+  // 既存 process.env を .env.production より優先してしまい、pk_live 上書きが効かない。
+  if (command === "serve") dotenv.config();
+
+  return {
   plugins: [react(), honoDevServer()],
   resolve: {
     alias: { "@": path.resolve(__dirname, "src") },
@@ -91,4 +98,5 @@ export default defineConfig({
     },
     chunkSizeWarningLimit: 700,
   },
+  };
 });
