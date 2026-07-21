@@ -5,15 +5,15 @@
   "type": "module",
   "packageManager": "pnpm@11.15.0",
   "scripts": {
-    "dev": "vite",
+    "dev": "dotenv -e .env -- bws run -- vite",
     "build": "vite build && node scripts/build-worker.mjs",
     "preview": "wrangler pages dev dist",
     "deploy": "pnpm build && wrangler deploy",
-    "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate",
-    "db:push": "drizzle-kit push",
-    "db:studio": "drizzle-kit studio",
-    "bootstrap": "tsx scripts/bootstrap.ts"
+    "db:generate": "dotenv -e .env -- bws run -- drizzle-kit generate",
+    "db:migrate": "dotenv -e .env -- bws run -- drizzle-kit migrate",
+    "db:push": "dotenv -e .env -- bws run -- drizzle-kit push",
+    "db:studio": "dotenv -e .env -- bws run -- drizzle-kit studio",
+    "bootstrap": "dotenv -e .env -- bws run -- tsx scripts/bootstrap.ts"
   },
   "dependencies": {
     "@clerk/react": "^6.4.2",
@@ -81,6 +81,7 @@
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",
     "dotenv": "^17.3.1",
+    "dotenv-cli": "^11.0.0",
     "drizzle-kit": "^0.31.1",
     "esbuild": "^0.28.0",
     "postcss": "^8.5.3",

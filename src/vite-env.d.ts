@@ -6,7 +6,6 @@ declare const process: { env: Record<string, string | undefined> };
 interface ImportMetaEnv {
   readonly VITE_CLERK_PUBLISHABLE_KEY: string;
   readonly VITE_BASE_URL: string;
-  readonly VITE_GOOGLE_CLIENT_ID: string;
   readonly VITE_GOOGLE_API_KEY: string;
 }
 
