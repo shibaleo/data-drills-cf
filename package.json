@@ -5,15 +5,15 @@
   "type": "module",
   "packageManager": "pnpm@11.15.0",
   "scripts": {
-    "dev": "dotenv -e .env -- bws run -- vite",
+    "dev": "dotenv -e .env -e .env.development -e .env.local -- bws run -- vite",
     "build": "vite build && node scripts/build-worker.mjs",
     "preview": "wrangler pages dev dist",
     "deploy": "pnpm build && wrangler deploy",
-    "db:generate": "dotenv -e .env -- bws run -- drizzle-kit generate",
-    "db:migrate": "dotenv -e .env -- bws run -- drizzle-kit migrate",
-    "db:push": "dotenv -e .env -- bws run -- drizzle-kit push",
-    "db:studio": "dotenv -e .env -- bws run -- drizzle-kit studio",
-    "bootstrap": "dotenv -e .env -- bws run -- tsx scripts/bootstrap.ts"
+    "db:generate": "dotenv -e .env -e .env.development -e .env.local -- bws run -- drizzle-kit generate",
+    "db:migrate": "dotenv -e .env -e .env.development -e .env.local -- bws run -- drizzle-kit migrate",
+    "db:push": "dotenv -e .env -e .env.development -e .env.local -- bws run -- drizzle-kit push",
+    "db:studio": "dotenv -e .env -e .env.development -e .env.local -- bws run -- drizzle-kit studio",
+    "bootstrap": "dotenv -e .env -e .env.development -e .env.local -- bws run -- tsx scripts/bootstrap.ts"
   },
   "dependencies": {
     "@clerk/react": "^6.4.2",
