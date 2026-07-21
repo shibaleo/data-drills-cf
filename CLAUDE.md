@@ -127,19 +127,24 @@ pdf-core は両 wrapper に workspace dep として参照される (`@data-drill
 #### 4. CodeMirror バンドル分割
 - 現状 1.5MB の単一 chunk。動的 import で code-split 可能
 
+#### 5. Google Cloud dev/prod リソース分離
+- OAuth client ID / API key を dev (localhost) と prod (drills.shibaleo.uk) で分離する。理想は GCP プロジェクト自体を dev/prod 分割し、quota・OAuth 同意画面・監視を isolation (dev の暴走が prod の quota を巻き込まないため)。
+- 現状は dev/prod 同一リソース。分離後は `GOOGLE_CLIENT_ID` / `VITE_GOOGLE_API_KEY` が env-specific になるので、public-config を `{ dev, prod }` 分岐へ (現状はプレーン定数)。
+- あわせて **GCP プロジェクトの整理**: 不要プロジェクト・認証情報の棚卸し、命名を `data-drills-dev` / `data-drills-prod` に統一、API 有効化と OAuth 同意画面を環境ごとに再設定。
+
 ### 将来の検討事項 (発生したら対応)
 
-#### 5. `@hono/zod-openapi` への移行
+#### 6. `@hono/zod-openapi` への移行
 - API を外部クライアント (SaaS、MCP モジュール等) に公開するタイミングで
 - Zod スキーマは再利用できるので移行コストは低い (docs/framework-proposal.md §4.4)
 
-#### 6. Sentry 等のエラー監視
+#### 7. Sentry 等のエラー監視
 - 本番運用開始時に導入 (docs/framework-proposal.md §5)
 
-#### 7. `AppType` コンパイル時間
+#### 8. `AppType` コンパイル時間
 - 現状問題なし。ルート数が増えて肥大化したら v1 を複数アプリに分割 (docs/framework-proposal.md §7)
 
-#### 8. `unwrap` 内部の narrowing cast
+#### 9. `unwrap` 内部の narrowing cast
 - [src/lib/rpc-client.ts](src/lib/rpc-client.ts) の `as SuccessBody<T>` 1 箇所
 - TypeScript の generic narrowing 制限を回避するための cast
 - `isErrorBody` ガードで runtime 保証済み、意図的な妥協として維持
