@@ -127,10 +127,13 @@ pdf-core は両 wrapper に workspace dep として参照される (`@data-drill
 #### 4. CodeMirror バンドル分割
 - 現状 1.5MB の単一 chunk。動的 import で code-split 可能
 
-#### 5. Google Cloud dev/prod リソース分離
+#### 5. Google Cloud dev/prod リソース分離 (🚧 進行中)
 - OAuth client ID / API key を dev (localhost) と prod (drills.shibaleo.uk) で分離する。理想は GCP プロジェクト自体を dev/prod 分割し、quota・OAuth 同意画面・監視を isolation (dev の暴走が prod の quota を巻き込まないため)。
-- 現状は dev/prod 同一リソース。分離後は `GOOGLE_CLIENT_ID` / `VITE_GOOGLE_API_KEY` が env-specific になるので、public-config を `{ dev, prod }` 分岐へ (現状はプレーン定数)。
-- あわせて **GCP プロジェクトの整理**: 不要プロジェクト・認証情報の棚卸し、命名を `data-drills-dev` / `data-drills-prod` に統一、API 有効化と OAuth 同意画面を環境ごとに再設定。
+- 現状は dev/prod 同一リソース。分離後は `GOOGLE_CLIENT_ID` / `VITE_GOOGLE_API_KEY` が env-specific になる。**public-config の新規分岐コードは不要** — 既存の Vite `.env.[mode]` 機構 (`VITE_BASE_URL` の dev/prod 分岐で実証済み) にそのまま乗せる。
+- あわせて **GCP プロジェクトの整理**: 命名を `shibaleo dev env` / `shibaleo prod env` に統一 (アカウント全体の環境区分)、API 有効化と OAuth 同意画面を環境ごとに再設定。
+- 進捗と残タスク・再開ポイント: [docs/gcp-dev-prod-separation.md](docs/gcp-dev-prod-separation.md)
+  - 完了: GCP dev/prod プロジェクト作成、dev env の API 有効化+同意画面、bws project 分割 (dev-secrets / prod-secrets) と既存キーのコピー
+  - 残: OAuth client + API key 発行 (ユーザー)、GOOGLE_CLIENT_SECRET の新値差し替え + dev/prod token 発行、.env.[mode] への値移動、検証、docs 更新
 
 ### 将来の検討事項 (発生したら対応)
 
