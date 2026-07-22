@@ -9,10 +9,11 @@ dist/
 services/pdf-lambda/lambda.zip
 services/pdf-lambda/assets/
 
-# env — 非機密の共有 config (.env / .env.development / .env.production) は commit する。
-# 実 secret は bws。bootstrap token とローカル上書きだけ gitignore。
-.env.local
-.env.*.local
+# env — 方針 (2026-07-22): 非機密 config は src/lib/public-config.ts (git 追跡) に集約。
+# secret は注入 (bws / CF Worker Secret)。よって .env* は一切 commit しない (全 ignore)。
+# .env.local には bootstrap の BWS_ACCESS_TOKEN のみ。
+.env
+.env.*
 .dev.vars
 
 # secrets

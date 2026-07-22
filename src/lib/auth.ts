@@ -9,6 +9,7 @@ import { apiKey, user } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { env } from "@/lib/env";
+import { publicConfig } from "@/lib/public-config";
 
 export interface AuthResult {
   authenticated: true;
@@ -72,7 +73,7 @@ async function verifyApiKeyToken(token: string): Promise<AuthResult | null> {
 // ── Clerk JWKS ──
 
 function getClerkDomain(): string | null {
-  const pk = env.VITE_CLERK_PUBLISHABLE_KEY;
+  const pk = publicConfig.clerkPublishableKey;
   if (!pk) return null;
   const encoded = pk.replace(/^pk_(test|live)_/, "");
   try {

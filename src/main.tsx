@@ -6,11 +6,12 @@ import { ClerkProvider } from "@clerk/react";
 import { Toaster } from "sonner";
 import { router } from "./router";
 import { PersistedQueryProvider } from "./lib/persisted-query-provider";
+import { publicConfig } from "./lib/public-config";
 import "./app/globals.css";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <ClerkProvider publishableKey={import.meta.env.VITE_CLERK_PUBLISHABLE_KEY}>
+    <ClerkProvider publishableKey={publicConfig.clerkPublishableKey}>
       <PersistedQueryProvider>
         <RouterProvider router={router} />
         <Toaster position="bottom-right" />

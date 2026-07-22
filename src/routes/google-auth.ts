@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { authenticate, type AuthResult } from "@/lib/auth";
-import { env } from "@/lib/env";
+import { publicConfig } from "@/lib/public-config";
 import { db } from "@/lib/db";
 import { oauthToken } from "@/lib/db/schema";
 import { and, eq } from "drizzle-orm";
@@ -24,7 +24,7 @@ const app = new Hono<Env>()
     const code = c.req.query("code");
     if (!code) return c.json({ error: "Missing code" }, 400);
     const userId = c.get("authResult").userId;
-    const baseUrl = env.BASE_URL;
+    const baseUrl = publicConfig.baseUrl;
 
     try {
       const tokens = await exchangeCode(code);

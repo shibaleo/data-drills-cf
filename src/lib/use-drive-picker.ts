@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useRef } from 'react'
+import { publicConfig } from '@/lib/public-config'
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 declare global {
@@ -69,8 +70,8 @@ export function useDrivePicker() {
     if (!res.ok) throw new Error('Failed to get access token')
     const { accessToken } = await res.json() as { accessToken: string }
 
-    const apiKey = import.meta.env.VITE_GOOGLE_API_KEY
-    if (!apiKey) throw new Error('Missing VITE_GOOGLE_API_KEY')
+    const apiKey = publicConfig.googlePickerApiKey
+    if (!apiKey) throw new Error('Missing googlePickerApiKey in public-config')
 
     return new Promise((resolve) => {
       const { picker } = window.google

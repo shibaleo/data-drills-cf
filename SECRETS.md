@@ -17,15 +17,19 @@
 
 ## 置き場所の区分け
 
+**原則 (2026-07-22 確定): 2 バケツだけ。曖昧な第3を作らない。**
+- **secret** → 注入 (git に置かない)。ローカル=bws、prod runtime=CF Worker Secret。
+- **非 secret** → **すべて git 追跡**。`src/lib/public-config.ts` に dev/prod 分岐で集約 (ビルド時 tree-shake)。
+- 禁止: 「非 secret なのに git 外」(gitignore した非機密 / CF dashboard のビルド変数 / bws の公開値 / CF binding の非機密)。
+
 | 種類 | 例 | 場所 | git |
 |---|---|---|---|
-| 実 secret（consume する外部 credential） | `DATABASE_URL` `CLERK_SECRET_KEY` `GOOGLE_CLIENT_SECRET` `AWS_*` `PDF_SERVICE_KEY` `NEON_DATABASE_URL` | **Bitwarden Secrets Manager** project `shibaleo-secrets-hub` | — |
+| 実 secret（consume する外部 credential） | `DATABASE_URL` `CLERK_SECRET_KEY` `GOOGLE_DRIVE_CLIENT_SECRET` `AWS_*` `PDF_SERVICE_KEY` `NEON_DATABASE_URL` | **Bitwarden Secrets Manager** `shibaleo-{dev,prod}-secrets`（token の `--project-id` で切替）+ prod runtime は CF Worker Secret | — |
 | bootstrap token（bws を開ける鍵） | `BWS_ACCESS_TOKEN` | `.env.local` | ignore |
-| 全環境共通の非機密 config | `GOOGLE_CLIENT_ID` `VITE_GOOGLE_API_KEY` `PDF_API_URL` | `.env` | **commit** |
-| dev 専用の非機密値 | `VITE_CLERK_PUBLISHABLE_KEY`(pk_test) `VITE_BASE_URL`(localhost:5180) | `.env.development` | **commit** |
-| prod 専用の非機密値 | `VITE_CLERK_PUBLISHABLE_KEY`(pk_live) | `.env.production` | **commit** |
+| **非機密 config（全部）** | `baseUrl` `clerkPublishableKey`(pk_test/pk_live) `googleDriveClientId` `googlePickerApiKey` `pdfApiUrl` | **`src/lib/public-config.ts`**（dev/prod 分岐・型付き・`import.meta.env.PROD` で選択） | **commit** |
 | wrangler dev/preview 用 secret | ローカル `wrangler dev` が読む | `.dev.vars` | ignore |
-| prod runtime secret | 本番 worker が読む `CLERK_SECRET_KEY` 等 | Cloudflare Worker Secret / `wrangler.toml [vars]` | — |
+
+**`.env*` は全て gitignore（`.env.local` の bws token だけローカルに存在）。** public-config.ts が非機密の単一ソース。
 
 ### 原則
 

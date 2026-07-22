@@ -16,6 +16,7 @@ import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { AwsClient } from "aws4fetch";
 import { db } from "@/lib/db";
+import { publicConfig } from "@/lib/public-config";
 import { problem, problemFile, subject, level } from "@/lib/db/schema";
 import { inArray } from "drizzle-orm";
 import type { AuthResult } from "@/lib/auth";
@@ -133,7 +134,7 @@ const app = new Hono<Env>()
       if (res && res.ok) return c.json({ ok: true, upstream: "lambda" });
     }
 
-    const renderUrl = readEnv(c, "PDF_API_URL");
+    const renderUrl = publicConfig.pdfApiUrl;
     if (!renderUrl) {
       return c.json({ error: "No PDF backend configured" }, 500);
     }
@@ -234,7 +235,7 @@ const app = new Hono<Env>()
 
     // ── Fallback to Render ──
     if (upstream !== "lambda") {
-      const renderUrl = readEnv(c, "PDF_API_URL");
+      const renderUrl = publicConfig.pdfApiUrl;
       const renderKey = readEnv(c, "PDF_SERVICE_KEY");
       if (!renderUrl || !renderKey) {
         return c.json({ error: "No usable PDF backend (Lambda failed and Render not configured)" }, 500);

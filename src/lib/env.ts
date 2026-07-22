@@ -18,19 +18,9 @@ export const env = {
     return v;
   },
 
-  /** Clerk Publishable Key (frontend 用)。Clerk JWKS domain 推定にも使う。 */
-  get VITE_CLERK_PUBLISHABLE_KEY(): string | undefined {
-    return process.env.VITE_CLERK_PUBLISHABLE_KEY;
-  },
-
   /** Clerk Secret Key (server 用)。ユーザー email lookup に使う。 */
   get CLERK_SECRET_KEY(): string | undefined {
     return process.env.CLERK_SECRET_KEY;
-  },
-
-  /** Render の PDF サービス URL。export 機能用。 */
-  get PDF_API_URL(): string | undefined {
-    return process.env.PDF_API_URL;
   },
 
   /** PDF サービスとの共有秘密鍵。x-pdf-service-key ヘッダで使う。 */
@@ -38,23 +28,11 @@ export const env = {
     return process.env.PDF_SERVICE_KEY ?? "";
   },
 
-  /** Google OAuth client ID (Drive 連携)。 */
-  get GOOGLE_CLIENT_ID(): string {
-    const v = process.env.GOOGLE_CLIENT_ID;
-    if (!v) throw new Error("GOOGLE_CLIENT_ID is not set");
+  /** Google Drive OAuth client secret (Drive 連携専用クライアント)。 */
+  get GOOGLE_DRIVE_CLIENT_SECRET(): string {
+    const v = process.env.GOOGLE_DRIVE_CLIENT_SECRET;
+    if (!v) throw new Error("GOOGLE_DRIVE_CLIENT_SECRET is not set");
     return v;
-  },
-
-  /** Google OAuth client secret。 */
-  get GOOGLE_CLIENT_SECRET(): string {
-    const v = process.env.GOOGLE_CLIENT_SECRET;
-    if (!v) throw new Error("GOOGLE_CLIENT_SECRET is not set");
-    return v;
-  },
-
-  /** App の base URL。OAuth redirect 構築に使う。 */
-  get BASE_URL(): string {
-    return process.env.VITE_BASE_URL ?? "http://localhost:3000";
   },
 
   /** Neon DWH 接続文字列 (read-only)。Toggl time entries 等の DWH view を引く用途。 */

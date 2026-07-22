@@ -3,8 +3,8 @@ main = "dist/_worker.js"
 compatibility_date = "2025-01-01"
 compatibility_flags = ["nodejs_compat_v2"]
 
-[vars]
-VITE_BASE_URL = "https://drills.shibaleo.uk"
+# 非機密 config は src/lib/public-config.ts (git 追跡・ビルド焼き込み) に集約。
+# ここには秘密も非機密の [vars] も置かない。実行時 secret は Worker Secret (wrangler secret put)。
 
 [[hyperdrive]]
 binding = "HYPERDRIVE"
