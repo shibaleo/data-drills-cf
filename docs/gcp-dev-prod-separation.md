@@ -220,19 +220,23 @@ prod env (`shibaleo-prod-env`) では origin/URI を `https://drills.shibaleo.uk
 
 ## ★ Prod cutover runbook (順序厳守 — commit は最後の引き金)
 
-**現状 (2026-07-22): dev は完全分離で稼働。prod はまだ旧デプロイのまま無事。1〜4追加/6 完了、残 5・7・8 + deploy 後の CF 掃除。**
-`main` への commit が CF 自動ビルド/デプロイを引く。commit を先にしない (5 を揃えてから 7)。
+**✅ CUTOVER 完了 (2026-07-22)。** CF/Render/Lambda すべて新 prod クライアント + 新 env 名で稼働。
+prod で main app picker / Lambda export / 両方の Drive 動作確認済み。
 
 - [x] 1. prod Google credential 発行 (`drills-drive-oauth` / `drills-picker-api-key`、project 698047960453)
 - [x] 2. public-config.ts の prod 値差し替え (client id / picker key)。build で焼き込み確認済
 - [x] 3. bws prod-secrets `GOOGLE_DRIVE_CLIENT_SECRET` = prod client secret
-- [x] 4-追加. CF Worker Secret に `GOOGLE_DRIVE_CLIENT_SECRET`(prod) を put 済 (wrangler、token=.env.local)
-- [x] 6. bws prod-secrets `CLERK_SECRET_KEY` = sk_live に差し替え済
-- [ ] 5. Render/Lambda の export env 名付け替え (下記)
-- [ ] 7. commit → deploy
-- [ ] 4-削除 (deploy 後). CF Worker の旧 secret を削除: `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` /
-      `VITE_CLERK_PUBLISHABLE_KEY` (どれも新コードは読まない = 公開値は焼き込み・secret は新名)。deploy 前に消すと現行 prod が壊れる
-- [ ] 8. prod で Drive 再認可 (新 prod クライアント)
+- [x] 4-追加. CF Worker Secret に `GOOGLE_DRIVE_CLIENT_SECRET`(prod) を put (wrangler)
+- [x] 6. bws prod-secrets `CLERK_SECRET_KEY` = sk_live に差し替え
+- [x] 5. Render (CLIENT_ID=MCP / SECRET=REST) + Lambda (aws cli) の env に新名を set。Lambda code は手動 zip upload
+- [x] 7. commit → push。CF は git 自動 deploy、Render は REST で trigger (autoDeploy 発火せず)、Lambda は `update-function-code`
+- [x] 4-削除. CF (`GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`/`VITE_CLERK_PUBLISHABLE_KEY`) / Render / Lambda の旧名を削除
+- [x] 8. prod で Drive 再認可 (新 prod クライアント)。picker + export 動作確認済み
+
+### 任意の残タスク (急がない)
+- 旧共用クライアント (learning-data-488710) に picker 修正で足した prod redirect URI は、しばらく監視後に外す
+- CF Worker Secret に非機密が残存 (`PDF_API_URL` は新コードで焼き込み済=dead、`PDF_LAMBDA_URL`/`PDF_LAMBDA_AWS_REGION` は非機密が secret) → 原則に従うなら public-config.ts へ移す follow-up
+- `.env.local` に一時的に置いた `CLOUDFLARE_API_TOKEN` / `RENDER_API_KEY` は用済み。運用で使わないなら削除 (bws token だけ残す)
 
 1. **prod Google credential 発行** (GCP `shibaleo-prod-env`, 名前は dev と揃える):
    - OAuth client `drills-drive-oauth`: JS 生成元 `https://drills.shibaleo.uk` / redirect `https://drills.shibaleo.uk/api/auth/google/callback`

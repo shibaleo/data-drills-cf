@@ -66,6 +66,8 @@ user
 
 ## Deployed Services
 
+> 全 web インフラ/サービスの棚卸し (ID・region・デプロイ方法・環境分離): [docs/infrastructure.md](docs/infrastructure.md)
+
 - **CF Worker**: data-drills-cf (本番)
 - **PDF Service**: https://pdf-service-r4i7.onrender.com (Render, free plan, Singapore)
   - Service ID: `srv-d7k658ho3t8c738s0flg`
@@ -127,8 +129,8 @@ pdf-core は両 wrapper に workspace dep として参照される (`@data-drill
 #### 4. CodeMirror バンドル分割
 - 現状 1.5MB の単一 chunk。動的 import で code-split 可能
 
-#### 5. Google Cloud dev/prod リソース分離 (🚧 進行中)
-- OAuth client ID / API key を dev (localhost) と prod (drills.shibaleo.uk) で分離する。理想は GCP プロジェクト自体を dev/prod 分割し、quota・OAuth 同意画面・監視を isolation (dev の暴走が prod の quota を巻き込まないため)。
+#### 5. Google Cloud dev/prod リソース分離 (✅ 完了 2026-07-22)
+- OAuth client ID / API key を dev (localhost) と prod (drills.shibaleo.uk) で分離。GCP プロジェクトも `shibaleo dev/prod env` に分割し、quota・OAuth 同意画面を isolation。**cutover 完了**: CF/Render/Lambda すべて新 prod クライアント + 新 env 名で稼働、prod で picker/export 動作確認済み。Neon も production/development ブランチに分離済。
 - 非機密 config は **`src/lib/public-config.ts`** に dev/prod 分岐で集約 (2026-07-22 確定)。`import.meta.env.PROD` でビルド時に選択・tree-shake (client=Vite / worker=esbuild define / dev worker=Vite ssrLoadModule)。原則「secret は注入 / 非 secret は全部 git 追跡 / 曖昧な第3を作らない」。`.env*` は全 gitignore。詳細 [SECRETS.md](SECRETS.md)。
 - env var は用途スコープ命名に統一済 (2026-07-22): `GOOGLE_CLIENT_ID`→`GOOGLE_DRIVE_CLIENT_ID` 等 (secret の env 名)。Drive OAuth client は main app と export サービス (pdf-core) が共有する 1 credential。公開値 (client_id / picker key / clerk pk 等) は env var でなく public-config.ts へ移行済。
 - あわせて **GCP プロジェクトの整理**: 命名を `shibaleo dev env` / `shibaleo prod env` に統一 (アカウント全体の環境区分)、API 有効化と OAuth 同意画面を環境ごとに再設定。
