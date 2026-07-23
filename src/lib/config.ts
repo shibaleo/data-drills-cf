@@ -10,4 +10,8 @@ export const config = {
   /** data-warehouse GAS doPost endpoint。Clerk JWT で守る前提なので公開 URL。
    *  rotation は clasp deploy -i <deploymentId> で同一 ID に上書きする限り発生しない。 */
   warehouseSyncUrl: "https://script.google.com/macros/s/AKfycbxVkvdAtIibcTCeetD4t3pHqHrEy9CeXfrK42zI4Y4Q9sa9im9qSna5p1rJeDpuRf1m/exec",
+
+  /** data-warehouse presentation API (Cloudflare Worker) origin. Read-only,
+   *  behind OAuth. Non-secret. Override per-env with WAREHOUSE_API_BASE_URL. */
+  warehouseApiBaseUrl: "https://dwh-api.shibaleo.workers.dev",
 } as const;

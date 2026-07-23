@@ -35,8 +35,24 @@ export const env = {
     return v;
   },
 
-  /** Neon DWH 接続文字列 (read-only)。Toggl time entries 等の DWH view を引く用途。 */
-  get NEON_DATABASE_URL(): string | undefined {
-    return process.env.NEON_DATABASE_URL;
+  /** data-warehouse presentation API origin override (per-env)。未設定なら
+   *  config.warehouseApiBaseUrl (prod) を使う。dev で dev worker を叩く時に設定。 */
+  get WAREHOUSE_API_BASE_URL(): string | undefined {
+    return process.env.WAREHOUSE_API_BASE_URL;
+  },
+
+  /** warehouse API の OAuth client_id (private_key_jwt, RFC 7523)。 */
+  get DWH_CLIENT_ID(): string {
+    const v = process.env.DWH_CLIENT_ID;
+    if (!v) throw new Error("DWH_CLIENT_ID is not set");
+    return v;
+  },
+
+  /** warehouse API 用クライアント秘密鍵 (Ed25519 private JWK, JSON 文字列)。
+   *  client_assertion の署名に使う。対応する公開鍵だけが warehouse D1 にある。 */
+  get DWH_CLIENT_PRIVATE_JWK(): string {
+    const v = process.env.DWH_CLIENT_PRIVATE_JWK;
+    if (!v) throw new Error("DWH_CLIENT_PRIVATE_JWK is not set");
+    return v;
   },
 };

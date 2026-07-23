@@ -1,7 +1,6 @@
 /// <reference types="@cloudflare/workers-types" />
 import app from "@/lib/hono-app";
 import { withRequestDb } from "@/lib/db";
-import { withRequestNeon } from "@/lib/neon-db";
 
 interface Env {
   ASSETS: Fetcher;
@@ -36,7 +35,7 @@ export default {
         // POST/PUT/DELETE はリクエスト body を一度読むと再利用できないため retry 不可。
         // GET / HEAD のみ retry し、それ以外は素直にエラーを返す。
         const canRetry = request.method === "GET" || request.method === "HEAD";
-        const run = () => withRequestDb(() => withRequestNeon(() => app.fetch(request, env, ctx)));
+        const run = () => withRequestDb(() => app.fetch(request, env, ctx));
         try {
           return (await run()) as Response;
         } catch (e) {
@@ -50,7 +49,7 @@ export default {
           });
         }
       }
-      return withRequestNeon(() => app.fetch(request, env, ctx));
+      return app.fetch(request, env, ctx);
     }
 
     // Everything else → static assets (with SPA fallback)

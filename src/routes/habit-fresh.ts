@@ -1,23 +1,17 @@
 /**
- * /api/v1/habit-fresh — habit done セルを warehouse JOIN で生成する read-only endpoint。
+ * /api/v1/habit-fresh — habit done セルを warehouse feed から生成する read-only endpoint。
  *
  * 流れ:
- *   1. 「論理今日」を決定: 最新の sleep の sleep_date (= 目覚めた日)
- *      fallback: JST 暦日
- *   2. data_drills.habit から user の active habits を取得
- *   3. warehouse から
- *        a) Toggl entries (project_name, description, started_at, synced_at)
- *        b) main sleep の境界 (sleep_date, start_at)
- *      の 2 クエリを並列実行
- *   4. JS 側で 1 entry につき「次の sleep.start_at」を binary search で求め、
- *      logical_date を確定 → (habitId, logical_date) で集計
- *   5. JS 側で habit と突き合わせて cells 組み立て
+ *   1. warehouse presentation API の /habit-fresh/feed を 1 回叩く。feed は
+ *      「論理今日」(最新 main sleep の wake 日, fallback JST 暦日)・past/future 窓・
+ *      Toggl entries・main sleep 境界をまとめて返す (旧: Neon 直の 3 クエリ)。
+ *   2. data_drills.habit から user の active habits を取得 (ここは consumer 保持)。
+ *   3. JS 側で 1 entry につき「次の sleep.start_at」を binary search で求め、
+ *      logical_date を確定 → (habitId, logical_date) で集計。
+ *   4. habit と突き合わせて cells 組み立て。
  *
- * 経緯: 当初は 1 SQL で per-row 相関サブクエリ (entries 429 × sleep 1532) を
- * 回していて 45s 掛かっていた。warehouse 側 view の重さもあり並列 2 クエリ
- * + JS join に分割して解消。
- *
- * 「夜更かし late entry を前日扱い」を実現する。
+ * 「夜更かし late entry を前日扱い」を実現する。warehouse 側の sleep_type 正規化で
+ * feed の logical-today は 'STAGES' を正しく拾う (docs/011 §3)。
  */
 
 import { Hono } from "hono";
@@ -26,7 +20,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { habit } from "@/lib/db/schema";
 import { and, eq } from "drizzle-orm";
-import { neonSql } from "@/lib/neon-db";
+import { whGet } from "@/lib/warehouse-api";
 import type { AuthResult } from "@/lib/auth";
 
 type Env = { Variables: { authResult: AuthResult } };
@@ -45,12 +39,6 @@ function addDays(s: string, n: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-function todayJSTCalendar(): string {
-  const now = new Date();
-  const jst = new Date(now.getTime() + 9 * 3600 * 1000);
-  return jst.toISOString().slice(0, 10);
-}
-
 type EntryRow = {
   project_name: string | null;
   project_color: string | null;
@@ -59,19 +47,26 @@ type EntryRow = {
   synced_at: Date | null;
 };
 
-type SleepBoundary = {
-  sleep_date: Date;
-  start_at: Date;
-};
-
-type TodayRow = {
-  d: string | null;
-};
-
 type Cell = {
   habitId: string;
   date: string;
   kind: "throughput" | "next-step" | "forecast";
+};
+
+type FeedResponse = {
+  data: {
+    today: string;
+    past_from: string;
+    future_to: string;
+    entries: {
+      project_name: string | null;
+      project_color: string | null;
+      description: string | null;
+      started_at: string | null;
+      synced_at: string | null;
+    }[];
+    sleeps: { sleep_date: string; start_at: string | null }[];
+  };
 };
 
 /**
@@ -103,21 +98,13 @@ const app = new Hono<Env>()
     const PAST_DAYS = past_days ?? DEFAULT_PAST_DAYS;
     const userId = c.get("authResult").userId;
 
-    // 1. 論理今日 = 最新の main sleep の sleep_date。24h 以上前なら未 sync と判定。
-    const [todayRow] = await neonSql<TodayRow[]>`
-      SELECT sleep_date::text AS d
-      FROM data_presentation.fct_health_sleep
-      WHERE sleep_type = 'stages'
-        AND end_at <= NOW()
-        AND end_at > NOW() - INTERVAL '24 hours'
-      ORDER BY end_at DESC
-      LIMIT 1
-    `;
-    const today = todayRow?.d ?? todayJSTCalendar();
-    const pastFrom = addDays(today, -PAST_DAYS);
-    const futureTo = addDays(today, FUTURE_DAYS);
+    // 1. warehouse feed (today + windows + entries + sleeps) を 1 回で取得。
+    const feed = await whGet<FeedResponse>("/habit-fresh/feed", {
+      past_days: String(PAST_DAYS),
+    });
+    const { today, past_from: pastFrom, future_to: futureTo } = feed.data;
 
-    // 2. user の active habits
+    // 2. user の active habits (consumer の OLTP DB 保持)
     const habits = await db.select().from(habit)
       .where(and(eq(habit.userId, userId), eq(habit.isActive, true)));
 
@@ -132,36 +119,24 @@ const app = new Hono<Env>()
       });
     }
 
-    const fetchFrom = addDays(pastFrom, -1);
-    const fetchTo = addDays(today, 2);
-    const sleepFetchTo = addDays(fetchTo, 2);
+    // 3. feed の entries / sleeps を Date 化 (旧 Neon の Date 戻り値と等価)。
+    const entries: EntryRow[] = feed.data.entries
+      .filter((e) => e.started_at != null)
+      .map((e) => ({
+        project_name: e.project_name,
+        project_color: e.project_color,
+        description: e.description,
+        started_at: new Date(e.started_at as string),
+        synced_at: e.synced_at ? new Date(e.synced_at) : null,
+      }));
+    const sleepStartMs = feed.data.sleeps
+      .filter((s) => s.start_at != null)
+      .map((s) => new Date(s.start_at as string).getTime());
+    const sleepDates = feed.data.sleeps
+      .filter((s) => s.start_at != null)
+      .map((s) => new Date(`${s.sleep_date}T00:00:00Z`));
 
-    // 3. entries + sleep 境界 を並列 fetch (project でフィルタしない: マッチは regex SSOT)
-    const [entries, sleeps] = await Promise.all([
-      neonSql<EntryRow[]>`
-        SELECT project_name, project_color, description, started_at, synced_at
-        FROM data_presentation.fct_toggl_time_entries
-        WHERE started_at >= (${fetchFrom}::date)::timestamp AT TIME ZONE 'Asia/Tokyo'
-          AND started_at <  (${fetchTo}::date)::timestamp AT TIME ZONE 'Asia/Tokyo'
-          AND description IS NOT NULL
-          AND description <> ''
-      `,
-      neonSql<SleepBoundary[]>`
-        SELECT sleep_date, start_at
-        FROM data_presentation.fct_health_sleep
-        WHERE sleep_type = 'stages'
-          AND start_at >= (${fetchFrom}::date)::timestamp AT TIME ZONE 'Asia/Tokyo'
-          AND start_at <  (${sleepFetchTo}::date)::timestamp AT TIME ZONE 'Asia/Tokyo'
-        ORDER BY start_at ASC
-      `,
-    ]);
-
-    // 4. sleeps を 2 つの並列配列に展開 (binary search 用)
-    const sleepStartMs = sleeps.map((s) => s.start_at.getTime());
-    const sleepDates = sleeps.map((s) => s.sleep_date);
-
-    // 5. habit ごとに patterns[] を OR で 1 個の RegExp に pre-compile (case-insensitive)。
-    //    壊れた pattern は skip (DB に入る前に zod で validate 済だが safety net)。
+    // 4. habit ごとに patterns[] を OR で 1 個の RegExp に pre-compile (case-insensitive)。
     type Compiled = { habitId: string; re: RegExp };
     const compiled: Compiled[] = [];
     for (const h of habits) {
@@ -172,9 +147,7 @@ const app = new Hono<Env>()
       compiled.push({ habitId: h.id, re });
     }
 
-    // 6. 全 entry × 全 habit regex を走査して (habitId, logicalDate) で集計。
-    //    1 entry が複数 habit にマッチしうる (登録ミス) ので最初の hit を採用。
-    //    habit ごとに color (= 直近マッチ entry の project_color の最頻値) を併せて算出。
+    // 5. 全 entry × 全 habit regex を走査して (habitId, logicalDate) で集計。
     const agg = new Map<string, { habitId: string; date: string; maxSyncedAt: Date | null }>();
     const colorVotes = new Map<string, Map<string, number>>();  // habitId → (color → count)
     for (const e of entries) {
